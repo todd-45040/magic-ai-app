@@ -16,6 +16,22 @@ import { AnalyticsIcon, BackIcon, CalendarIcon, CheckIcon, ChecklistIcon, CopyIc
 type ViewMode = 'list' | 'board' | 'timeline';
 type SortBy = 'dueDate' | 'priority' | 'createdAt';
 
+type PipelineRoutineHandoff = {
+    version: number;
+    source?: string;
+    pipelineStage?: string;
+    title?: string;
+    notes?: string;
+    patter?: string;
+    effectDescription?: string;
+    selectedTones?: string[];
+    upstream?: any;
+    created_at?: string;
+};
+
+const SHOW_PLANNER_ROUTINE_HANDOFF_KEY = 'maw_show_planner_routine_handoff_v1';
+
+
 // Avoid importing @google/genai in UI components.
 // Our serverless /api/generate endpoint accepts schema objects with string-based types.
 const SchemaType = {
@@ -505,12 +521,28 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
     const [isLoadingShows, setIsLoadingShows] = useState(true);
     const [showsError, setShowsError] = useState<string | null>(null);
     const [toastMsg, setToastMsg] = useState<string | null>(null);
+    const [pipelineRoutine, setPipelineRoutine] = useState<PipelineRoutineHandoff | null>(null);
 
     useEffect(() => {
         if (!toastMsg) return;
         const t = window.setTimeout(() => setToastMsg(null), 2200);
         return () => window.clearTimeout(t);
     }, [toastMsg]);
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.version !== 1) {
+                localStorage.removeItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY);
+                return;
+            }
+            setPipelineRoutine(parsed);
+            void trackClientEvent({ tool: 'creative_pipeline', action: 'routine_handoff_loaded', outcome: 'SUCCESS_NOT_CHARGED', metadata: { source: parsed.source || 'unknown', title: parsed.title || null } });
+        } catch {
+            // ignore malformed handoffs
+        }
+    }, []);
     const [selectedShow, setSelectedShow] = useState<Show | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -554,6 +586,13 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
                 const allShows = await getShows();
                 if (!isMounted) return;
                 setShows(allShows);
+
+                try {
+                    const rawPipeline = localStorage.getItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY);
+                    if (rawPipeline && !initialShowId && allShows[0]) {
+                        openShowDashboard(allShows[0], 'deep_link');
+                    }
+                } catch {}
 
                 // Fetch contract meta for show list badges & delete confirmations
                 try {
@@ -655,6 +694,46 @@ const ShowPlanner: React.FC<ShowPlannerProps> = ({ user, clients, onNavigateToAn
         }
     };
     
+    const handleAddPipelineRoutineToShow = async () => {
+        if (!selectedShow || !pipelineRoutine) return;
+        const title = String(pipelineRoutine.title || 'Generated Routine').trim() || 'Generated Routine';
+        const notes = [
+            pipelineRoutine.notes || pipelineRoutine.patter || '',
+            pipelineRoutine.effectDescription ? `\n\n---\nSource Effect Context:\n${pipelineRoutine.effectDescription}` : '',
+        ].filter(Boolean).join('');
+        try {
+            const newShows = await addTaskToShow(selectedShow.id, {
+                title,
+                notes,
+                priority: 'Medium',
+                status: 'To-Do',
+                createdAt: Date.now(),
+                subtasks: [
+                    { title: 'Refine script', done: false },
+                    { title: 'Block physical handling', done: false },
+                    { title: 'Rehearse timing aloud', done: false },
+                    { title: 'Add props/checklist notes', done: false },
+                ],
+            } as any);
+            setShows(newShows);
+            const refreshedShow = newShows.find(s => s.id === selectedShow.id) || null;
+            setSelectedShow(refreshedShow);
+            try { localStorage.removeItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY); } catch {}
+            setPipelineRoutine(null);
+            setToastMsg('Creative pipeline routine added to this show.');
+            void trackClientEvent({ tool: 'creative_pipeline', action: 'routine_to_show_completed', outcome: 'SUCCESS_NOT_CHARGED', metadata: { showId: selectedShow.id, showTitle: selectedShow.title, routineTitle: title, source: pipelineRoutine.source || 'patter_engine' } });
+        } catch (err: any) {
+            console.error('Failed to add pipeline routine:', err);
+            setToastMsg(err?.message ? String(err.message) : "Couldn't add routine to show.");
+        }
+    };
+
+    const dismissPipelineRoutine = () => {
+        try { localStorage.removeItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY); } catch {}
+        setPipelineRoutine(null);
+        void trackClientEvent({ tool: 'creative_pipeline', action: 'routine_handoff_dismissed', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: pipelineRoutine?.title || null } });
+    };
+
     // Task handlers
     const handleAddTask = async (data: any) => {
         if (!selectedShow) return;
@@ -2185,6 +2264,36 @@ return (
             {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
             {isLiveModalOpen && selectedShow && <LivePerformanceModal show={selectedShow} onClose={() => setIsLiveModalOpen(false)} onEnd={(id) => { setIsLiveModalOpen(false); onNavigateToAnalytics(id); }} />}
             {isAudienceQrModalOpen && selectedShow && <AudienceFeedbackQrModal show={selectedShow} onClose={() => setIsAudienceQrModalOpen(false)} />}
+            {pipelineRoutine && (
+                <div className="mx-4 mb-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-50 md:mx-6">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="font-bold text-emerald-200">Creative Pipeline: Script → Routine → Show</div>
+                            <div className="mt-1 text-emerald-50/80">
+                                Ready to add: <span className="font-semibold text-white">{pipelineRoutine.title || 'Generated Routine'}</span>
+                                {selectedShow ? <> to <span className="font-semibold text-white">{selectedShow.title}</span></> : <>. Select or create a show first.</>}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={handleAddPipelineRoutineToShow}
+                                disabled={!selectedShow}
+                                className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                            >
+                                Add Routine to This Show
+                            </button>
+                            <button
+                                type="button"
+                                onClick={dismissPipelineRoutine}
+                                className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {selectedShow ? <ShowDetailView /> : <ShowListView />}
 
             {toastMsg && (

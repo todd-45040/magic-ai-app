@@ -33,6 +33,8 @@ type VisualEffectHandoff = {
 };
 
 const EFFECT_ENGINE_VISUAL_HANDOFF_KEY = 'maw_effect_engine_visual_handoff';
+const PATTER_ENGINE_PREFILL_KEY = 'maw_patter_engine_prefill_v1';
+
 
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
@@ -800,6 +802,56 @@ ${lastOutput}`
     }
   };
   
+  const buildEffectPipelineDescription = (effect: ParsedEffect) => {
+    const visualContext = visualSeed?.source === 'visual_image'
+      ? [
+          `Source visual title: ${visualSeed.title || 'Saved visual concept'}`,
+          visualSeed.prompt ? `Source visual prompt: ${visualSeed.prompt}` : '',
+          visualSeed.imageUrl ? `Source image: ${visualSeed.imageUrl}` : '',
+        ].filter(Boolean).join('\n')
+      : '';
+
+    return [
+      `Effect title: ${effect.name || 'Untitled Effect'}`,
+      effect.premise ? `Premise:\n${effect.premise}` : '',
+      effect.experience ? `Audience experience:\n${effect.experience}` : '',
+      effect.performanceNotes ? `Performance notes:\n${effect.performanceNotes}` : '',
+      effect.methodOverview ? `High-level method direction:\n${effect.methodOverview}` : '',
+      visualContext ? `\nVisual seed context:\n${visualContext}` : '',
+      '',
+      'Write this as a polished performance script with natural spoken lines, audience interaction, pauses, callbacks, and a clear ending.',
+    ].filter(Boolean).join('\n\n');
+  };
+
+  const sendEffectToPatterEngine = (effect: ParsedEffect, index: number) => {
+    const payload = {
+      version: 1,
+      source: 'effect_engine',
+      pipelineStage: 'effect_to_script',
+      effectTitle: effect.name || `Effect ${index + 1}`,
+      effectDescription: buildEffectPipelineDescription(effect),
+      selectedTones: creativeIntent === 'Comedy Bit' ? ['Comedic'] : creativeIntent === 'Emotional Story Piece' ? ['Storytelling'] : ['Mysterious', 'Dramatic'],
+      visualSeed: visualSeed || null,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(PATTER_ENGINE_PREFILL_KEY, JSON.stringify(payload));
+      localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'effect_to_script', ts: Date.now(), title: payload.effectTitle }));
+    } catch {}
+
+    void trackClientEvent({
+      tool: 'creative_pipeline',
+      action: 'effect_to_script_clicked',
+      outcome: 'SUCCESS_NOT_CHARGED',
+      metadata: { effectTitle: payload.effectTitle, effectIndex: index, source: visualSeed?.source || 'effect_engine' },
+    });
+
+    try {
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'patter-engine', source: 'effect_engine', title: payload.effectTitle } }));
+    } catch {}
+  };
+
   const handleSave = async () => {
     if (!ideas) return;
     const cleanItems = items.map((item) => item.trim()).filter((item) => item !== '');
@@ -1315,6 +1367,14 @@ ${lastOutput}`
                                       </button>
 
                                       <div className="flex flex-col items-end gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => sendEffectToPatterEngine(ef, idx)}
+                                          className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-500/20 transition"
+                                          title="Send this effect into the Patter Engine"
+                                        >
+                                          Send to Script →
+                                        </button>
                                         {strength ? (
                                           <span className={`text-xs rounded-full border px-2 py-1 ${strengthStyle}`}>
                                             {strength === 'Strong Concept' ? '🟢' : strength === 'Needs Work' ? '🟡' : '🔵'} {strength}

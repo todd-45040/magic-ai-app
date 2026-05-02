@@ -13,6 +13,9 @@ interface PatterEngineProps {
 }
 
 const TONES = ["Comedic", "Mysterious", "Dramatic", "Storytelling"] as const;
+const PATTER_ENGINE_PREFILL_KEY = "maw_patter_engine_prefill_v1";
+const SHOW_PLANNER_ROUTINE_HANDOFF_KEY = "maw_show_planner_routine_handoff_v1";
+
 
 const LoadingIndicator: React.FC<{ statusText?: string }> = ({ statusText }) => (
   <div className="flex flex-col items-center justify-center text-center p-8">
@@ -43,6 +46,7 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [attemptedGenerate, setAttemptedGenerate] = useState(false);
+  const [pipelineSource, setPipelineSource] = useState<any>(null);
 
   // Perceived speed: staged progress text while loading
   const [loadingStep, setLoadingStep] = useState(0);
@@ -60,20 +64,23 @@ const PatterEngine: React.FC<PatterEngineProps> = ({ user: _user, onIdeaSaved })
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('maw_patter_engine_prefill_v1');
+      const raw = localStorage.getItem(PATTER_ENGINE_PREFILL_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (!parsed || parsed.version !== 1) {
-        localStorage.removeItem('maw_patter_engine_prefill_v1');
+        localStorage.removeItem(PATTER_ENGINE_PREFILL_KEY);
         return;
       }
       if (typeof parsed.effectDescription === 'string' && parsed.effectDescription.trim()) {
         setEffectDescription(parsed.effectDescription.trim());
       }
       if (Array.isArray(parsed.selectedTones) && parsed.selectedTones.length) {
-        setSelectedTones(parsed.selectedTones.filter((tone: string) => TONES.includes(tone as any)));
+        const tones = parsed.selectedTones.filter((tone: string) => TONES.includes(tone as any));
+        if (tones.length) setSelectedTones(tones);
       }
-      localStorage.removeItem('maw_patter_engine_prefill_v1');
+      setPipelineSource(parsed);
+      localStorage.removeItem(PATTER_ENGINE_PREFILL_KEY);
+      void trackClientEvent({ tool: 'creative_pipeline', action: 'script_prefill_loaded', outcome: 'SUCCESS_NOT_CHARGED', metadata: { source: parsed.source || 'unknown', effectTitle: parsed.effectTitle || null } });
     } catch {
       // ignore prefill errors
     }
@@ -236,6 +243,7 @@ Return plain text.`;
     setCopyStatus("idle");
     setAttemptedGenerate(false);
     setLoadingStep(0);
+    setPipelineSource(null);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -351,6 +359,34 @@ Return plain text.`;
     }
   };
 
+  const handleCreateRoutineForShow = () => {
+    if (!result) return;
+    const title = pipelineSource?.effectTitle || effectDescription.split('\n')[0]?.replace(/^Effect title:\s*/i, '').slice(0, 80) || 'Generated Routine';
+    const payload = {
+      version: 1,
+      source: 'patter_engine',
+      pipelineStage: 'script_to_routine',
+      title: String(title || 'Generated Routine'),
+      notes: fullContentForSave(),
+      patter: result,
+      effectDescription,
+      selectedTones,
+      upstream: pipelineSource || null,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY, JSON.stringify(payload));
+      localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'script_to_routine', ts: Date.now(), title: payload.title }));
+    } catch {}
+
+    void trackClientEvent({ tool: 'creative_pipeline', action: 'script_to_routine_clicked', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: payload.title, source: pipelineSource?.source || 'patter_engine' } });
+
+    try {
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'show-planner', source: 'patter_engine', title: payload.title } }));
+    } catch {}
+  };
+
   return (
     <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
       {/* Control Panel */}
@@ -360,6 +396,21 @@ Return plain text.`;
         <p className="text-slate-400 mb-4">
           Describe your effect, choose a style, and generate performance-ready patter you can copy or save to your Ideas.
         </p>
+
+        {pipelineSource ? (
+          <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-50">
+            <div className="font-bold text-amber-200">Creative Pipeline: Effect → Script</div>
+            <div className="mt-1 text-amber-50/80">Loaded from: {pipelineSource.effectTitle || 'Effect Engine concept'}</div>
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={!canGenerate}
+              className="mt-3 rounded-lg bg-amber-500/20 border border-amber-300/30 px-3 py-2 text-xs font-semibold text-amber-50 hover:bg-amber-500/30 disabled:opacity-50"
+            >
+              Generate script from this effect
+            </button>
+          </div>
+        ) : null}
 
         {/* Booth-friendly presets + reset */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -499,7 +550,14 @@ Return plain text.`;
                 saved={saveStatus === "saved"}
                 saving={false}
               />
-              <div className="mt-2 flex justify-end">
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateRoutineForShow}
+                  className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 transition"
+                >
+                  Create Routine → Add to Show
+                </button>
                 <CohesionActions content={fullContentForSave()} defaultTitle={"Patter"} defaultTags={["patter"]} compact />
               </div>
             </div>

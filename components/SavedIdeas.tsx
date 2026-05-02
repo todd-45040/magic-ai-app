@@ -9,6 +9,7 @@ import NextStepPanel from './NextStepPanel';
 import RoutineTracker from './RoutineTracker';
 import ResumePanel from './ResumePanel';
 import { FEATURE_FLAGS } from '../featureFlags';
+import { trackClientEvent } from '../services/telemetryClient';
 
 type MawIdeaV2 = {
     format: string;
@@ -1158,15 +1159,42 @@ ${buildImageIdeaPromptContext(idea)}`
     };
 
     const addImageToScript = (idea: SavedIdea) => {
-        onAiSpark?.({
-            type: 'custom-prompt',
-            payload: {
-                prompt: `Turn this saved visual concept into performance script material. Write a 90-second script, a 3-beat routine outline, audience interaction lines, and a strong closing line.
+        const display = getIdeaDisplay(idea);
+        const payload = {
+            version: 1,
+            source: 'saved_visual_idea',
+            pipelineStage: 'image_to_script',
+            effectTitle: display.title || idea.title || 'Saved visual concept',
+            effectDescription: [
+                'Create performance-ready patter from this saved visual concept.',
+                buildImageIdeaPromptContext(idea),
+                '',
+                'Write a 90-second script, a 3-beat routine outline, audience interaction lines, and a strong closing line.',
+            ].join('\n'),
+            selectedTones: ['Comedic', 'Storytelling'],
+            ideaId: idea.id,
+            created_at: new Date().toISOString(),
+        };
 
-${buildImageIdeaPromptContext(idea)}`
-            }
-        });
-        setActionMessage('Image concept sent to the AI Assistant for scripting.');
+        try {
+            localStorage.setItem('maw_patter_engine_prefill_v1', JSON.stringify(payload));
+            localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'image_to_script', ts: Date.now(), title: payload.effectTitle }));
+        } catch {}
+
+        void trackClientEvent({ tool: 'creative_pipeline', action: 'image_to_script_clicked', outcome: 'SUCCESS_NOT_CHARGED', metadata: { ideaId: idea.id, title: payload.effectTitle } });
+
+        setOpenIdea(null);
+        setActionMessage('Visual concept loaded into Patter Engine.');
+        try {
+            window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'patter-engine', source: 'saved_visual_idea', ideaId: idea.id } }));
+        } catch {
+            onAiSpark?.({
+                type: 'custom-prompt',
+                payload: {
+                    prompt: `Turn this saved visual concept into performance script material. Write a 90-second script, a 3-beat routine outline, audience interaction lines, and a strong closing line.\n\n${buildImageIdeaPromptContext(idea)}`
+                }
+            });
+        }
     };
 
     const sendToPlanner = (idea: SavedIdea) => {
