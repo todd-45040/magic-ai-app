@@ -2,41 +2,41 @@
 
 import { supabase } from '../supabase';
 
-export async function logEvent(
+export function logEvent(
   event_name: string,
   payload: any = {},
   partner_source?: string
 ) {
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const token = data.session?.access_token;
 
-    const token = session?.access_token;
+        if (!token) {
+          console.warn('No auth token — skipping telemetry');
+          return;
+        }
 
-    if (!token) {
-      console.warn('No auth token — skipping telemetry');
-      return;
-    }
-
-    const response = await fetch('/api/analyticsEvent', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        event_name,
-        event_payload: payload,
-        partner_source,
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      console.error('Telemetry endpoint error:', response.status, text);
-    }
+        fetch('/api/analyticsEvent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            event_name,
+            event_payload: payload,
+            partner_source,
+          }),
+        }).catch((err) => {
+          console.warn('Telemetry request failed:', err);
+        });
+      })
+      .catch((err) => {
+        console.warn('Telemetry session lookup failed:', err);
+      });
   } catch (err) {
-    console.error('Telemetry failed:', err);
+    console.warn('Telemetry failed:', err);
   }
 }
