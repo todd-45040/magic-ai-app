@@ -24,7 +24,7 @@ import {
 import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
-const TIMEOUT_MS = 25_000;
+const TIMEOUT_MS = 55_000;
 
 function getClientIp(req: any): string | null {
   const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
@@ -61,6 +61,37 @@ function extractText(result: any): string {
 }
 
 
+
+
+function normalizeGeminiSchema(schema: any): any {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(normalizeGeminiSchema);
+
+  const out: any = { ...schema };
+  if (typeof out.type === 'string') {
+    const t = out.type.toLowerCase();
+    const map: Record<string, string> = {
+      object: 'OBJECT',
+      array: 'ARRAY',
+      string: 'STRING',
+      number: 'NUMBER',
+      integer: 'INTEGER',
+      boolean: 'BOOLEAN',
+    };
+    out.type = map[t] || out.type;
+  }
+
+  if (out.properties && typeof out.properties === 'object') {
+    out.properties = Object.fromEntries(
+      Object.entries(out.properties).map(([key, value]) => [key, normalizeGeminiSchema(value)])
+    );
+  }
+  if (out.items) out.items = normalizeGeminiSchema(out.items);
+  if (Array.isArray(out.anyOf)) out.anyOf = out.anyOf.map(normalizeGeminiSchema);
+  if (Array.isArray(out.oneOf)) out.oneOf = out.oneOf.map(normalizeGeminiSchema);
+  if (Array.isArray(out.allOf)) out.allOf = out.allOf.map(normalizeGeminiSchema);
+  return out;
+}
 
 function tryExtractStructuredJson(result: any): any | null {
   const parsed = result?.response?.parsed ?? result?.parsed ?? null;
@@ -146,7 +177,7 @@ export default async function handler(req: any, res: any) {
     const body = req.body || {};
     const { model, config } = body;
 
-    const responseSchema = config?.responseSchema;
+    let responseSchema = config?.responseSchema;
     if (!responseSchema || typeof responseSchema !== 'object') {
       return jsonError(res, 400, {
         ok: false,
@@ -156,6 +187,13 @@ export default async function handler(req: any, res: any) {
         ...(isPreviewEnv() ? { details: { hint: 'Send { config: { responseSchema: { ... } } }' } } : {}),
       });
     }
+
+    // Normalize JSON schema type names before passing to Gemini.
+    // Several frontend tools use standard JSON Schema lowercase values ('object',
+    // 'array', 'string'), while @google/genai expects uppercase enum values
+    // ('OBJECT', 'ARRAY', 'STRING'). Without this, Gemini can throw INVALID_ARGUMENT
+    // and the UI only sees the generic hardening message.
+    responseSchema = normalizeGeminiSchema(responseSchema);
 
     // Canonical input: messages[]; for Gemini we must provide `contents`.
     const messages = body.messages;

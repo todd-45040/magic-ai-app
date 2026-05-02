@@ -491,20 +491,18 @@ export const generateStructuredResponse = async (
     },
   };
 
-  // Structured AI calls should go through the hardened JSON endpoint, not the legacy
-  // /api/generate chat proxy. The JSON endpoint validates responseSchema, repairs
-  // malformed JSON once server-side, and returns parsed JSON directly. This prevents
-  // Effect Engine / Director Mode style tools from showing a vague "unexpected error"
-  // when the model response is valid enough to repair but not directly parseable on
-  // the client.
+  // Structured AI calls must use the hardened JSON endpoint rather than the legacy
+  // chat proxy. /api/ai/json validates the schema, normalizes provider quirks,
+  // repairs malformed model JSON once server-side, and returns parsed JSON as
+  // { ok:true, json }. This is the reliable path for Effect Engine.
   const result = await postJson<any>('/api/ai/json', body, currentUser, options?.extraHeaders, { timeoutMs: 90000, retries: 2 });
 
   if (result?.ok === true && result?.json && typeof result.json === 'object') {
     return result.json;
   }
 
-  // Backward compatibility for older deployments/proxies that still return raw Gemini
-  // candidates instead of { ok:true, json }.
+  // Backward compatibility for older deployments/proxies that still return raw
+  // Gemini candidates instead of { ok:true, json }.
   const text = extractText(result);
 
   const looksTruncated = (raw: string, errMsg: string) => {
