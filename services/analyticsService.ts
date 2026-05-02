@@ -1,6 +1,6 @@
 // services/analyticsService.ts
 
-import { supabase } from '../lib/supabase';
+import { supabase } from '../src/lib/supabase';
 
 export async function logEvent(
   event_name: string,
