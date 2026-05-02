@@ -695,21 +695,23 @@ export const identifyTrickFromImage = async (
 
   const body: GeminiGenerateBody = {
     model,
-    contents: {
+    contents: [{
+      role: 'user',
       parts: [
         { text: prompt },
         { inlineData: { mimeType, data: base64ImageData } }
       ]
-    },
+    }],
     config: {
       responseMimeType: "application/json",
       responseSchema,
     },
   };
 
-  const result = await postJson<any>('/api/generate', body, currentUser);
-  const text = extractText(result);
-  const parsed = JSON.parse(text || '{}') as any;
+  const result = await postJson<any>('/api/ai/json', body, currentUser);
+  const parsed = (result?.ok === true && result?.json && typeof result.json === 'object')
+    ? result.json
+    : safeJsonParse(extractText(result) || '{}');
 
   const trickName: string = String(parsed?.trickName || '').trim() || 'Unknown Trick';
   const videoQueriesRaw: any[] = Array.isArray(parsed?.videoQueries) ? parsed.videoQueries : [];

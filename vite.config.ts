@@ -44,9 +44,10 @@ export default defineConfig(({ mode }) => {
               if (id.includes('react')) return 'vendor-react';
               return 'vendor';
             }
-            if (id.includes('/components/Admin')) return 'admin';
-            if (id.includes('/components/LiveRehearsal') || id.includes('/components/VideoRehearsal') || id.includes('/services/geminiService')) return 'studio';
-            if (id.includes('/components/Auth') || id.includes('/services/billingClient') || id.includes('/components/FoundingCirclePage')) return 'auth-billing';
+            // Keep app/source modules in Rollup's default graph. Manually chunking
+            // interconnected React feature modules caused circular chunks such as
+            // vendor -> vendor-react -> vendor and studio -> auth-billing -> studio.
+            // Vendor-only chunks are safer and still preserve caching benefits.
           },
         },
       },

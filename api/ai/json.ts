@@ -25,6 +25,7 @@ import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // ~2MB
 const TIMEOUT_MS = 55_000;
+const REPAIR_MAX_OUTPUT_TOKENS = 4096;
 
 function getClientIp(req: any): string | null {
   const xf = req?.headers?.['x-forwarded-for'] || req?.headers?.['X-Forwarded-For'];
@@ -363,10 +364,10 @@ export default async function handler(req: any, res: any) {
 
       const runRepair = async () => {
         if (provider === 'openai') {
-          return callOpenAI({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+          return callOpenAI({ model, contents: repairContents, config: { ...config, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 0), REPAIR_MAX_OUTPUT_TOKENS) } });
         }
         if (provider === 'anthropic') {
-          return callAnthropic({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+          return callAnthropic({ model, contents: repairContents, config: { ...config, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 0), REPAIR_MAX_OUTPUT_TOKENS) } });
         }
         const apiKey = getGoogleAiApiKey();
         if (!apiKey) {
@@ -377,7 +378,7 @@ export default async function handler(req: any, res: any) {
         return ai.models.generateContent({
           model: model || 'gemini-2.5-flash',
           contents: repairContents,
-          config: { ...config, responseMimeType: 'application/json', responseSchema, maxOutputTokens: 1400, temperature: 0 },
+          config: { ...config, responseMimeType: 'application/json', responseSchema, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 0), REPAIR_MAX_OUTPUT_TOKENS), temperature: 0 },
         });
       };
 
