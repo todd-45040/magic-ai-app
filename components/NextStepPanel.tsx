@@ -38,8 +38,24 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
     });
   };
 
+  const handleNextStepClickCapture = (event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest<HTMLButtonElement>('[data-next-step-action]');
+    const action = button?.dataset.nextStepAction;
+
+    if (!action) return;
+
+    // Capture-phase logging fires before any button action changes views,
+    // opens modals, or triggers AI flows. This makes next_step_clicked
+    // reliable even when the button immediately starts another workflow.
+    trackNextStepClick(action);
+  };
+
   return (
-    <section className="mb-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-slate-950/70 p-4 shadow-[0_18px_42px_rgba(15,23,42,0.28)]">
+    <section
+      onClickCapture={handleNextStepClickCapture}
+      className="mb-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-slate-950/70 p-4 shadow-[0_18px_42px_rgba(15,23,42,0.28)]"
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.22em] text-amber-200/80">Next step</div>
@@ -52,8 +68,8 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[520px]">
           <button
             type="button"
+            data-next-step-action="generate_patter"
             onClick={() => {
-              trackNextStepClick('generate_patter');
               onAiSpark({
               type: 'custom-prompt',
               payload: {
@@ -69,8 +85,8 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
 
           <button
             type="button"
+            data-next-step-action="rehearse_this"
             onClick={() => {
-              trackNextStepClick('rehearse_this');
               try {
                 window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'live-rehearsal' } }));
               } catch {}
@@ -89,7 +105,8 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
 
           <button
             type="button"
-            onClick={() => { trackNextStepClick('add_to_show'); onAddToShow(idea); }}
+            data-next-step-action="add_to_show"
+            onClick={() => { onAddToShow(idea); }}
             className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/20 hover:text-white"
           >
             <div className="text-sm font-bold text-emerald-100">📋 Add to Show</div>
@@ -101,7 +118,8 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
-          onClick={() => { trackNextStepClick('start_new_routine'); onPromoteToRoutine(idea); }}
+          data-next-step-action="start_new_routine"
+          onClick={() => { onPromoteToRoutine(idea); }}
           className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
         >
           Start a new routine from this idea
