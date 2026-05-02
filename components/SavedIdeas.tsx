@@ -296,13 +296,41 @@ function tryParseMawIdeaV2(content: string): MawIdeaV2 | null {
     }
 }
 
+function extractImageUrlFromText(text: string): string {
+    const value = String(text || '').trim();
+    if (!value) return '';
+
+    // Direct image URL or data URL.
+    if (/^(data:image\/|blob:|https?:\/\/)/i.test(value)) return value;
+
+    // Common older export/notes formats: "Image: <url>", markdown images, or
+    // embedded data URLs/remote URLs inside a larger text blob.
+    const markdown = value.match(/!\[[^\]]*\]\(([^)]+)\)/i)?.[1];
+    if (markdown) return markdown.trim();
+
+    const labeled = value.match(/(?:^|\n)\s*(?:image|imageUrl|url)\s*:\s*(data:image\/[^\s]+|blob:[^\s]+|https?:\/\/[^\s)]+)[^\S\r\n]*/i)?.[1];
+    if (labeled) return labeled.trim();
+
+    const embedded = value.match(/(data:image\/[^\s"'`)]+|blob:[^\s"'`)]+|https?:\/\/[^\s"'`)]+)/i)?.[1];
+    return embedded ? embedded.trim() : '';
+}
+
 function getImageUrlForIdea(idea: SavedIdea): string {
-    if (idea.type !== 'image') return idea.content;
+    if (idea.type !== 'image') return extractImageUrlFromText(idea.content);
     const v2 = tryParseMawIdeaV2(idea.content);
-    const url = (v2 as any)?.meta?.imageUrl || (v2 as any)?.structured?.imageUrl || (v2 as any)?.imageUrl;
-    if (typeof url === 'string' && url.trim()) return url.trim();
-    // Backward compatibility: older image ideas store a direct URL in content.
-    return idea.content;
+    const candidates = [
+        (v2 as any)?.meta?.imageUrl,
+        (v2 as any)?.structured?.imageUrl,
+        (v2 as any)?.imageUrl,
+        (v2 as any)?.url,
+        idea.content,
+    ];
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') continue;
+        const url = extractImageUrlFromText(candidate);
+        if (url) return url;
+    }
+    return '';
 }
 
 function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {

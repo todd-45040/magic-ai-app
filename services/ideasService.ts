@@ -63,8 +63,8 @@ function sanitizeIdeaContent(content: string): string {
     if (
       parsed &&
       typeof parsed === 'object' &&
-      parsed.format === 'maw.idea.v2' &&
-      typeof parsed.tool === 'string'
+      typeof parsed.format === 'string' &&
+      parsed.format.startsWith('maw.idea.')
     ) {
       return text;
     }

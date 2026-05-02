@@ -48,34 +48,27 @@ function normalizeTool(raw: any): string {
 }
 
 
-async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: string, partnerIds: string[] = []) {
+async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: string) {
   const rows: any[] = [];
   const pageSize = 1000;
-  const partnerSet = new Set((partnerIds || []).map((id) => String(id)).filter(Boolean));
-
   for (let start = 0; start < 10000; start += pageSize) {
     const end = start + pageSize - 1;
-    const { data, error } = await admin
+    let query = admin
       .from('analytics_events')
       .select('user_id,event_name,event_payload,partner_source,created_at')
       .gte('created_at', sinceIso)
       .order('created_at', { ascending: false })
       .range(start, end);
 
-    if (error) throw error;
-
-    if (Array.isArray(data) && data.length > 0) {
-      for (const row of data) {
-        const source = String(row?.partner_source || '').trim().toLowerCase();
-        const userId = String(row?.user_id || '').trim();
-        // Prefer explicit analytics partner_source, but also include legacy/null
-        // events from users whose profile is attributed to the selected partner.
-        if (sources.includes(source) || (userId && partnerSet.has(userId))) {
-          rows.push(row);
-        }
-      }
+    if (sources.length === 1) {
+      query = query.eq('partner_source', sources[0]);
+    } else {
+      query = query.in('partner_source', sources);
     }
 
+    const { data, error } = await query;
+    if (error) throw error;
+    if (Array.isArray(data) && data.length > 0) rows.push(...data);
     if (!data || data.length < pageSize) break;
   }
   return rows;
@@ -218,8 +211,8 @@ export default async function handler(req: any, res: any) {
     const sources = sourceList(source);
     const { data: partnerUsers, error: userErr } = await admin
       .from('users')
-      .select('id,email,membership,trial_end_date,created_at,signup_source,partner_source')
-      .or(sources.map((src) => `partner_source.eq.${src},signup_source.eq.${src}`).join(','))
+      .select('id,email,membership,trial_end_date,created_at,signup_source')
+      .in('signup_source', sources)
       .order('created_at', { ascending: false })
       .limit(5000);
 
@@ -251,7 +244,7 @@ export default async function handler(req: any, res: any) {
 
     let activationAnalytics: any[] = [];
     try {
-      activationAnalytics = await fetchAllAnalyticsEvents(admin, sources, sinceIso, partnerIds);
+      activationAnalytics = await fetchAllAnalyticsEvents(admin, sources, sinceIso);
     } catch (analyticsErr) {
       console.error('adminIbmFunnel analytics_events load failed', analyticsErr);
       activationAnalytics = [];
