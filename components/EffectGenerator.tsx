@@ -23,6 +23,18 @@ type ParsedEffect = {
   buildCost: 'Low' | 'Medium' | 'High' | '';
 };
 
+type VisualEffectHandoff = {
+  source: 'visual_image';
+  imageUrl?: string;
+  prompt?: string;
+  title?: string;
+  ideaId?: string;
+  created_at?: string;
+};
+
+const EFFECT_ENGINE_VISUAL_HANDOFF_KEY = 'maw_effect_engine_visual_handoff';
+
+
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
 
 
@@ -397,6 +409,35 @@ const EffectGenerator: React.FC<EffectGeneratorProps> = ({ onIdeaSaved }) => {
     'Visual Miracle' | 'Comedy Bit' | 'Mentalism' | 'Close-Up Practical' | 'Stage Expansion' | 'Social Media Piece' | 'Emotional Story Piece'
   >('Visual Miracle');
   const [difficulty, setDifficulty] = useState<'Self-Working' | 'Intermediate' | 'Advanced / Gimmick Allowed'>('Intermediate');
+  const [visualSeed, setVisualSeed] = useState<VisualEffectHandoff | null>(null);
+  const visualHandoffAppliedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(EFFECT_ENGINE_VISUAL_HANDOFF_KEY);
+      if (!raw) return;
+      localStorage.removeItem(EFFECT_ENGINE_VISUAL_HANDOFF_KEY);
+      const parsed = JSON.parse(raw) as VisualEffectHandoff;
+      if (!parsed || parsed.source !== 'visual_image') return;
+
+      const title = String(parsed.title || 'Saved visual concept').trim();
+      visualHandoffAppliedRef.current = true;
+      setVisualSeed(parsed);
+      setItems([title.slice(0, 80), 'picture frame / image', 'magician presentation', 'audience reveal']);
+      setCreativeIntent('Visual Miracle');
+      setDifficulty('Intermediate');
+      setIdeas(null);
+      setDisplayIdeas(null);
+      setError(null);
+      setSaveStatus('idle');
+      setCopyStatus('idle');
+      try {
+        window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+      } catch {}
+    } catch {
+      // ignore malformed or unavailable visual handoff data
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -469,6 +510,7 @@ const EFFECT_ENGINE_EXAMPLES: Array<{
 
   useEffect(() => {
     try {
+      if (visualHandoffAppliedRef.current) return;
       const raw = localStorage.getItem(draftKey);
       if (!raw) return;
       const parsed = JSON.parse(raw);
@@ -567,6 +609,7 @@ const handleTryExample = () => {
     setCopyStatus('idle');
     setIsStrongIdea(false);
     setExpandedEffectIndex(0);
+    setVisualSeed(null);
     try {
       localStorage.removeItem(draftKey);
     } catch {}
@@ -595,6 +638,9 @@ const handleTryExample = () => {
     // Phase 1: steer generations with intent + practicality constraints.
     const prompt = [
       `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
+      visualSeed?.source === 'visual_image'
+        ? `Create a magic effect based on this saved visual concept. Visual concept title: ${visualSeed.title || 'Untitled visual concept'}. Original visual prompt/context: ${visualSeed.prompt || 'No prompt provided'}. Image reference URL/data is available for UI context: ${visualSeed.imageUrl || 'not available'}. Use the image as the creative seed, but keep the effect practical and performance-ready.`
+        : `Generate magic effect ideas using the following items: ${itemList}.`,
       `Generate magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
@@ -686,6 +732,9 @@ const handleTryExample = () => {
 
     const prompt = [
       `You are a professional creative consultant for magicians designing polished, performance-ready routines.`,
+      visualSeed?.source === 'visual_image'
+        ? `Generate NEW magic effect ideas based on this saved visual concept. Visual concept title: ${visualSeed.title || 'Untitled visual concept'}. Original visual prompt/context: ${visualSeed.prompt || 'No prompt provided'}. Image reference URL/data is available for UI context: ${visualSeed.imageUrl || 'not available'}. Make the new concepts meaningfully different from the previous output while staying faithful to the image.`
+        : `Generate NEW magic effect ideas using the following items: ${itemList}.`,
       `Generate NEW magic effect ideas using the following items: ${itemList}.`,
       `Creative intent: ${creativeIntent}.`,
       `Difficulty level: ${difficulty}.`,
@@ -1075,6 +1124,28 @@ ${lastOutput}`
         <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-300 mb-2">The Effect Engine</h2>
             <p className="text-slate-400 mb-4">Combine everyday objects to invent extraordinary magic. Enter up to four items to see what's possible.</p>
+
+            {visualSeed ? (
+              <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 shadow-lg shadow-emerald-950/10">
+                <div className="flex flex-col md:flex-row gap-4">
+                  {visualSeed.imageUrl ? (
+                    <div className="w-full md:w-40 shrink-0 overflow-hidden rounded-xl border border-emerald-400/20 bg-slate-950">
+                      <img src={visualSeed.imageUrl} alt={visualSeed.title || 'Saved visual concept'} className="h-40 w-full object-cover" />
+                    </div>
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wide text-emerald-200/70 font-semibold">Loaded from Saved Ideas</div>
+                    <div className="mt-1 text-base font-bold text-emerald-100">Create a magic effect based on this visual concept</div>
+                    <div className="mt-1 text-sm text-slate-300 line-clamp-2">{visualSeed.title || 'Saved visual concept'}</div>
+                    {visualSeed.prompt ? <div className="mt-2 text-xs text-slate-400 line-clamp-3">{visualSeed.prompt}</div> : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => handleGenerate()} disabled={isLoading} className="px-3 py-2 text-xs rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60 transition">Generate effects from this image</button>
+                      <button type="button" onClick={() => setVisualSeed(null)} disabled={isLoading} className="px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-500 disabled:opacity-60 transition">Clear image context</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-4">
                 {/* Items panel */}

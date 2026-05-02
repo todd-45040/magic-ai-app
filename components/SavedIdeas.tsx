@@ -1122,15 +1122,39 @@ Return: variation title, image prompt, performance use, and what changed from th
     };
 
     const useImageInEffect = (idea: SavedIdea) => {
-        onAiSpark?.({
-            type: 'custom-prompt',
-            payload: {
-                prompt: `Build a practical magic effect from this saved visual concept. Include effect description, props, method-safe handling notes, staging, reset, risk/angle warnings, and 3 short patter options.
+        const display = getIdeaDisplay(idea);
+        const imageUrl = getImageUrlForIdea(idea);
+        const prompt = extractOriginalPrompt(idea) || display.body || idea.content || '';
+        const payload = {
+            source: 'visual_image',
+            imageUrl: imageUrl || '',
+            prompt,
+            title: display.title || idea.title || 'Saved visual concept',
+            ideaId: idea.id,
+            created_at: new Date().toISOString(),
+        };
+
+        try {
+            localStorage.setItem('maw_effect_engine_visual_handoff', JSON.stringify(payload));
+        } catch {
+            // If storage is unavailable, still route the user and let Effect Engine start normally.
+        }
+
+        setOpenIdea(null);
+        setActionMessage('Visual concept loaded into Effect Engine.');
+
+        try {
+            window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'effect-generator', source: 'visual_image', ideaId: idea.id } }));
+        } catch {
+            onAiSpark?.({
+                type: 'custom-prompt',
+                payload: {
+                    prompt: `Build a practical magic effect from this saved visual concept. Include effect description, props, method-safe handling notes, staging, reset, risk/angle warnings, and 3 short patter options.
 
 ${buildImageIdeaPromptContext(idea)}`
-            }
-        });
-        setActionMessage('Image concept sent to the AI Assistant to build an effect.');
+                }
+            });
+        }
     };
 
     const addImageToScript = (idea: SavedIdea) => {

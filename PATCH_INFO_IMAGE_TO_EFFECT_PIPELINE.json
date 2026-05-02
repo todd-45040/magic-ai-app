@@ -1,0 +1,13 @@
+{
+  "patch": "image-to-effect-pipeline",
+  "summary": "Adds one-click Saved Image -> Effect Engine handoff. Saved visual ideas now preload Effect Engine with image context, preview, prompt seed, and a generate-from-image CTA.",
+  "files_changed": [
+    "components/SavedIdeas.tsx",
+    "components/EffectGenerator.tsx"
+  ],
+  "validation": [
+    "esbuild syntax/bundle check for components/SavedIdeas.tsx",
+    "esbuild syntax/bundle check for components/EffectGenerator.tsx"
+  ],
+  "notes": "Full npm build was not run because node_modules was not present in the uploaded package."
+}
