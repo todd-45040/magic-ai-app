@@ -1,4 +1,5 @@
 import React from 'react';
+import { logEvent } from '../services/analyticsService';
 import type { SavedIdea, Show } from '../types';
 
 interface RoutineTrackerProps {
@@ -24,6 +25,19 @@ const RoutineTracker: React.FC<RoutineTrackerProps> = ({ ideas, shows }) => {
     { label: 'Add to a Show', done: hasShow },
   ];
   const complete = steps.filter((step) => step.done).length;
+
+  React.useEffect(() => {
+    void logEvent('routine_tracker_viewed', {
+      source: 'saved_ideas',
+      idea_count: ideas.length,
+      show_count: shows.length,
+      steps_complete: complete,
+      has_effect: hasEffect,
+      has_patter: hasPatter,
+      has_rehearsal: hasRehearsal,
+      has_show: hasShow,
+    });
+  }, []);
 
   return (
     <section className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/55 p-4">

@@ -1,4 +1,5 @@
 import React from 'react';
+import { logEvent } from '../services/analyticsService';
 import type { AiSparkAction, SavedIdea } from '../types';
 
 interface NextStepPanelProps {
@@ -18,6 +19,25 @@ const buildIdeaContext = (title: string, body: string) => {
 const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSpark, onAddToShow, onPromoteToRoutine }) => {
   const ideaContext = buildIdeaContext(title, body);
 
+  React.useEffect(() => {
+    void logEvent('next_step_panel_viewed', {
+      idea_id: idea?.id ?? null,
+      idea_type: idea?.type ?? null,
+      title: title || idea?.title || null,
+      source: 'saved_ideas',
+    });
+  }, [idea?.id]);
+
+  const trackNextStepClick = (action: string) => {
+    void logEvent('next_step_clicked', {
+      action,
+      idea_id: idea?.id ?? null,
+      idea_type: idea?.type ?? null,
+      title: title || idea?.title || null,
+      source: 'saved_ideas',
+    });
+  };
+
   return (
     <section className="mb-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-slate-950/70 p-4 shadow-[0_18px_42px_rgba(15,23,42,0.28)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -32,12 +52,15 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[520px]">
           <button
             type="button"
-            onClick={() => onAiSpark({
+            onClick={() => {
+              trackNextStepClick('generate_patter');
+              onAiSpark({
               type: 'custom-prompt',
               payload: {
                 prompt: `Generate polished performance patter for this magic routine. Include: a strong opening line, audience interaction beats, a concise script, and a closer. Keep it practical and performance-ready.\n\n${ideaContext}`,
               },
-            })}
+            });
+            }}
             className="rounded-xl border border-purple-400/25 bg-purple-500/15 px-3 py-3 text-left transition hover:bg-purple-500/25 hover:text-white"
           >
             <div className="text-sm font-bold text-purple-100">🎭 Generate Patter</div>
@@ -47,6 +70,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
           <button
             type="button"
             onClick={() => {
+              trackNextStepClick('rehearse_this');
               try {
                 window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'live-rehearsal' } }));
               } catch {}
@@ -65,7 +89,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
 
           <button
             type="button"
-            onClick={() => onAddToShow(idea)}
+            onClick={() => { trackNextStepClick('add_to_show'); onAddToShow(idea); }}
             className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/20 hover:text-white"
           >
             <div className="text-sm font-bold text-emerald-100">📋 Add to Show</div>
@@ -77,7 +101,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
-          onClick={() => onPromoteToRoutine(idea)}
+          onClick={() => { trackNextStepClick('start_new_routine'); onPromoteToRoutine(idea); }}
           className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
         >
           Start a new routine from this idea
