@@ -9,6 +9,7 @@ import NextStepPanel from './NextStepPanel';
 import RoutineTracker from './RoutineTracker';
 import ResumePanel from './ResumePanel';
 import { FEATURE_FLAGS } from '../featureFlags';
+import { logEvent } from '../services/analyticsService';
 
 type MawIdeaV2 = {
     format: string;
@@ -919,6 +920,17 @@ const bulkDuplicateToClipboard = async () => {
         clearSelection();
     };
 
+        const trackNextStepShortcut = (action: string, idea: SavedIdea, source = 'saved_ideas_shortcut') => {
+        const display = getIdeaDisplay(idea);
+        void logEvent('next_step_clicked', {
+            action,
+            idea_id: idea?.id ?? null,
+            idea_type: idea?.type ?? null,
+            title: display.title || idea?.title || null,
+            source,
+        });
+    };
+
         const openIdeaView = (idea: SavedIdea) => {
         markOpenedNow(idea.id);
         if (idea.type === 'image' && idea.content) {
@@ -929,6 +941,7 @@ const bulkDuplicateToClipboard = async () => {
     };
 
 const openPromoteModal = (idea: SavedIdea) => {
+        trackNextStepShortcut('promote_to_routine', idea);
         const display = getIdeaDisplay(idea);
         setPromoteIdea(idea);
         setPromoteForm({
@@ -940,6 +953,7 @@ const openPromoteModal = (idea: SavedIdea) => {
     };
 
     const openAddToShowModal = (idea: SavedIdea) => {
+        trackNextStepShortcut('add_to_show', idea);
         setAddToShowIdea(idea);
         setAddToShowForm({
             showId: shows[0]?.id || '',
