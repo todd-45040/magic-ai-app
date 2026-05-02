@@ -315,6 +315,65 @@ function extractImageUrlFromText(text: string): string {
     return embedded ? embedded.trim() : '';
 }
 
+function getLocalVisualBrainstormImageFallback(idea: SavedIdea, v2?: MawIdeaV2 | null): string {
+    if (typeof window === 'undefined') return '';
+
+    const wantedHistoryId = String(
+        (v2 as any)?.meta?.historyId ||
+        (v2 as any)?.structured?.lineage?.historyId ||
+        ''
+    ).trim();
+    const wantedSessionId = String(
+        (v2 as any)?.meta?.sessionId ||
+        (v2 as any)?.structured?.lineage?.sessionId ||
+        ''
+    ).trim();
+    const wantedTitle = String(idea.title || (v2 as any)?.title || '').trim().toLowerCase();
+
+    try {
+        const visualSessionKeys: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i += 1) {
+            const key = window.localStorage.key(i) || '';
+            if (key.startsWith('maw_visual_sessions_v1:')) visualSessionKeys.push(key);
+        }
+
+        for (const key of visualSessionKeys) {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) continue;
+            const sessions = JSON.parse(raw);
+            if (!Array.isArray(sessions)) continue;
+
+            for (const session of sessions) {
+                if (wantedSessionId && String(session?.id || '') === wantedSessionId) {
+                    const sessionCover = extractImageUrlFromText(String(session?.coverImageUrl || ''));
+                    if (sessionCover) return sessionCover;
+                }
+
+                const history = Array.isArray(session?.history) ? session.history : [];
+                for (const item of history) {
+                    const itemUrl = extractImageUrlFromText(String(item?.imageUrl || ''));
+                    if (!itemUrl) continue;
+
+                    if (wantedHistoryId && String(item?.id || '') === wantedHistoryId) return itemUrl;
+
+                    const itemTitle = String(item?.title || '').trim().toLowerCase();
+                    if (wantedTitle && itemTitle && (itemTitle === wantedTitle || itemTitle.includes(wantedTitle) || wantedTitle.includes(itemTitle))) {
+                        return itemUrl;
+                    }
+                }
+
+                const batch = Array.isArray(session?.lastBatchImages) ? session.lastBatchImages : [];
+                const batchFirst = batch.map((value: unknown) => extractImageUrlFromText(String(value || ''))).find(Boolean);
+                if (wantedSessionId && batchFirst) return batchFirst;
+            }
+        }
+    } catch {
+        // Local visual-session recovery is best-effort only.
+    }
+
+    return '';
+}
+
 function getImageUrlForIdea(idea: SavedIdea): string {
     if (idea.type !== 'image') return extractImageUrlFromText(idea.content);
     const v2 = tryParseMawIdeaV2(idea.content);
@@ -330,8 +389,40 @@ function getImageUrlForIdea(idea: SavedIdea): string {
         const url = extractImageUrlFromText(candidate);
         if (url) return url;
     }
-    return '';
+
+    // Older visual ideas may have been flattened before the rich image payload
+    // preservation patch. In that case, the image is often still available in
+    // the browser's Visual Brainstorm session cache. Recover it so previously
+    // saved ideas do not render as blank cards.
+    return getLocalVisualBrainstormImageFallback(idea, v2);
 }
+
+
+const SavedIdeaImage: React.FC<{ idea: SavedIdea; className?: string; full?: boolean }> = ({ idea, className = '', full = false }) => {
+    const [failed, setFailed] = useState(false);
+    const src = getImageUrlForIdea(idea);
+
+    if (!src || failed) {
+        return (
+            <div className={`${className} ${full ? 'relative min-h-[240px] rounded-xl border border-slate-800' : 'absolute inset-0'} flex items-center justify-center bg-slate-950/80`}>
+                <div className="px-4 text-center">
+                    <ImageIcon className="w-10 h-10 mx-auto mb-3 text-purple-300/70" />
+                    <div className="text-xs font-semibold text-slate-300">Image preview unavailable</div>
+                    <div className="mt-1 text-[11px] leading-4 text-slate-500">Open the idea or regenerate/re-save the visual if this was saved before image payloads were preserved.</div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <img
+            src={src}
+            alt={idea.title || 'Saved visual idea'}
+            className={className}
+            onError={() => setFailed(true)}
+        />
+    );
+};
 
 function getIdeaDisplay(idea: SavedIdea): { title: string; body: string } {
     if (idea.type === 'image') return { title: idea.title || 'Saved Image', body: '' };
@@ -1833,7 +1924,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                         onClick={() => openIdeaView(idea)}
                                                                         className="group relative bg-slate-900 border border-slate-700 rounded-xl flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500"
                                                                     >
-                                                                        <img src={getImageUrlForIdea(idea)} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
+                                                                        <SavedIdeaImage idea={idea} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105" />
                                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                                                                         <div className="relative z-10 p-4 flex flex-col justify-end h-full">
                                                                             <div className="flex items-center gap-2">
@@ -1934,7 +2025,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                                                 <span className={`text-xs ${selectedIds.includes(idea.id) ? 'text-purple-200' : 'text-slate-400'}`}>{selectedIds.includes(idea.id) ? '✓' : ''}</span>
                                                             </button>
 
-                                                            <img src={getImageUrlForIdea(idea)} alt={idea.title || 'Saved visual idea'} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105"/>
+                                                            <SavedIdeaImage idea={idea} className="w-full h-full object-cover absolute inset-0 transition-transform duration-300 group-hover:scale-105" />
                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent"></div>
                                                             <div className="relative z-10 p-3 flex flex-col justify-end h-full">
                                                                 <div className="flex items-center gap-2">
@@ -2285,7 +2376,7 @@ const openPromoteModal = (idea: SavedIdea) => {
                                         className="w-full min-h-[220px] rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
                                     />
                                 ) : openIdea.type === 'image' ? (
-                                    <img src={getImageUrlForIdea(openIdea)} alt={openIdea.title || 'Saved image'} className="w-full rounded-xl border border-slate-800" />
+                                    <SavedIdeaImage idea={openIdea} full className="w-full rounded-xl border border-slate-800" />
                                 ) : (
                                     <div className="text-sm text-slate-200 whitespace-pre-wrap break-words">{getIdeaDisplay(openIdea).body || openIdea.content}</div>
                                 )}
