@@ -16,8 +16,9 @@ export function logEvent(
         return;
       }
 
-      fetch('/api/analyticsEvent', {
+      void fetch('/api/analyticsEvent', {
         method: 'POST',
+        keepalive: true,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -27,6 +28,11 @@ export function logEvent(
           event_payload: payload,
           partner_source,
         }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          const text = await response.text().catch(() => '');
+          console.warn('Telemetry endpoint error:', response.status, text);
+        }
       }).catch((err) => {
         console.warn('Telemetry request failed:', err);
       });

@@ -228,17 +228,6 @@ export default function FirstWinGate({ user, onNavigate, onDismiss }: Props) {
       await refreshAllData(dispatch);
     } catch (e: any) {
       const msg = String(e?.message ?? 'We’re warming up the magic engine. Try again in a few seconds.');
-      void logEvent('ai_generation_failed', {
-        tool: 'activation_flow',
-        action: 'activation_generate_error',
-        http_status: typeof e?.status === 'number' ? e.status : null,
-        error_code: e?.error_code || e?.code || null,
-        retryable: typeof e?.retryable === 'boolean' ? e.retryable : null,
-        message: msg,
-        magic_type: selectedObjects,
-        style: selectedStyle,
-        duration_ms: Date.now() - startedAt,
-      });
       setError(msg);
     } finally {
       setBusy(false);

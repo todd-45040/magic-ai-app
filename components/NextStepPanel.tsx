@@ -28,7 +28,17 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
     });
   }, [idea?.id]);
 
+  const lastTrackedActionRef = React.useRef<{ action: string; at: number } | null>(null);
+
   const trackNextStepClick = (action: string) => {
+    const now = Date.now();
+    const last = lastTrackedActionRef.current;
+
+    // Buttons can fire pointer + click events. Avoid duplicate telemetry for the same action.
+    if (last?.action === action && now - last.at < 1000) return;
+
+    lastTrackedActionRef.current = { action, at: now };
+
     void logEvent('next_step_clicked', {
       action,
       idea_id: idea?.id ?? null,
@@ -52,6 +62,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[520px]">
           <button
             type="button"
+            onPointerDownCapture={() => trackNextStepClick('generate_patter')}
             onClick={() => {
               trackNextStepClick('generate_patter');
               onAiSpark({
@@ -69,6 +80,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
 
           <button
             type="button"
+            onPointerDownCapture={() => trackNextStepClick('rehearse_this')}
             onClick={() => {
               trackNextStepClick('rehearse_this');
               try {
@@ -89,6 +101,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
 
           <button
             type="button"
+            onPointerDownCapture={() => trackNextStepClick('add_to_show')}
             onClick={() => { trackNextStepClick('add_to_show'); onAddToShow(idea); }}
             className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/20 hover:text-white"
           >
@@ -101,6 +114,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
+          onPointerDownCapture={() => trackNextStepClick('start_new_routine')}
           onClick={() => { trackNextStepClick('start_new_routine'); onPromoteToRoutine(idea); }}
           className="rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20"
         >
