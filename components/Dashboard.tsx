@@ -8,7 +8,6 @@ import { normalizeTier, getEffectiveMembershipTier, isActiveTrialUser } from '..
 import { getTrialPromptCopy } from '../services/trialMessaging';
 import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
 import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
-import { logEvent } from '../services/analyticsService';
 
 interface DashboardProps {
     variant?: 'home' | 'full';
@@ -208,14 +207,7 @@ const FirstActionGuidance: React.FC<{ shows: Show[]; ideas: SavedIdea[]; onNavig
                         <div className="text-sm font-semibold text-white">{it.title}</div>
                         <div className="text-xs text-white/60 mt-1">{it.message}</div>
                         <button
-                            onClick={() => {
-                                void logEvent('next_step_clicked', {
-                                    action: it.key,
-                                    destination: it.view,
-                                    source: 'dashboard_next_best_step',
-                                });
-                                onNavigate(it.view);
-                            }}
+                            onClick={() => onNavigate(it.view)}
                             className="mt-3 w-full inline-flex items-center justify-center rounded-xl border border-purple-400/25 bg-purple-500/15 px-3 py-2 text-sm font-semibold text-purple-100 transition hover:bg-purple-500/25 hover:text-white"
                         >
                             {it.cta}

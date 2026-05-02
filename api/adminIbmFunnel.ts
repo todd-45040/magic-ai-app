@@ -102,12 +102,33 @@ function buildFunnel(signupsWindow: number, activatedWindow: number, firstIdeaSa
   });
 }
 
+function buildStageFunnel(stages: Array<{ key: string; label: string; count: number; description?: string }>) {
+  return stages.map((stage, index) => {
+    const prev = index > 0 ? stages[index - 1] : null;
+    const dropoffCount = prev ? Math.max(prev.count - stage.count, 0) : 0;
+    const dropoffRate = prev ? pctOrNull(dropoffCount, prev.count) : null;
+    return {
+      ...stage,
+      conversion_from_previous: prev ? pctOrNull(stage.count, prev.count) : null,
+      conversion_from_start: pctOrNull(stage.count, stages[0]?.count || 0),
+      dropoff_count_from_previous: dropoffCount,
+      dropoff_rate_from_previous: dropoffRate,
+      heat: dropoffRate == null ? 'none' : dropoffRate >= 0.5 ? 'high' : dropoffRate >= 0.25 ? 'medium' : dropoffRate > 0 ? 'low' : 'none',
+    };
+  });
+}
+
 function buildActivationMetrics(rows: any[]) {
   const viewed = new Set<string>();
   const started = new Set<string>();
-  const generated = new Set<string>();
+  const generateClicked = new Set<string>();
+  const effectGenerated = new Set<string>();
   const saved = new Set<string>();
   const completed = new Set<string>();
+  const nextStepViewed = new Set<string>();
+  const nextStepClicked = new Set<string>();
+  const resumePanelViewed = new Set<string>();
+  const resumeClicked = new Set<string>();
 
   for (const row of rows || []) {
     const userId = String(row?.user_id || '').trim();
@@ -115,21 +136,44 @@ function buildActivationMetrics(rows: any[]) {
     const eventName = String(row?.event_name || '').trim().toLowerCase();
     if (eventName === 'activation_viewed') viewed.add(userId);
     if (eventName === 'activation_started') started.add(userId);
-    if (eventName === 'activation_generate_clicked') generated.add(userId);
+    if (eventName === 'activation_generate_clicked') generateClicked.add(userId);
+    if (eventName === 'activation_effect_generated') effectGenerated.add(userId);
     if (eventName === 'first_idea_saved') saved.add(userId);
     if (eventName === 'activation_completed') completed.add(userId);
+    if (eventName === 'next_step_panel_viewed') nextStepViewed.add(userId);
+    if (eventName === 'next_step_clicked') nextStepClicked.add(userId);
+    if (eventName === 'resume_panel_viewed') resumePanelViewed.add(userId);
+    if (eventName === 'resume_clicked') resumeClicked.add(userId);
   }
+
+  const activationFunnel = buildStageFunnel([
+    { key: 'activation_started', label: 'Activation Started', count: started.size, description: 'User began the activation flow.' },
+    { key: 'activation_generate_clicked', label: 'Generate Clicked', count: generateClicked.size, description: 'User clicked the first generation CTA.' },
+    { key: 'activation_effect_generated', label: 'Effect Generated', count: effectGenerated.size, description: 'AI returned the first generated effect.' },
+    { key: 'first_idea_saved', label: 'First Idea Saved', count: saved.size, description: 'Activation moment: user saved their first idea.' },
+    { key: 'next_step_panel_viewed', label: 'Next Step Viewed', count: nextStepViewed.size, description: 'User saw the post-save next-step panel.' },
+    { key: 'next_step_clicked', label: 'Next Step Clicked', count: nextStepClicked.size, description: 'User clicked the next-step CTA.' },
+    { key: 'resume_clicked', label: 'Resume Clicked', count: resumeClicked.size, description: 'User clicked to resume/continue from the activation journey.' },
+  ]);
 
   return {
     counts: {
       viewed: viewed.size,
       started: started.size,
-      generated: generated.size,
+      generated: generateClicked.size,
+      effect_generated: effectGenerated.size,
       saved: saved.size,
       completed: completed.size,
+      next_step_viewed: nextStepViewed.size,
+      next_step_clicked: nextStepClicked.size,
+      resume_panel_viewed: resumePanelViewed.size,
+      resume_clicked: resumeClicked.size,
     },
+    funnel: activationFunnel,
     total_activations: saved.size,
     activation_rate: viewed.size > 0 ? saved.size / viewed.size : null,
+    next_step_click_rate: nextStepViewed.size > 0 ? nextStepClicked.size / nextStepViewed.size : null,
+    resume_click_rate: nextStepClicked.size > 0 ? resumeClicked.size / nextStepClicked.size : null,
   };
 }
 
@@ -349,6 +393,7 @@ export default async function handler(req: any, res: any) {
         active_trial_current: activeTrialCurrent,
       },
       activation_metrics: activationMetrics,
+      activation_funnel: activationMetrics.funnel,
       partner_activation_view: activationPartnerView,
       events: {
         signup: signupEvents,

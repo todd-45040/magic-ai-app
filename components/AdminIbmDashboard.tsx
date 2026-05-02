@@ -80,6 +80,43 @@ function FunnelStageCard({ stage }: { stage: any }) {
   );
 }
 
+function DropoffHeatPill({ heat }: { heat: string }) {
+  const normalized = String(heat || 'none').toLowerCase();
+  const label = normalized === 'high' ? 'High leak' : normalized === 'medium' ? 'Medium leak' : normalized === 'low' ? 'Low leak' : 'No leak';
+  const cls = normalized === 'high'
+    ? 'border-red-300/30 bg-red-500/20 text-red-100'
+    : normalized === 'medium'
+      ? 'border-amber-300/30 bg-amber-500/15 text-amber-100'
+      : normalized === 'low'
+        ? 'border-sky-300/25 bg-sky-500/10 text-sky-100'
+        : 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100';
+  return <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-medium ${cls}`}>{label}</span>;
+}
+
+function ActivationFunnelStageCard({ stage }: { stage: any }) {
+  const fromPrev = stage?.conversion_from_previous == null ? 'Start' : pct(stage?.conversion_from_previous);
+  const fromStart = stage?.conversion_from_start == null ? '—' : pct(stage?.conversion_from_start);
+  const dropoffRate = stage?.dropoff_rate_from_previous == null ? '—' : pct(stage?.dropoff_rate_from_previous);
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.18em] text-white/50">{String(stage?.label || 'Activation Step')}</div>
+          <div className="mt-2 text-3xl font-semibold text-white">{num(stage?.count || 0)}</div>
+        </div>
+        <DropoffHeatPill heat={String(stage?.heat || 'none')} />
+      </div>
+      <div className="mt-2 text-xs text-white/55 min-h-[2rem]">{String(stage?.description || '')}</div>
+      <div className="mt-3"><FunnelBar value={(Number(stage?.conversion_from_start) || 0) * 100} /></div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-xl bg-white/5 p-2"><div className="text-white/45">From prev</div><div className="mt-1 text-white/80">{fromPrev}</div></div>
+        <div className="rounded-xl bg-white/5 p-2"><div className="text-white/45">From start</div><div className="mt-1 text-white/80">{fromStart}</div></div>
+        <div className="rounded-xl bg-white/5 p-2"><div className="text-white/45">Drop-off</div><div className="mt-1 text-white/80">{num(stage?.dropoff_count_from_previous || 0)} • {dropoffRate}</div></div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminIbmDashboard() {
   const [days, setDays] = useState<number>(30);
   const [source, setSource] = useState<CampaignSource>('all');
@@ -118,6 +155,7 @@ export default function AdminIbmDashboard() {
   const recentConverted = Array.isArray(data?.recent_converted) ? data.recent_converted : [];
   const topErrors = Array.isArray(data?.top_error_kinds) ? data.top_error_kinds : [];
   const funnel = Array.isArray(data?.funnel) ? data.funnel : [];
+  const activationFunnel = Array.isArray(data?.activation_funnel) ? data.activation_funnel : [];
 
   const activationMetrics = data?.activation_metrics || {};
   const activationCounts = activationMetrics?.counts || {};
@@ -208,12 +246,28 @@ export default function AdminIbmDashboard() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
-              <KpiCard label="Viewed" value={num(activationCounts.viewed)} />
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
               <KpiCard label="Started" value={num(activationCounts.started)} />
-              <KpiCard label="Generated" value={num(activationCounts.generated)} />
-              <KpiCard label="Saved" value={num(activationCounts.saved)} />
-              <KpiCard label="Completed" value={num(activationCounts.completed)} />
+              <KpiCard label="Generate Clicked" value={num(activationCounts.generated)} />
+              <KpiCard label="Effect Generated" value={num(activationCounts.effect_generated)} />
+              <KpiCard label="First Idea Saved" value={num(activationCounts.saved)} />
+              <KpiCard label="Next Step Clicked" value={num(activationCounts.next_step_clicked)} sub={`View → click: ${pct(activationMetrics.next_step_click_rate)}`} />
+              <KpiCard label="Resume Clicked" value={num(activationCounts.resume_clicked)} sub={`Next → resume: ${pct(activationMetrics.resume_click_rate)}`} />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-2">
+                <div>
+                  <div className="text-sm uppercase tracking-[0.18em] text-white/55">True activation funnel</div>
+                  <div className="mt-1 text-sm text-white/70">Distinct users by activation step, including next-step CTA clicks and drop-off heat.</div>
+                </div>
+                <div className="text-xs text-white/55">Key question: do users click after seeing the next step?</div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {activationFunnel.length === 0 ? (
+                  <div className="text-sm text-white/55">No activation funnel telemetry in this window.</div>
+                ) : activationFunnel.map((stage: any) => <ActivationFunnelStageCard key={stage.key} stage={stage} />)}
+              </div>
             </div>
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
