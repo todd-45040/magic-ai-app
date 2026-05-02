@@ -11,6 +11,7 @@ import { addTaskToShow } from '../services/showsService';
 import { isDemoMode } from '../src/demo/demoEngine';
 import { markDemoToolCompleted } from '../services/demoTourService';
 import { trackClientEvent } from '../services/telemetryClient';
+import { logEvent } from '../services/analyticsService';
 
 type ParsedEffect = {
   name: string;
@@ -24,6 +25,20 @@ type ParsedEffect = {
 };
 
 const normalize = (s: string) => String(s ?? '').replace(/\r\n/g, '\n').trim();
+
+const getAiFailurePayload = (tool: string, action: string, err: unknown, metadata: Record<string, unknown> = {}) => {
+  const anyErr = err as any;
+  return {
+    tool,
+    action,
+    http_status: typeof anyErr?.status === 'number' ? anyErr.status : null,
+    error_code: anyErr?.error_code || anyErr?.code || null,
+    retryable: typeof anyErr?.retryable === 'boolean' ? anyErr.retryable : null,
+    message: err instanceof Error ? err.message : String(err || 'unknown'),
+    ...metadata,
+  };
+};
+
 
 
 const EFFECTS_RESPONSE_SCHEMA = {
@@ -651,6 +666,8 @@ const handleTryExample = () => {
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
     } catch (err) {
+      const failurePayload = getAiFailurePayload('effect_generator', 'effect_generate_error', err, { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, duration_ms: Date.now() - startedAt });
+      void logEvent('ai_generation_failed', failurePayload);
       void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, duration_ms: Date.now() - startedAt, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
     } finally {
@@ -744,6 +761,7 @@ ${lastOutput}`
         try { markDemoToolCompleted('effect_engine'); } catch {}
       }
     } catch (err) {
+      void logEvent('ai_generation_failed', getAiFailurePayload('effect_generator', 'effect_alternative_error', err, { creativeIntent, difficulty, itemCount: validItems.length }));
       void trackClientEvent({ tool: 'effect_generator', action: 'effect_alternative_error', outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, itemCount: validItems.length, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -881,6 +899,7 @@ ${lastOutput}`
       setDisplayIdeas(response);
       void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_success`, outcome: 'SUCCESS_NOT_CHARGED', metadata: { creativeIntent, difficulty } });
     } catch (err) {
+      void logEvent('ai_generation_failed', getAiFailurePayload('effect_generator', `effect_refine_${mode}_error`, err, { creativeIntent, difficulty }));
       void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_error`, outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, message: err instanceof Error ? err.message : 'unknown' } });
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
