@@ -332,21 +332,79 @@ export default async function handler(req: any, res: any) {
       return out;
     };
 
+    const stripTrailingCommas = (jsonLike: string) =>
+      String(jsonLike || '').replace(/,\s*([}\]])/g, '$1');
+
+    const closeLikelyTruncatedJson = (jsonLike: string) => {
+      const src = String(jsonLike || '');
+      let out = '';
+      let inStr = false;
+      let esc = false;
+      const closers: string[] = [];
+
+      for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        out += ch;
+        if (esc) { esc = false; continue; }
+        if (ch === '\\') { esc = true; continue; }
+        if (ch === '"') { inStr = !inStr; continue; }
+        if (inStr) continue;
+        if (ch === '{') closers.push('}');
+        else if (ch === '[') closers.push(']');
+        else if ((ch === '}' || ch === ']') && closers.length) closers.pop();
+      }
+
+      if (inStr) out += '"';
+      if (closers.length) out += closers.reverse().join('');
+      return out;
+    };
+
     const tryParse = (text: string): any | null => {
       if (!text || typeof text !== 'string') return null;
-      try {
-        return JSON.parse(text);
-      } catch {
-        // ignore
-      }
-      try {
-        const candidate = extractJsonBlock(stripFences(text));
+      const candidates = [
+        text,
+        stripFences(text),
+        extractJsonBlock(stripFences(text)),
+      ].filter(Boolean);
+
+      for (const candidate of candidates) {
         const repaired = escapeControlCharsInsideStrings(candidate);
-        return JSON.parse(repaired);
-      } catch {
-        return null;
+        const attempts = [
+          candidate,
+          repaired,
+          stripTrailingCommas(repaired),
+          closeLikelyTruncatedJson(stripTrailingCommas(repaired)),
+        ];
+        for (const attempt of attempts) {
+          try {
+            return JSON.parse(attempt);
+          } catch {
+            // try next repair strategy
+          }
+        }
       }
+      return null;
     };
+
+    const isEffectEngineSchema = (schema: any) => {
+      const props = schema?.properties || {};
+      return !!props.effects && String(props.effects?.type || '').toUpperCase() === 'ARRAY';
+    };
+
+    const buildEffectFallback = (raw: string) => ({
+      effects: [1, 2, 3].map((n) => ({
+        name: `Recovered Effect Concept ${n}`,
+        premise: 'The AI generated a usable concept but returned it in an unexpected format. Regenerate once for a cleaner version, or simplify the item list to get a stronger structured draft.',
+        experience: 'Spectators experience a clear magical sequence built around the chosen objects. The routine should be framed with a simple opening question, a visible impossible moment, and a clean closing line. This recovered card protects the user experience when the provider returns malformed JSON.',
+        methodOverview: 'Use this as a placeholder recovery card rather than an exposed method. Keep the handling high-level, practical, and adapted to your existing knowledge of magic principles.',
+        performanceNotes: 'Regenerate the effect if you need a polished version. For best results, use two or three concrete objects, choose a clear creative intent, and avoid overly broad prompts. The app has logged the malformed response for debugging.',
+        secretHint: 'Simplify the input and regenerate for a stronger structured response.',
+        ideaStrength: n === 1 ? 'Needs Work' : 'Experimental',
+        buildCost: 'Low',
+      })),
+      _recoveredFromBadJson: true,
+      _rawPreview: String(raw || '').slice(0, 500),
+    });
 
     if (parsed == null) parsed = tryParse(rawText);
 
@@ -363,10 +421,10 @@ export default async function handler(req: any, res: any) {
 
       const runRepair = async () => {
         if (provider === 'openai') {
-          return callOpenAI({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+          return callOpenAI({ model, contents: repairContents, config: { ...config, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 4096), 8192), temperature: 0 } });
         }
         if (provider === 'anthropic') {
-          return callAnthropic({ model, contents: repairContents, config: { ...config, maxOutputTokens: 1400 } });
+          return callAnthropic({ model, contents: repairContents, config: { ...config, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 4096), 8192), temperature: 0 } });
         }
         const apiKey = getGoogleAiApiKey();
         if (!apiKey) {
@@ -377,7 +435,7 @@ export default async function handler(req: any, res: any) {
         return ai.models.generateContent({
           model: model || 'gemini-2.5-flash',
           contents: repairContents,
-          config: { ...config, responseMimeType: 'application/json', responseSchema, maxOutputTokens: 1400, temperature: 0 },
+          config: { ...config, responseMimeType: 'application/json', responseSchema, maxOutputTokens: Math.max(Number(config?.maxOutputTokens || 4096), 8192), temperature: 0 },
         });
       };
 
@@ -391,13 +449,17 @@ export default async function handler(req: any, res: any) {
     }
 
     if (parsed == null) {
-      return jsonError(res, 422, {
-        ok: false,
-        error_code: 'BAD_JSON',
-        message: 'The AI response was not valid JSON. Please try again.',
-        retryable: true,
-        ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
-      });
+      if (isEffectEngineSchema(responseSchema)) {
+        parsed = buildEffectFallback(rawText);
+      } else {
+        return jsonError(res, 422, {
+          ok: false,
+          error_code: 'BAD_JSON',
+          message: 'The AI returned an unexpected format. Please try again with simpler inputs.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { rawText: rawText?.slice(0, 4000) } } : {}),
+        });
+      }
     }
 
     // Best-effort increment AFTER success

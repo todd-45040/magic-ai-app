@@ -685,11 +685,11 @@ const handleTryExample = () => {
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
           : {
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
               speedMode: opts?.fast ? 'fast' : 'full',
             }
       );
@@ -710,7 +710,7 @@ const handleTryExample = () => {
       }
     } catch (err) {
       void trackClientEvent({ tool: 'effect_generator', action: 'effect_generate_error', outcome: 'ERROR_UPSTREAM', metadata: { fast: !!opts?.fast, creativeIntent, difficulty, itemCount: validItems.length, duration_ms: Date.now() - startedAt, message: err instanceof Error ? err.message : 'unknown' } });
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+      setError(err instanceof Error ? err.message : "The AI returned an unexpected format. Please try again with simpler inputs.");
     } finally {
       setIsLoading(false);
     }
@@ -781,10 +781,10 @@ ${lastOutput}`
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
             }
           : {
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
             }
       );
 
@@ -806,7 +806,7 @@ ${lastOutput}`
       }
     } catch (err) {
       void trackClientEvent({ tool: 'effect_generator', action: 'effect_alternative_error', outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, itemCount: validItems.length, message: err instanceof Error ? err.message : 'unknown' } });
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setError(err instanceof Error ? err.message : 'The AI returned an unexpected format. Please try again with simpler inputs.');
     } finally {
       setIsLoading(false);
     }
@@ -983,10 +983,10 @@ ${lastOutput}`
                 'X-Demo-Tool': 'effect_engine',
                 'X-Demo-Scenario': demoScenario,
               },
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
             }
           : {
-              maxOutputTokens: 3800,
+              maxOutputTokens: 8192,
             }
       );
 
@@ -1002,7 +1002,7 @@ ${lastOutput}`
       void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_success`, outcome: 'SUCCESS_NOT_CHARGED', metadata: { creativeIntent, difficulty } });
     } catch (err) {
       void trackClientEvent({ tool: 'effect_generator', action: `effect_refine_${mode}_error`, outcome: 'ERROR_UPSTREAM', metadata: { creativeIntent, difficulty, message: err instanceof Error ? err.message : 'unknown' } });
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setError(err instanceof Error ? err.message : 'The AI returned an unexpected format. Please try again with simpler inputs.');
     } finally {
       setIsLoading(false);
     }
