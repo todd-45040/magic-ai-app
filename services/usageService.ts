@@ -5,8 +5,8 @@ import { normalizeTier } from './membershipService.js';
 // NOTE: Other tool-type caps (video/image/live minutes) are tracked client-side
 // in services/usageTracker.ts.
 const TIER_LIMITS: Record<string, number> = {
-  free: 10,
-  trial: 20,
+  free: 3,
+  trial: 10,
   amateur: 200,
   professional: 10000, // effectively unlimited (fair use)
   expired: 0,

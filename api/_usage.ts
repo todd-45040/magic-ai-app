@@ -22,8 +22,8 @@ function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'profe
 }
 
 const TIER_LIMITS: Record<string, number> = {
-  free: 10,
-  trial: 20,
+  free: 3,
+  trial: 10,
   amateur: 200,
   professional: 10000,
   expired: 0,
@@ -34,8 +34,8 @@ const TIER_LIMITS: Record<string, number> = {
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
-  free: 10,
-  trial: 20,
+  free: 3,
+  trial: 10,
   amateur: 60,
   professional: 120,
   expired: 0,

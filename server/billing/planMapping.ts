@@ -226,8 +226,8 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
 
   if (planAlias === 'trial') {
     return {
-      dailyAiLimit: 20,
-      burstLimit: 20,
+      dailyAiLimit: 10,
+      burstLimit: 10,
       monthlyToolQuotas: {
         quota_live_audio_minutes: 300,
         quota_image_gen: 2,
@@ -235,7 +235,7 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
         quota_video_uploads: 1,
       },
       dailyToolLimits: {
-        live_audio_minutes: 60,
+        live_audio_minutes: 10,
         video_uploads: 1,
       },
     };
@@ -252,11 +252,11 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
     dailyAiLimit:
       billingPlanKey === 'professional' ? 1000
       : billingPlanKey === 'amateur' ? 200
-      : 20,
+      : 3,
     burstLimit:
       billingPlanKey === 'professional' ? 120
       : billingPlanKey === 'amateur' ? 60
-      : 20,
+      : 3,
     monthlyToolQuotas: {
       quota_live_audio_minutes: plan.heavyToolLimits.liveRehearsalMinutesMonthly,
       quota_image_gen: plan.heavyToolLimits.imageGenerationsMonthly,

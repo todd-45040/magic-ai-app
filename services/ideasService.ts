@@ -1,6 +1,8 @@
 import { supabase } from '../supabase';
 import type { IdeaCategory, IdeaType, SavedIdea } from '../types';
 import { logUserActivity } from './userActivityService';
+import { getUserProfile } from './usersService';
+import { ConversionFrictionError, getSavedIdeaLimitForFriction, getSavedIdeaLimitMessage, recordConversionFriction } from './conversionFriction';
 
 // --- DB row shape (maps to SavedIdea used by the UI) ---
 type DbIdeaRow = {
@@ -118,6 +120,47 @@ async function requireUserId(): Promise<string> {
   return uid;
 }
 
+
+async function enforceSavedIdeaFriction(uid: string, ideaType: IdeaType): Promise<void> {
+  // Rehearsal sessions are governed by the Live Rehearsal minute wall; this
+  // guard focuses on the general "Saved Ideas" conversion moment.
+  if (ideaType === 'rehearsal') return;
+
+  const profile = await getUserProfile(uid);
+  const limit = getSavedIdeaLimitForFriction(profile as any);
+  if (limit >= Number.MAX_SAFE_INTEGER) return;
+
+  const { count, error } = await supabase
+    .from('ideas')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .neq('type', 'rehearsal');
+
+  if (error) {
+    // Do not create a hard failure when the count check itself fails. The DB/RLS
+    // insert will still protect data ownership.
+    console.warn('Saved idea friction count check failed:', error);
+    return;
+  }
+
+  const existingCount = Number(count ?? 0);
+  if (existingCount >= limit) {
+    const message = getSavedIdeaLimitMessage(existingCount, limit);
+    recordConversionFriction('saved_idea_limit', {
+      feature: 'saved_ideas',
+      existing_count: existingCount,
+      limit,
+      attempted_type: ideaType,
+      source: 'save_idea',
+    });
+    throw new ConversionFrictionError('saved_idea_limit', message, {
+      existing_count: existingCount,
+      limit,
+      attempted_type: ideaType,
+    });
+  }
+}
+
 export async function getSavedIdeas(): Promise<SavedIdea[]> {
   const uid = await requireUserId();
   const { data, error } = await supabase
@@ -171,6 +214,8 @@ export async function saveIdea(
     typeof a === 'string'
       ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
       : a;
+
+  await enforceSavedIdeaFriction(uid, payload.type);
 
   const baseInsert = {
     user_id: uid,

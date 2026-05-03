@@ -50,9 +50,9 @@ const FOUNDER_RATE_NOTES = ['Founder pricing is a rate lock designation, not a s
 export const BILLING_PLAN_CATALOG: Record<BillingPlanKey, BillingPlanDefinition> = {
   free: {
     key: 'free', planId: 'free', stripeLookupKey: null, displayName: 'Free', publicLabel: 'Free', monthlyPriceCents: null, annualPriceCents: null, entitlementTier: 'free',
-    monthlyLimits: { text_generations: 20, image_generations: 0, live_rehearsal_minutes: 0, video_analysis_clips: 2, saved_shows: 3, saved_ideas: 10 },
+    monthlyLimits: { text_generations: 3, image_generations: 0, live_rehearsal_minutes: 0, video_analysis_clips: 2, saved_shows: 3, saved_ideas: 1 },
     heavyToolLimits: { imageGenerationsMonthly: 0, videoAnalysisClipsMonthly: 2, liveRehearsalMinutesMonthly: 0, maxConcurrentLiveSessions: 0, maxReconnectAttemptsPerSession: 0, maxVideoUploadMb: 25, maxImageUploadMb: 10 },
-    storageLimits: { savedShows: 3, savedIdeas: 10 }, featureAccessMatrix: buildFeatureMatrix(FREE_FEATURES),
+    storageLimits: { savedShows: 3, savedIdeas: 1 }, featureAccessMatrix: buildFeatureMatrix(FREE_FEATURES),
     allowedUpgrades: ['amateur', 'founder_amateur', 'professional', 'founder_professional'],
     downgradeBehavior: { downgradeTo: 'free', takesEffect: 'period_end', preserveExistingProjects: true, blockNewStorageWhenOverLimit: true, overageMessage: 'Free users keep existing records but cannot create new items once storage limits are exceeded.' },
     founderOverrideBehavior: { eligible: false, lockedPlan: null, lockedPriceCents: null, preventAutomaticDowngrade: false, preservePriceOnReactivation: false, notes: ['Baseline plan with no founder protections.'] },

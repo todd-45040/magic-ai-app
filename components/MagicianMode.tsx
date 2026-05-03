@@ -72,6 +72,7 @@ import { consume, getUsage } from '../services/usageTracker';
 import { logIbmConversionEvent, isIbmConversionCandidate } from '../services/ibmConversionTracking';
 import { logUserActivity } from '../services/userActivityService';
 import { logEvent } from '../services/analyticsService';
+import { recordTextGenerationSuccessAndMaybePrompt } from '../services/conversionFriction';
 
 interface AngleRiskFormProps {
     trickName: string;
@@ -2957,6 +2958,20 @@ useEffect(() => {
 
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail || {};
+      void logEvent('upgrade_prompt_shown', {
+        source: 'conversion_friction',
+        reason: detail.reason || 'unknown',
+        ...detail,
+      });
+      setIsUpgradeModalOpen(true);
+    };
+    window.addEventListener('maw:conversion-friction-upgrade', handler as any);
+    return () => window.removeEventListener('maw:conversion-friction-upgrade', handler as any);
+  }, []);
   const [showFirstIdeaConversionModal, setShowFirstIdeaConversionModal] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -3667,6 +3682,7 @@ useEffect(() => {
         historyForUI
       );
       setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
+      recordTextGenerationSuccessAndMaybePrompt(user, 'chat_with_history');
     } catch (err) {
         const anyErr: any = err as any;
         void trackClientEvent({
@@ -3739,6 +3755,7 @@ useEffect(() => {
           newHistoryForUI
         );
         setMessages(prev => [...prev, createChatMessage('model', normalizeAiReply(replyText))]);
+      recordTextGenerationSuccessAndMaybePrompt(user, 'chat_send');
     } catch (err) {
         console.error("Error in handleSend:", err);
         setMessages(prev => [...prev, createChatMessage('model', "The AI didn’t respond this time. Try again or start a new session.")]);
