@@ -794,32 +794,67 @@ async function insertAnalyticsEventBestEffort(admin: any, params: {
 
 async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, event: any) {
   const eventType = String(event?.type || '').trim();
-  if (eventType !== 'checkout.session.completed') return { skipped: true, reason: 'not_checkout_completed' };
-
-  const userId = String(sync?.userId || '').trim() || null;
-  if (!userId) return { skipped: true, reason: 'missing_user_id' };
-
   const object = event?.data?.object || {};
   const billingStatus = String(sync?.billingStatus || '').trim().toLowerCase();
   const paymentStatus = String(object?.payment_status || '').trim().toLowerCase();
-  const statusLooksComplete = billingStatus === 'active' || billingStatus === 'trialing' || paymentStatus === 'paid' || paymentStatus === 'no_payment_required';
-  if (!statusLooksComplete) return { skipped: true, reason: 'checkout_not_complete', billingStatus, paymentStatus };
+
+  const userId = String(sync?.userId || '').trim() || await resolveUserIdForBillingEvent(admin, {
+    explicitUserId: String(object?.metadata?.user_id || object?.client_reference_id || '').trim() || null,
+    stripeCustomerId: String(object?.customer || '').trim() || null,
+    stripeSubscriptionId: String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
+  });
+
+  if (!userId) return { skipped: true, reason: 'missing_user_id' };
+
+  const completeEventTypes = new Set([
+    'checkout.session.completed',
+    'customer.subscription.created',
+    'customer.subscription.updated',
+    'invoice.paid',
+  ]);
+
+  if (!completeEventTypes.has(eventType)) {
+    return { skipped: true, reason: 'not_completion_event', eventType };
+  }
+
+  const statusLooksComplete =
+    billingStatus === 'active' ||
+    billingStatus === 'trialing' ||
+    paymentStatus === 'paid' ||
+    paymentStatus === 'no_payment_required' ||
+    eventType === 'invoice.paid';
+
+  if (!statusLooksComplete) {
+    return { skipped: true, reason: 'event_not_complete', eventType, billingStatus, paymentStatus };
+  }
 
   const partnerSource = await resolvePartnerSourceForWebhook(admin, userId);
   const payload = sanitizeStripeLogValue({
     source: 'stripe_webhook',
     stripe_event_type: eventType,
     stripe_event_id: String(event?.id || '').trim() || null,
-    stripe_customer_id: sync?.stripeCustomerId || null,
-    stripe_subscription_id: sync?.stripeSubscriptionId || null,
-    checkout_session_id: object?.id || null,
+    stripe_customer_id: sync?.stripeCustomerId || object?.customer || null,
+    stripe_subscription_id: sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : null),
+    checkout_session_id: object?.object === 'checkout.session' ? object?.id || null : null,
+    invoice_id: object?.object === 'invoice' ? object?.id || null : null,
     plan_key: sync?.planKey || null,
     billing_status: sync?.billingStatus || null,
     payment_status: paymentStatus || null,
     partner_source: partnerSource,
   }) as Record<string, unknown>;
 
-  const analyticsResult = await insertAnalyticsEventBestEffort(admin, {
+  const analyticsResults: Record<string, unknown> = {};
+
+  if (eventType === 'checkout.session.completed') {
+    analyticsResults.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
+      userId,
+      eventName: 'checkout_completed',
+      partnerSource,
+      payload,
+    });
+  }
+
+  analyticsResults.upgrade_completed = await insertAnalyticsEventBestEffort(admin, {
     userId,
     eventName: 'upgrade_completed',
     partnerSource,
@@ -831,15 +866,15 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
       user_id: userId,
       email: null,
       tool_name: 'system',
-      event_type: 'checkout_completed',
+      event_type: eventType === 'checkout.session.completed' ? 'checkout_completed' : 'upgrade_completed',
       success: true,
       metadata: payload,
     });
   } catch (activityError) {
-    console.error('stripe webhook checkout_completed activity insert failed', activityError);
+    console.error('stripe webhook completion activity insert failed', activityError);
   }
 
-  return { skipped: false, analytics: analyticsResult, partnerSource };
+  return { skipped: false, analytics: analyticsResults, partnerSource, eventType };
 }
 
 async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any) {
