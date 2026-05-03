@@ -584,12 +584,20 @@ const kUsers = data?.users || {};
 
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="font-semibold text-white">Partner conversion events</div>
+            <div className="text-[11px] text-white/50 mt-1">Uses the current trial funnel telemetry names plus legacy aliases.</div>
             <div className="mt-3 space-y-2 text-sm">
-              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade prompts viewed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_prompt_viewed ?? 0).toLocaleString()}</span></div>
-              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade clicks</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_clicked ?? 0).toLocaleString()}</span></div>
-              <div className="flex items-center justify-between"><span className="text-white/70">Checkout started</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.checkout_started ?? 0).toLocaleString()}</span></div>
-              <div className="flex items-center justify-between"><span className="text-white/70">Checkout completed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.checkout_completed ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade prompts shown</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_prompt_shown ?? ibmFunnel?.events?.upgrade_prompt_viewed ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Locked features clicked</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.locked_feature_clicked ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Save limits hit</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.save_limit_hit ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">AI limits hit</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.limit_hit_ai_generation ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade intent clicked</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_intent_clicked ?? ibmFunnel?.events?.upgrade_clicked ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Checkout started</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_checkout_started ?? ibmFunnel?.events?.checkout_started ?? 0).toLocaleString()}</span></div>
+              <div className="flex items-center justify-between"><span className="text-white/70">Upgrade completed</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.upgrade_completed ?? ibmFunnel?.events?.checkout_completed ?? 0).toLocaleString()}</span></div>
               <div className="flex items-center justify-between"><span className="text-white/70">Trial expired</span><span className="font-semibold text-white">{Number(ibmFunnel?.events?.trial_expired ?? 0).toLocaleString()}</span></div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-2"><div className="text-white/50">Prompt → Click</div><div className="font-semibold text-white">{pct(ibmFunnel?.conversion_metrics?.prompt_to_intent_rate, 0)}</div></div>
+              <div className="rounded-lg border border-white/10 bg-black/20 p-2"><div className="text-white/50">Checkout → Paid</div><div className="font-semibold text-white">{pct(ibmFunnel?.conversion_metrics?.checkout_to_completed_rate, 0)}</div></div>
             </div>
           </div>
         </div>

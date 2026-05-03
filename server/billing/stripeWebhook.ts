@@ -746,6 +746,102 @@ async function cancelSubscriptionBestEffort(subscriptionId: string, reason: stri
 }
 
 
+
+async function resolvePartnerSourceForWebhook(admin: any, userId: string | null): Promise<string | null> {
+  const id = String(userId || '').trim();
+  if (!id) return null;
+  try {
+    const { data } = await admin
+      .from('users')
+      .select('partner_source, signup_source')
+      .eq('id', id)
+      .maybeSingle();
+    const partnerSource = String((data as any)?.partner_source || '').trim().toLowerCase();
+    const signupSource = String((data as any)?.signup_source || '').trim().toLowerCase();
+    return partnerSource || signupSource || null;
+  } catch {
+    return null;
+  }
+}
+
+async function insertAnalyticsEventBestEffort(admin: any, params: {
+  userId: string | null;
+  eventName: string;
+  partnerSource?: string | null;
+  payload?: Record<string, unknown>;
+}) {
+  const userId = String(params.userId || '').trim();
+  if (!userId) return { ok: false, skipped: true, reason: 'missing_user_id' };
+
+  try {
+    const { error } = await admin.from('analytics_events').insert({
+      user_id: userId,
+      event_name: params.eventName,
+      event_payload: params.payload || {},
+      partner_source: params.partnerSource || null,
+      created_at: new Date().toISOString(),
+    });
+    if (error) {
+      console.error('stripe webhook analytics insert failed', error);
+      return { ok: false, skipped: true, reason: 'insert_failed' };
+    }
+    return { ok: true };
+  } catch (error: any) {
+    console.error('stripe webhook analytics insert exception', error);
+    return { ok: false, skipped: true, reason: String(error?.message || error || 'unknown') };
+  }
+}
+
+async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, event: any) {
+  const eventType = String(event?.type || '').trim();
+  if (eventType !== 'checkout.session.completed') return { skipped: true, reason: 'not_checkout_completed' };
+
+  const userId = String(sync?.userId || '').trim() || null;
+  if (!userId) return { skipped: true, reason: 'missing_user_id' };
+
+  const object = event?.data?.object || {};
+  const billingStatus = String(sync?.billingStatus || '').trim().toLowerCase();
+  const paymentStatus = String(object?.payment_status || '').trim().toLowerCase();
+  const statusLooksComplete = billingStatus === 'active' || billingStatus === 'trialing' || paymentStatus === 'paid' || paymentStatus === 'no_payment_required';
+  if (!statusLooksComplete) return { skipped: true, reason: 'checkout_not_complete', billingStatus, paymentStatus };
+
+  const partnerSource = await resolvePartnerSourceForWebhook(admin, userId);
+  const payload = sanitizeStripeLogValue({
+    source: 'stripe_webhook',
+    stripe_event_type: eventType,
+    stripe_event_id: String(event?.id || '').trim() || null,
+    stripe_customer_id: sync?.stripeCustomerId || null,
+    stripe_subscription_id: sync?.stripeSubscriptionId || null,
+    checkout_session_id: object?.id || null,
+    plan_key: sync?.planKey || null,
+    billing_status: sync?.billingStatus || null,
+    payment_status: paymentStatus || null,
+    partner_source: partnerSource,
+  }) as Record<string, unknown>;
+
+  const analyticsResult = await insertAnalyticsEventBestEffort(admin, {
+    userId,
+    eventName: 'upgrade_completed',
+    partnerSource,
+    payload,
+  });
+
+  try {
+    await insertUserActivity(admin, {
+      user_id: userId,
+      email: null,
+      tool_name: 'system',
+      event_type: 'checkout_completed',
+      success: true,
+      metadata: payload,
+    });
+  } catch (activityError) {
+    console.error('stripe webhook checkout_completed activity insert failed', activityError);
+  }
+
+  return { skipped: false, analytics: analyticsResult, partnerSource };
+}
+
 async function logIbmPaidConversionFromWebhook(admin: any, sync: any, event: any) {
   const userId = String(sync?.userId || '').trim() || null;
   const billingStatus = String(sync?.billingStatus || '').trim().toLowerCase();
@@ -847,12 +943,14 @@ export async function processStripeWebhook(input: {
     }
 
     const sync = await syncFromEvent(admin, event);
+    const upgradeTelemetry = await logUpgradeCompletedTelemetryFromWebhook(admin, sync, event);
     await logIbmPaidConversionFromWebhook(admin, sync, event);
     const founderCap = await enforceFounderCapBestEffort(admin, event);
 
     await markBillingEventStatus(admin, billingEventId, 'processed', {
       summary: buildEventSummary(event),
       sync,
+      upgradeTelemetry,
       founderCap,
     });
 

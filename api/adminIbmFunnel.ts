@@ -47,6 +47,31 @@ function normalizeTool(raw: any): string {
   return lower;
 }
 
+function normalizePartnerSource(raw: any): string {
+  return String(raw || '').trim().toLowerCase();
+}
+
+function userMatchesSource(user: any, sources: string[]): boolean {
+  const partnerSource = normalizePartnerSource(user?.partner_source);
+  const signupSource = normalizePartnerSource(user?.signup_source);
+  return sources.includes(partnerSource || signupSource);
+}
+
+function countAnalyticsEvents(rows: any[], names: string[]): number {
+  const accepted = new Set(names.map((n) => String(n).trim().toLowerCase()));
+  return (rows || []).filter((row) => accepted.has(String(row?.event_name || '').trim().toLowerCase())).length;
+}
+
+function countAnalyticsUsers(rows: any[], names: string[]): number {
+  const accepted = new Set(names.map((n) => String(n).trim().toLowerCase()));
+  const users = new Set<string>();
+  for (const row of rows || []) {
+    const userId = String(row?.user_id || '').trim();
+    if (userId && accepted.has(String(row?.event_name || '').trim().toLowerCase())) users.add(userId);
+  }
+  return users.size;
+}
+
 
 async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: string) {
   const rows: any[] = [];
@@ -211,14 +236,13 @@ export default async function handler(req: any, res: any) {
     const sources = sourceList(source);
     const { data: partnerUsers, error: userErr } = await admin
       .from('users')
-      .select('id,email,membership,trial_end_date,created_at,signup_source')
-      .in('signup_source', sources)
+      .select('id,email,membership,trial_end_date,created_at,signup_source,partner_source')
       .order('created_at', { ascending: false })
       .limit(5000);
 
     if (userErr) return res.status(500).json({ ok: false, error: `Failed to load ${campaignLabel(source)} users`, details: userErr });
 
-    const users = Array.isArray(partnerUsers) ? partnerUsers : [];
+    const users = (Array.isArray(partnerUsers) ? partnerUsers : []).filter((u: any) => userMatchesSource(u, sources));
     const partnerIds = users.map((u: any) => u.id).filter(Boolean);
 
     const signupsTotal = users.length;
@@ -251,6 +275,17 @@ export default async function handler(req: any, res: any) {
     }
 
     const activationMetrics = buildActivationMetrics(activationAnalytics);
+    const analyticsFrictionEvents = {
+      upgrade_prompt_shown: countAnalyticsEvents(activationAnalytics, ['upgrade_prompt_shown', 'upgrade_prompt_viewed', 'conversion_modal_viewed']),
+      locked_feature_clicked: countAnalyticsEvents(activationAnalytics, ['locked_feature_clicked']),
+      save_limit_hit: countAnalyticsEvents(activationAnalytics, ['save_limit_hit']),
+      limit_hit_ai_generation: countAnalyticsEvents(activationAnalytics, ['limit_hit_ai_generation']),
+      rehearsal_limit_hit: countAnalyticsEvents(activationAnalytics, ['rehearsal_limit_hit']),
+      upgrade_intent_clicked: countAnalyticsEvents(activationAnalytics, ['upgrade_intent_clicked', 'upgrade_clicked']),
+      upgrade_checkout_started: countAnalyticsEvents(activationAnalytics, ['upgrade_checkout_started', 'checkout_started']),
+      upgrade_completed: countAnalyticsEvents(activationAnalytics, ['upgrade_completed', 'checkout_completed']),
+      upgrade_completed_users: countAnalyticsUsers(activationAnalytics, ['upgrade_completed', 'checkout_completed']),
+    };
 
     const activatedWindowUsers = new Set<string>();
     const activatedTotalUsers = new Set<string>();
@@ -317,6 +352,11 @@ export default async function handler(req: any, res: any) {
         }
       }
     }
+
+    upgradePromptViewed += analyticsFrictionEvents.upgrade_prompt_shown;
+    upgradeClicked += analyticsFrictionEvents.upgrade_intent_clicked;
+    checkoutStarted += analyticsFrictionEvents.upgrade_checkout_started;
+    checkoutCompleted += analyticsFrictionEvents.upgrade_completed;
 
     const mostUsedTools = Array.from(toolEventCounts.entries())
       .map(([tool, events]) => ({
@@ -395,6 +435,14 @@ export default async function handler(req: any, res: any) {
       activation_metrics: activationMetrics,
       activation_funnel: activationMetrics.funnel,
       partner_activation_view: activationPartnerView,
+      conversion_metrics: {
+        prompt_to_intent_rate: upgradePromptViewed > 0 ? upgradeClicked / upgradePromptViewed : null,
+        intent_to_checkout_rate: upgradeClicked > 0 ? checkoutStarted / upgradeClicked : null,
+        checkout_to_completed_rate: checkoutStarted > 0 ? checkoutCompleted / checkoutStarted : null,
+        signup_to_completed_rate: signupsWindow > 0 ? checkoutCompleted / signupsWindow : null,
+        activated_to_completed_rate: activationMetrics.counts.started > 0 ? checkoutCompleted / activationMetrics.counts.started : null,
+        paid_completion_users: analyticsFrictionEvents.upgrade_completed_users,
+      },
       events: {
         signup: signupEvents,
         login: loginEvents,
@@ -403,9 +451,17 @@ export default async function handler(req: any, res: any) {
         first_tool_used: firstToolUsedEvents,
         first_idea_saved: firstIdeaSavedEvents,
         upgrade_prompt_viewed: upgradePromptViewed,
+        upgrade_prompt_shown: upgradePromptViewed,
+        locked_feature_clicked: analyticsFrictionEvents.locked_feature_clicked,
+        save_limit_hit: analyticsFrictionEvents.save_limit_hit,
+        limit_hit_ai_generation: analyticsFrictionEvents.limit_hit_ai_generation,
+        rehearsal_limit_hit: analyticsFrictionEvents.rehearsal_limit_hit,
         upgrade_clicked: upgradeClicked,
+        upgrade_intent_clicked: upgradeClicked,
         checkout_started: checkoutStarted,
+        upgrade_checkout_started: checkoutStarted,
         checkout_completed: checkoutCompleted,
+        upgrade_completed: checkoutCompleted,
         trial_expired: trialExpiredEvents,
         error: errorEvents,
       },
