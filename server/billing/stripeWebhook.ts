@@ -183,6 +183,33 @@ function normalizeStripeId(value: unknown): string | null {
   return String(value || '').trim() || null;
 }
 
+function extractStripeCustomerIdForWebhookEvent(event: any): string | null {
+  const eventType = String(event?.type || '').trim();
+  const object = event?.data?.object || {};
+
+  if (eventType === 'checkout.session.completed') {
+    return normalizeStripeId(object?.customer);
+  }
+
+  if (
+    eventType === 'invoice.paid' ||
+    eventType === 'invoice.payment_succeeded' ||
+    eventType === 'invoice_payment.paid'
+  ) {
+    return normalizeStripeId(object?.customer);
+  }
+
+  if (
+    eventType === 'customer.subscription.created' ||
+    eventType === 'customer.subscription.updated' ||
+    eventType === 'customer.subscription.deleted'
+  ) {
+    return normalizeStripeId(object?.customer);
+  }
+
+  return normalizeStripeId(object?.customer);
+}
+
 function normalizePlanFromObject(object: any, fallback?: { priceId?: string | null; productId?: string | null }): BillingPlanKey {
   const metadata = object?.metadata || {};
   const explicitPlan = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
@@ -262,7 +289,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   const metadata = object?.metadata || {};
   const stripeEventId = String(event?.id || '').trim();
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
-  const stripeCustomerId = normalizeStripeId(object?.customer);
+  const stripeCustomerId = extractStripeCustomerIdForWebhookEvent(event);
   const userId = String(metadata?.user_id || '').trim() || null;
 
   const payload = {
@@ -652,7 +679,7 @@ async function syncFromEvent(admin: any, event: any) {
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
 
   const explicitUserId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
-  const stripeCustomerId = normalizeStripeId(object?.customer);
+  const stripeCustomerId = extractStripeCustomerIdForWebhookEvent(event);
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const userId = await resolveUserIdForBillingEvent(admin, {
     explicitUserId,
@@ -821,7 +848,7 @@ async function resolveUserForCompletionTelemetry(admin: any, params: {
     if (data?.id) return data;
   }
 
-  const stripeCustomerId = String(sync?.stripeCustomerId || normalizeStripeId(object?.customer) || '').trim() || null;
+  const stripeCustomerId = String(sync?.stripeCustomerId || extractStripeCustomerIdForWebhookEvent(event) || '').trim() || null;
   if (stripeCustomerId) {
     const { data } = await admin
       .from('users')
@@ -860,6 +887,8 @@ async function logCompletionTelemetryDirectFromStripeObject(admin: any, event: a
     'customer.subscription.created',
     'customer.subscription.updated',
     'invoice.paid',
+    'invoice.payment_succeeded',
+    'invoice_payment.paid',
   ]);
 
   if (!completeEventTypes.has(eventType)) {
@@ -872,7 +901,7 @@ async function logCompletionTelemetryDirectFromStripeObject(admin: any, event: a
       skipped: true,
       reason: 'user_not_found_for_completion_telemetry',
       eventType,
-      stripeCustomerId: normalizeStripeId(object?.customer),
+      stripeCustomerId: extractStripeCustomerIdForWebhookEvent(event),
       stripeSubscriptionId: String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
     };
   }
@@ -882,7 +911,7 @@ async function logCompletionTelemetryDirectFromStripeObject(admin: any, event: a
     source: 'stripe_webhook_direct_completion_logger',
     stripe_event_type: eventType,
     stripe_event_id: String(event?.id || '').trim() || null,
-    stripe_customer_id: String(sync?.stripeCustomerId || normalizeStripeId(object?.customer) || '').trim() || null,
+    stripe_customer_id: String(sync?.stripeCustomerId || extractStripeCustomerIdForWebhookEvent(event) || '').trim() || null,
     stripe_subscription_id: String(sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
     checkout_session_id: object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null,
     invoice_id: object?.object === 'invoice' ? String(object?.id || '').trim() || null : null,
@@ -893,14 +922,12 @@ async function logCompletionTelemetryDirectFromStripeObject(admin: any, event: a
   }) as Record<string, unknown>;
 
   const results: Record<string, unknown> = {};
-  if (eventType === 'checkout.session.completed') {
-    results.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
-      userId: user.id,
-      eventName: 'checkout_completed',
-      partnerSource,
-      payload,
-    });
-  }
+  results.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
+    userId: user.id,
+    eventName: 'checkout_completed',
+    partnerSource,
+    payload,
+  });
 
   results.upgrade_completed = await insertAnalyticsEventBestEffort(admin, {
     userId: user.id,
@@ -933,7 +960,7 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
 
   const userId = String(sync?.userId || '').trim() || await resolveUserIdForBillingEvent(admin, {
     explicitUserId: String(object?.metadata?.user_id || object?.client_reference_id || '').trim() || null,
-    stripeCustomerId: normalizeStripeId(object?.customer),
+    stripeCustomerId: extractStripeCustomerIdForWebhookEvent(event),
     stripeSubscriptionId: String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
   });
 
@@ -944,6 +971,8 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
     'customer.subscription.created',
     'customer.subscription.updated',
     'invoice.paid',
+    'invoice.payment_succeeded',
+    'invoice_payment.paid',
   ]);
 
   if (!completeEventTypes.has(eventType)) {
@@ -955,7 +984,9 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
     billingStatus === 'trialing' ||
     paymentStatus === 'paid' ||
     paymentStatus === 'no_payment_required' ||
-    eventType === 'invoice.paid';
+    eventType === 'invoice.paid' ||
+    eventType === 'invoice.payment_succeeded' ||
+    eventType === 'invoice_payment.paid';
 
   if (!statusLooksComplete) {
     return { skipped: true, reason: 'event_not_complete', eventType, billingStatus, paymentStatus };
@@ -966,7 +997,7 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
     source: 'stripe_webhook',
     stripe_event_type: eventType,
     stripe_event_id: String(event?.id || '').trim() || null,
-    stripe_customer_id: sync?.stripeCustomerId || normalizeStripeId(object?.customer),
+    stripe_customer_id: sync?.stripeCustomerId || extractStripeCustomerIdForWebhookEvent(event),
     stripe_subscription_id: sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : null),
     checkout_session_id: object?.object === 'checkout.session' ? object?.id || null : null,
     invoice_id: object?.object === 'invoice' ? object?.id || null : null,
@@ -978,14 +1009,12 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
 
   const analyticsResults: Record<string, unknown> = {};
 
-  if (eventType === 'checkout.session.completed') {
-    analyticsResults.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
-      userId,
-      eventName: 'checkout_completed',
-      partnerSource,
-      payload,
-    });
-  }
+  analyticsResults.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
+    userId,
+    eventName: 'checkout_completed',
+    partnerSource,
+    payload,
+  });
 
   analyticsResults.upgrade_completed = await insertAnalyticsEventBestEffort(admin, {
     userId,
@@ -1090,6 +1119,8 @@ export async function processStripeWebhook(input: {
     'customer.subscription.updated',
     'customer.subscription.deleted',
     'invoice.paid',
+    'invoice.payment_succeeded',
+    'invoice_payment.paid',
     'invoice.payment_failed',
   ]);
 
