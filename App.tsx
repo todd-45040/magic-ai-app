@@ -26,6 +26,7 @@ import FounderSuccessPage from './components/FounderSuccessPage';
 import { isDemoEnabled, enableDemo, seedDemoData } from './services/demoSeedService';
 import { createCheckoutSession, fetchBillingStatus, resolveCheckoutLookupKey } from './services/billingClient';
 import { logIbmConversionEvent, isIbmConversionCandidate } from './services/ibmConversionTracking';
+import { logEventAsync } from './services/analyticsService';
 import { logUserActivity } from './services/userActivityService';
 import { getPartnerContext, normalizePartnerSource, getPartnerMeta } from './services/partnerTrialService';
 
@@ -53,14 +54,25 @@ function App() {
   const handleUpgrade = async (selection: any, options?: any) => {
     try {
       const normalized = typeof selection === 'string' ? { tier: selection, billingCycle: options?.billingCycle || 'monthly', founderRequested: Boolean(options?.founderRequested) } : { tier: selection?.tier, billingCycle: selection?.billingCycle || 'monthly', founderRequested: Boolean(selection?.founderRequested) };
+      const intentPayload = {
+        source: 'upgrade_modal',
+        location: 'app',
+        target_plan: normalized?.tier || 'professional',
+        billing_cycle: normalized?.billingCycle || 'monthly',
+        founder_requested: Boolean(normalized?.founderRequested),
+        active_user_email: user?.email || null,
+      };
+
+      // Log the user's intent before any billing-status or Stripe work begins.
+      // This is the conversion handoff point we need to see in analytics_events.
+      await logEventAsync('upgrade_intent_clicked', intentPayload);
+
       const billingStatus = await fetchBillingStatus();
       const lookupKey = resolveCheckoutLookupKey(normalized, billingStatus);
 
       if (isIbmConversionCandidate(user)) {
-        void logIbmConversionEvent(user, 'upgrade_clicked', {
-          target_plan: normalized?.tier || 'professional',
-          billing_cycle: normalized?.billingCycle || 'monthly',
-          founder_requested: Boolean(normalized?.founderRequested),
+        await logIbmConversionEvent(user, 'upgrade_clicked', {
+          ...intentPayload,
           target_lookup_key: lookupKey,
         });
       }
@@ -68,28 +80,31 @@ function App() {
       const result = await createCheckoutSession(lookupKey);
 
       if (result?.url) {
+        const checkoutPayload = {
+          ...intentPayload,
+          target_lookup_key: lookupKey,
+          billing_action: result?.billingAction || 'checkout_session',
+        };
+
+        // Await this before redirect so browser navigation cannot cancel the event.
+        await logEventAsync('upgrade_checkout_started', checkoutPayload);
+
         if (isIbmConversionCandidate(user)) {
-          void logIbmConversionEvent(user, 'checkout_started', {
-            target_plan: normalized?.tier || 'professional',
-            billing_cycle: normalized?.billingCycle || 'monthly',
-            founder_requested: Boolean(normalized?.founderRequested),
-            target_lookup_key: lookupKey,
-            billing_action: result?.billingAction || 'checkout_session',
-          });
+          await logIbmConversionEvent(user, 'checkout_started', checkoutPayload);
         }
         window.location.href = String(result.url);
         return;
       }
 
       if (result?.cycleSwitchApplied) {
+        const cycleSwitchPayload = {
+          ...intentPayload,
+          target_lookup_key: lookupKey,
+          billing_action: result?.billingAction || 'subscription_update',
+        };
+        await logEventAsync('upgrade_checkout_started', cycleSwitchPayload);
         if (isIbmConversionCandidate(user)) {
-          void logIbmConversionEvent(user, 'checkout_started', {
-            target_plan: normalized?.tier || 'professional',
-            billing_cycle: normalized?.billingCycle || 'monthly',
-            founder_requested: Boolean(normalized?.founderRequested),
-            target_lookup_key: lookupKey,
-            billing_action: result?.billingAction || 'subscription_update',
-          });
+          await logIbmConversionEvent(user, 'checkout_started', cycleSwitchPayload);
         }
         alert(result?.message || 'Billing cycle updated successfully.');
         window.location.reload();
