@@ -63,6 +63,8 @@ import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
 import type { BillingCycle } from '../services/planCatalog';
 import TrialConversionBanner from './TrialConversionBanner';
+import TrialCountdownCard from './TrialCountdownCard';
+import FirstIdeaConversionModal from './FirstIdeaConversionModal';
 import FirstWinGate from './FirstWinGate';
 import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
@@ -2955,6 +2957,7 @@ useEffect(() => {
 
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [showFirstIdeaConversionModal, setShowFirstIdeaConversionModal] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [showFirstSessionActivation, setShowFirstSessionActivation] = useState(false);
@@ -3891,6 +3894,22 @@ useEffect(() => {
 
     const nextIdeaCount = Number(Array.isArray(ideas) ? ideas.length : 0) + 1;
     maybeLogHighIntentUser(nextIdeaCount, 'idea_saved');
+
+    const conversionModalKey = `maw_first_idea_conversion_modal:${String(user?.email || 'guest').toLowerCase()}`;
+    if (nextIdeaCount === 1) {
+      try {
+        if (localStorage.getItem(conversionModalKey) !== '1') {
+          localStorage.setItem(conversionModalKey, '1');
+          setShowFirstIdeaConversionModal(true);
+        }
+      } catch {
+        setShowFirstIdeaConversionModal(true);
+      }
+      void logIbmConversionEvent(user, 'first_idea_saved', {
+        location: activeView,
+        conversion_moment: 'ownership_modal',
+      });
+    }
 
     showToast(message, {
       label: 'View Ideas',
@@ -5053,6 +5072,24 @@ const renderIntentSubnav = () => {
             user={user as any}
           />
         )}
+        {showFirstIdeaConversionModal && (
+          <FirstIdeaConversionModal
+            user={user}
+            onClose={() => setShowFirstIdeaConversionModal(false)}
+            onViewIdeas={() => {
+              setShowFirstIdeaConversionModal(false);
+              setActiveView('saved-ideas');
+            }}
+            onUpgrade={() => {
+              void logIbmConversionEvent(user, 'upgrade_clicked', {
+                location: 'first_idea_conversion_modal',
+                active_view: activeView,
+              });
+              setShowFirstIdeaConversionModal(false);
+              setIsUpgradeModalOpen(true);
+            }}
+          />
+        )}
         {isHelpModalOpen && <HelpModal
             onClose={() => setIsHelpModalOpen(false)}
             onNavigate={(view) => {
@@ -5142,6 +5179,11 @@ const renderIntentSubnav = () => {
         </div>
       </header>
       <TrialConversionBanner user={user} location="app" onPrimaryAction={handleTrialConversionPrimaryAction} />
+      {!isDemoMode && (
+        <div className="px-3 pt-3 sm:px-4">
+          <TrialCountdownCard user={user} onUpgrade={() => setIsUpgradeModalOpen(true)} />
+        </div>
+      )}
 
       {/* Demo banner is handled globally by <DemoBanner /> to avoid stacked indicators in recordings. */}
 
