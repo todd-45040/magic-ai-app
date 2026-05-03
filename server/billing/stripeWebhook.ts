@@ -174,6 +174,15 @@ function normalizeBool(value: unknown): boolean {
   return raw === 'true' || raw === '1' || raw === 'yes';
 }
 
+function normalizeStripeId(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'object' && value && 'id' in (value as any)) {
+    return String((value as any).id || '').trim() || null;
+  }
+  return String(value || '').trim() || null;
+}
+
 function normalizePlanFromObject(object: any, fallback?: { priceId?: string | null; productId?: string | null }): BillingPlanKey {
   const metadata = object?.metadata || {};
   const explicitPlan = String(metadata?.plan_key || metadata?.internal_plan_key || '').trim();
@@ -253,7 +262,7 @@ async function insertBillingEventReceipt(admin: any, event: any, requestId: stri
   const metadata = object?.metadata || {};
   const stripeEventId = String(event?.id || '').trim();
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
-  const stripeCustomerId = String(object?.customer || '').trim() || null;
+  const stripeCustomerId = normalizeStripeId(object?.customer);
   const userId = String(metadata?.user_id || '').trim() || null;
 
   const payload = {
@@ -643,7 +652,7 @@ async function syncFromEvent(admin: any, event: any) {
   const firstPrice = object?.items?.data?.[0]?.price || object?.lines?.data?.[0]?.price || object?.plan || null;
 
   const explicitUserId = String(metadata?.user_id || object?.client_reference_id || '').trim() || null;
-  const stripeCustomerId = String(object?.customer || '').trim() || null;
+  const stripeCustomerId = normalizeStripeId(object?.customer);
   const stripeSubscriptionId = String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
   const userId = await resolveUserIdForBillingEvent(admin, {
     explicitUserId,
@@ -792,6 +801,130 @@ async function insertAnalyticsEventBestEffort(admin: any, params: {
   }
 }
 
+
+async function resolveUserForCompletionTelemetry(admin: any, params: {
+  sync?: any;
+  event?: any;
+}) {
+  const sync = params.sync || {};
+  const event = params.event || {};
+  const object = event?.data?.object || {};
+  const metadata = object?.metadata || {};
+
+  const explicitUserId = String(sync?.userId || metadata?.user_id || object?.client_reference_id || '').trim() || null;
+  if (explicitUserId) {
+    const { data } = await admin
+      .from('users')
+      .select('id, email, partner_source, signup_source, membership, stripe_status')
+      .eq('id', explicitUserId)
+      .maybeSingle();
+    if (data?.id) return data;
+  }
+
+  const stripeCustomerId = String(sync?.stripeCustomerId || normalizeStripeId(object?.customer) || '').trim() || null;
+  if (stripeCustomerId) {
+    const { data } = await admin
+      .from('users')
+      .select('id, email, partner_source, signup_source, membership, stripe_status')
+      .eq('stripe_customer_id', stripeCustomerId)
+      .maybeSingle();
+    if (data?.id) return data;
+  }
+
+  const stripeSubscriptionId = String(sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null;
+  if (stripeSubscriptionId) {
+    const { data: subscription } = await admin
+      .from('subscriptions')
+      .select('user_id')
+      .eq('stripe_subscription_id', stripeSubscriptionId)
+      .maybeSingle();
+    const subscriptionUserId = String(subscription?.user_id || '').trim() || null;
+    if (subscriptionUserId) {
+      const { data } = await admin
+        .from('users')
+        .select('id, email, partner_source, signup_source, membership, stripe_status')
+        .eq('id', subscriptionUserId)
+        .maybeSingle();
+      if (data?.id) return data;
+    }
+  }
+
+  return null;
+}
+
+async function logCompletionTelemetryDirectFromStripeObject(admin: any, event: any, sync?: any) {
+  const eventType = String(event?.type || '').trim();
+  const object = event?.data?.object || {};
+  const completeEventTypes = new Set([
+    'checkout.session.completed',
+    'customer.subscription.created',
+    'customer.subscription.updated',
+    'invoice.paid',
+  ]);
+
+  if (!completeEventTypes.has(eventType)) {
+    return { skipped: true, reason: 'not_completion_event', eventType };
+  }
+
+  const user = await resolveUserForCompletionTelemetry(admin, { sync, event });
+  if (!user?.id) {
+    return {
+      skipped: true,
+      reason: 'user_not_found_for_completion_telemetry',
+      eventType,
+      stripeCustomerId: normalizeStripeId(object?.customer),
+      stripeSubscriptionId: String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
+    };
+  }
+
+  const partnerSource = String(user.partner_source || user.signup_source || '').trim().toLowerCase() || null;
+  const payload = sanitizeStripeLogValue({
+    source: 'stripe_webhook_direct_completion_logger',
+    stripe_event_type: eventType,
+    stripe_event_id: String(event?.id || '').trim() || null,
+    stripe_customer_id: String(sync?.stripeCustomerId || normalizeStripeId(object?.customer) || '').trim() || null,
+    stripe_subscription_id: String(sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
+    checkout_session_id: object?.object === 'checkout.session' ? String(object?.id || '').trim() || null : null,
+    invoice_id: object?.object === 'invoice' ? String(object?.id || '').trim() || null : null,
+    plan_key: sync?.planKey || user.membership || null,
+    billing_status: sync?.billingStatus || user.stripe_status || null,
+    payment_status: String(object?.payment_status || '').trim() || null,
+    partner_source: partnerSource,
+  }) as Record<string, unknown>;
+
+  const results: Record<string, unknown> = {};
+  if (eventType === 'checkout.session.completed') {
+    results.checkout_completed = await insertAnalyticsEventBestEffort(admin, {
+      userId: user.id,
+      eventName: 'checkout_completed',
+      partnerSource,
+      payload,
+    });
+  }
+
+  results.upgrade_completed = await insertAnalyticsEventBestEffort(admin, {
+    userId: user.id,
+    eventName: 'upgrade_completed',
+    partnerSource,
+    payload,
+  });
+
+  try {
+    await insertUserActivity(admin, {
+      user_id: user.id,
+      email: user.email || null,
+      tool_name: 'system',
+      event_type: eventType === 'checkout.session.completed' ? 'checkout_completed' : 'upgrade_completed',
+      success: true,
+      metadata: payload,
+    });
+  } catch (activityError) {
+    console.error('stripe webhook direct completion activity insert failed', activityError);
+  }
+
+  return { skipped: false, eventType, partnerSource, analytics: results };
+}
+
 async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, event: any) {
   const eventType = String(event?.type || '').trim();
   const object = event?.data?.object || {};
@@ -800,7 +933,7 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
 
   const userId = String(sync?.userId || '').trim() || await resolveUserIdForBillingEvent(admin, {
     explicitUserId: String(object?.metadata?.user_id || object?.client_reference_id || '').trim() || null,
-    stripeCustomerId: String(object?.customer || '').trim() || null,
+    stripeCustomerId: normalizeStripeId(object?.customer),
     stripeSubscriptionId: String(object?.subscription || (object?.object === 'subscription' ? object?.id : '') || '').trim() || null,
   });
 
@@ -833,7 +966,7 @@ async function logUpgradeCompletedTelemetryFromWebhook(admin: any, sync: any, ev
     source: 'stripe_webhook',
     stripe_event_type: eventType,
     stripe_event_id: String(event?.id || '').trim() || null,
-    stripe_customer_id: sync?.stripeCustomerId || object?.customer || null,
+    stripe_customer_id: sync?.stripeCustomerId || normalizeStripeId(object?.customer),
     stripe_subscription_id: sync?.stripeSubscriptionId || object?.subscription || (object?.object === 'subscription' ? object?.id : null),
     checkout_session_id: object?.object === 'checkout.session' ? object?.id || null : null,
     invoice_id: object?.object === 'invoice' ? object?.id || null : null,
@@ -966,6 +1099,16 @@ export async function processStripeWebhook(input: {
     billingEventId = receipt.billingEventId;
     if (receipt.duplicate) {
       await incrementBillingEventAttempt(admin, billingEventId);
+      // A replayed Stripe event should still be able to backfill completion analytics.
+      // This is important after telemetry patches: billing_events may already mark the
+      // Stripe event processed, while analytics_events may still be missing
+      // checkout_completed / upgrade_completed.
+      const replayCompletionTelemetry = await logCompletionTelemetryDirectFromStripeObject(admin, event, null);
+      await markBillingEventStatus(admin, billingEventId, 'processed', {
+        summary: buildEventSummary(event),
+        duplicate: true,
+        replayCompletionTelemetry,
+      });
       return { ok: true, received: true, duplicate: true, processed: true, eventType, eventId };
     }
 
@@ -979,6 +1122,7 @@ export async function processStripeWebhook(input: {
 
     const sync = await syncFromEvent(admin, event);
     const upgradeTelemetry = await logUpgradeCompletedTelemetryFromWebhook(admin, sync, event);
+    const directCompletionTelemetry = await logCompletionTelemetryDirectFromStripeObject(admin, event, sync);
     await logIbmPaidConversionFromWebhook(admin, sync, event);
     const founderCap = await enforceFounderCapBestEffort(admin, event);
 
@@ -986,6 +1130,7 @@ export async function processStripeWebhook(input: {
       summary: buildEventSummary(event),
       sync,
       upgradeTelemetry,
+      directCompletionTelemetry,
       founderCap,
     });
 
