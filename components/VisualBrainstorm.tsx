@@ -12,6 +12,7 @@ import type { User } from '../types';
 import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
 import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
+import { startPipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
 
 const PRACTICAL_VISUAL_BRAINSTORM_HINT = 'practical magic prop or stage concept, real materials, believable construction, professional theatrical realism, buildable design, no fantasy physics';
 const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Practical mode: outputs are biased toward believable stage/build designs.';
@@ -998,6 +999,62 @@ const activeSession = useMemo(() => {
     }
   };
 
+
+  const handleUseInEffect = () => {
+    if (!generatedImage) return;
+
+    const title = conceptTitle?.trim() || activeItem?.title || buildConceptTitle() || 'Visual Brainstorm Concept';
+    const prompt = String(promptUsed || finalPrompt || '').trim();
+    const imageUrl = generatedImage;
+    const payload = {
+      source: 'visual_image',
+      imageUrl,
+      prompt,
+      title,
+      ideaId: savedIdeaId || undefined,
+      historyId: activeHistoryId || undefined,
+      created_at: new Date().toISOString(),
+    };
+
+    // Debug checkpoint requested for verification.
+    console.log('IMAGE IDEA:', payload);
+
+    try {
+      localStorage.setItem('maw_effect_engine_visual_handoff', JSON.stringify(payload));
+      // Temporary compatibility key for older patch instructions/debugging.
+      localStorage.setItem('pipelineSession', JSON.stringify({
+        sourceType: 'image',
+        imageUrl,
+        prompt,
+        title,
+        lastStep: 'image',
+        createdAt: Date.now(),
+      }));
+    } catch {
+      // If storage is unavailable, still try to route the user.
+    }
+
+    try {
+      const session = startPipelineSession({
+        sourceType: 'image',
+        lastStep: 'image',
+        imageUrl,
+        prompt,
+        title,
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: session })); } catch {}
+      trackPipelineAdvance('image', 'effect', 'visual_brainstorm', { historyId: activeHistoryId || null, ideaId: savedIdeaId || null });
+    } catch {
+      // Pipeline state is helpful, but navigation should still work without it.
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'effect-generator', source: 'visual_brainstorm', historyId: activeHistoryId || null } }));
+    } catch {
+      window.location.href = '/effect-engine';
+    }
+  };
+
   const handleSaveImage = async () => {
     if (!generatedImage) return;
     if (!activeHistoryId) return;
@@ -1764,10 +1821,16 @@ ${visualPrompt}`,
                   <div className="mt-5 pt-4 border-t border-slate-800/70">
                     <SaveActionBar
                       title="Next step:"
-                      subtitle="Save this visual, then move it into a Show or Task."
+                      subtitle="Move this visual into Effect Engine, or save it for later."
                       saved={!!savedIdeaId}
                       savingLabel="Saving…"
                       savedLabel="Saved"
+                      workflowAction={{
+                        label: 'Use in Effect',
+                        onClick: handleUseInEffect,
+                        disabled: !generatedImage,
+                        tone: 'primary',
+                      }}
                       primary={{
                         label: 'Save Idea',
                         onClick: () => void handleSaveImage(),

@@ -35,6 +35,9 @@ export interface SaveActionBarProps {
   title?: string;
   subtitle?: string;
 
+  /** New API: Optional workflow action shown above the primary save action */
+  workflowAction?: ActionButton;
+
   /** New API: Primary save action (big purple CTA) */
   primary?: ActionButton;
 
@@ -144,6 +147,7 @@ export default function SaveActionBar(props: SaveActionBarProps) {
     className,
 
     // New API
+    workflowAction,
     primary,
     secondaryLeft,
     secondaryRight,
@@ -245,8 +249,19 @@ export default function SaveActionBar(props: SaveActionBarProps) {
         ) : null}
       </div>
 
+      {/* Workflow CTA: use this to move the saved/active idea into the next creative tool. */}
+      {workflowAction ? (
+        <div className="mt-4">
+          <Button
+            {...workflowAction}
+            tone={workflowAction.tone ?? "primary"}
+            fullWidth
+          />
+        </div>
+      ) : null}
+
       {/* Primary CTA */}
-      <div className="mt-4">
+      <div className={workflowAction ? "mt-3" : "mt-4"}>
         <Button
           label={effectivePrimaryLabel}
           onClick={safePrimary?.onClick ?? (() => {})}

@@ -1,0 +1,125 @@
+--- app120_orig/magic-ai-app-main/components/VisualBrainstorm.tsx	2026-05-02 22:29:09.000000000 +0000
++++ app120/magic-ai-app-main/components/VisualBrainstorm.tsx	2026-05-03 03:08:36.299335351 +0000
+@@ -12,6 +12,7 @@
+ import { canConsume, consume, getSoftLimitWarning } from '../services/usageTracker';
+ import { normalizeTier } from '../services/membershipService';
+ import { trackClientEvent } from "../services/telemetryClient";
++import { logEvent } from "../services/analyticsService";
+ 
+ const PRACTICAL_VISUAL_BRAINSTORM_HINT = 'practical magic prop or stage concept, real materials, believable construction, professional theatrical realism, buildable design, no fantasy physics';
+ const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Practical mode: outputs are biased toward believable stage/build designs.';
+@@ -998,6 +999,93 @@
+     }
+   };
+ 
++
++  const handleUseInEffect = () => {
++    if (!generatedImage) return;
++
++    const visualPrompt = String(promptUsed || finalPrompt || '').trim();
++    const title = conceptTitle?.trim() || buildConceptTitle();
++    const idea = {
++      type: 'image',
++      imageUrl: generatedImage,
++      prompt: visualPrompt,
++      title,
++      ideaId: savedIdeaId || null,
++      historyId: activeHistoryId || null,
++      source: 'visual_brainstorm',
++    };
++
++    // Step 3: intentional debug line for the next verification pass.
++    // Confirm imageUrl, prompt, and title are present before the handoff.
++    console.log('IMAGE IDEA:', idea);
++
++    const now = Date.now();
++    const effectPayload = {
++      source: 'visual_image',
++      imageUrl: generatedImage,
++      prompt: visualPrompt,
++      title,
++      ideaId: savedIdeaId || undefined,
++      created_at: new Date(now).toISOString(),
++    };
++
++    const pipelineSession = {
++      sourceType: 'image',
++      imageUrl: generatedImage,
++      prompt: visualPrompt,
++      title,
++      ideaId: savedIdeaId || null,
++      historyId: activeHistoryId || null,
++      lastStep: 'image',
++      createdAt: now,
++      updatedAt: now,
++    };
++
++    try {
++      // Existing Effect Engine handoff key used elsewhere in the app.
++      localStorage.setItem('maw_effect_engine_visual_handoff', JSON.stringify(effectPayload));
++      // New shared pipeline-session key from the pipeline architecture.
++      localStorage.setItem('pipelineSession', JSON.stringify(pipelineSession));
++    } catch {
++      // Never block the user if storage is unavailable.
++    }
++
++    void logEvent('pipeline_session_started', {
++      source: 'visual_brainstorm',
++      from: 'image',
++      to: 'effect',
++      sourceType: 'image',
++      idea_id: savedIdeaId || null,
++      history_id: activeHistoryId || null,
++      title,
++    });
++
++    void logEvent('pipeline_step_completed', {
++      source: 'visual_brainstorm',
++      step: 'image',
++      next_step: 'effect',
++      idea_id: savedIdeaId || null,
++      history_id: activeHistoryId || null,
++      title,
++    });
++
++    trackClientEvent({
++      tool: 'visual_brainstorm',
++      action: 'visual_use_in_effect_click',
++      metadata: { historyId: activeHistoryId, ideaId: savedIdeaId, title },
++      outcome: 'ALLOWED',
++    });
++
++    try {
++      window.dispatchEvent(new CustomEvent('maw:navigate', {
++        detail: { view: 'effect-generator', source: 'visual_image', ideaId: savedIdeaId || undefined },
++      }));
++    } catch {
++      // Last-resort fallback for environments where the custom app event is unavailable.
++      window.location.hash = '#effect-generator';
++    }
++  };
++
+   const handleSaveImage = async () => {
+     if (!generatedImage) return;
+     if (!activeHistoryId) return;
+@@ -1762,6 +1850,20 @@
+                   </div>
+ 
+                   <div className="mt-5 pt-4 border-t border-slate-800/70">
++                    <div className="mb-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3">
++                      <div className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-emerald-200/80">Creative pipeline</div>
++                      <button
++                        type="button"
++                        onClick={handleUseInEffect}
++                        disabled={!generatedImage}
++                        className="w-full rounded-xl bg-purple-600 px-4 py-3 text-sm font-bold text-white shadow-[0_10px_30px_-12px_rgba(168,85,247,0.9)] transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
++                      >
++                        Use in Effect
++                      </button>
++                      <p className="mt-2 text-xs leading-5 text-slate-300">
++                        Send this visual concept directly into Effect Engine with the image and prompt already loaded.
++                      </p>
++                    </div>
+                     <SaveActionBar
+                       title="Next step:"
+                       subtitle="Save this visual, then move it into a Show or Task."
