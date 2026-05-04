@@ -23,12 +23,14 @@ function asSource(raw: any, fallback: AllowedSource = 'ibm'): AllowedSource {
 
 function campaignLabel(source: AllowedSource): string {
   if (source === 'sam') return 'SAM';
-  if (source === 'all') return 'All Partners';
+  if (source === 'all') return 'All Users';
   return 'IBM';
 }
 
 function sourceList(source: AllowedSource): string[] {
-  if (source === 'all') return ['ibm', 'sam'];
+  // Empty list intentionally means no partner_source filter.
+  // This makes source=all a true product-wide dashboard, not only IBM + SAM.
+  if (source === 'all') return [];
   return [source];
 }
 
@@ -52,6 +54,7 @@ function normalizePartnerSource(raw: any): string {
 }
 
 function userMatchesSource(user: any, sources: string[]): boolean {
+  if (!sources.length) return true;
   const partnerSource = normalizePartnerSource(user?.partner_source);
   const signupSource = normalizePartnerSource(user?.signup_source);
   return sources.includes(partnerSource || signupSource);
@@ -87,7 +90,7 @@ async function fetchAllAnalyticsEvents(admin: any, sources: string[], sinceIso: 
 
     if (sources.length === 1) {
       query = query.eq('partner_source', sources[0]);
-    } else {
+    } else if (sources.length > 1) {
       query = query.in('partner_source', sources);
     }
 

@@ -9,7 +9,7 @@ const WINDOW_OPTIONS = [
 ];
 
 const CAMPAIGN_OPTIONS = [
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'All Users' },
   { value: 'ibm', label: 'IBM' },
   { value: 'sam', label: 'SAM' },
 ] as const;
@@ -147,7 +147,7 @@ export default function AdminIbmDashboard() {
     };
   }, [days, source]);
 
-  const campaignLabel = String(data?.campaign?.label || (source === 'sam' ? 'SAM' : source === 'all' ? 'All Partners' : 'IBM'));
+  const campaignLabel = String(data?.campaign?.label || (source === 'sam' ? 'SAM' : source === 'all' ? 'All Users' : 'IBM')); 
   const summary = data?.summary || {};
   const events = data?.events || {};
   const rates = data?.rates || {};
@@ -177,7 +177,7 @@ export default function AdminIbmDashboard() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <div className="text-lg font-semibold text-amber-200">Partner Campaign Dashboard</div>
-          <div className="text-sm text-white/70">Compare IBM, SAM, or all partner campaigns across signups, activation, checkout behavior, and paid conversions.</div>
+          <div className="text-sm text-white/70">Compare all users, IBM, or SAM across signups, activation, checkout behavior, and paid conversions.</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
