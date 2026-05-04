@@ -152,7 +152,8 @@ async function syncCustomerMapping(params: {
 }
 
 async function resolveUserForEvent(event: Stripe.Event, customerId: string) {
-  const object: any = event.data.object;
+  // const object: any = event.data.object;
+  // const stripeObject = event.data.object;
   const metadataUserId = extractUserId(event);
   const customerEmail = extractCustomerEmail(event);
 
