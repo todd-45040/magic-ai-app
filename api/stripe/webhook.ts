@@ -152,8 +152,6 @@ async function syncCustomerMapping(params: {
 }
 
 async function resolveUserForEvent(event: Stripe.Event, customerId: string) {
-  // const object: any = event.data.object;
-  // const stripeObject = event.data.object;
   const metadataUserId = extractUserId(event);
   const customerEmail = extractCustomerEmail(event);
 
@@ -233,6 +231,121 @@ function shouldLogUpgradeCompleted(eventType: string): boolean {
   return isRevenueSignal(eventType);
 }
 
+
+async function reserveStripeEvent(event: Stripe.Event) {
+  const nowIso = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('stripe_webhook_events')
+    .insert({
+      event_id: event.id,
+      event_type: event.type,
+      status: 'processing',
+      received_at: nowIso,
+    });
+
+  if (!error) {
+    return { reserved: true, duplicate: false, protectionUnavailable: false, error: null as string | null };
+  }
+
+  if (error.code === '23505') {
+    const existing = await supabase
+      .from('stripe_webhook_events')
+      .select('status, received_at')
+      .eq('event_id', event.id)
+      .maybeSingle();
+
+    if (existing.error) {
+      await logAnalytics('stripe_webhook_error', {
+        stage: 'idempotency_existing_lookup_failed',
+        event_type: event.type,
+        event_id: event.id,
+        message: existing.error.message,
+      });
+      return { reserved: false, duplicate: true, protectionUnavailable: false, error: existing.error.message };
+    }
+
+    const status = existing.data?.status;
+    const receivedAt = existing.data?.received_at ? new Date(existing.data.received_at).getTime() : 0;
+    const isStaleProcessing = status === 'processing' && receivedAt > 0 && Date.now() - receivedAt > 15 * 60 * 1000;
+    const canRetry = status === 'failed' || isStaleProcessing;
+
+    if (canRetry) {
+      const retry = await supabase
+        .from('stripe_webhook_events')
+        .update({
+          status: 'processing',
+          event_type: event.type,
+          received_at: nowIso,
+          processed_at: null,
+          message: status === 'failed' ? 'retry_after_failed' : 'retry_after_stale_processing',
+        })
+        .eq('event_id', event.id)
+        .in('status', ['failed', 'processing']);
+
+      if (!retry.error) {
+        return { reserved: true, duplicate: false, protectionUnavailable: false, error: null as string | null };
+      }
+
+      await logAnalytics('stripe_webhook_error', {
+        stage: 'idempotency_retry_reserve_failed',
+        event_type: event.type,
+        event_id: event.id,
+        message: retry.error.message,
+      });
+    }
+
+    return { reserved: false, duplicate: true, protectionUnavailable: false, error: null as string | null };
+  }
+
+  // Fail open if the migration has not been applied yet, so billing does not break.
+  // Run the included migration to enable real idempotency protection.
+  if (error.code === '42P01') {
+    await logAnalytics('stripe_webhook_error', {
+      stage: 'idempotency_table_missing',
+      event_type: event.type,
+      event_id: event.id,
+      message: 'stripe_webhook_events table is missing; run the idempotency migration',
+    });
+    return { reserved: true, duplicate: false, protectionUnavailable: true, error: error.message };
+  }
+
+  await logAnalytics('stripe_webhook_error', {
+    stage: 'idempotency_reserve_failed',
+    event_type: event.type,
+    event_id: event.id,
+    message: error.message,
+  });
+
+  // Fail closed for unexpected idempotency errors. Stripe will retry this event later.
+  return { reserved: false, duplicate: false, protectionUnavailable: false, error: error.message };
+}
+
+async function markStripeEventProcessed(params: {
+  event: Stripe.Event;
+  customerId?: string | null;
+  userId?: string | null;
+  status: 'processed' | 'skipped' | 'failed';
+  message?: string | null;
+}) {
+  const { event, customerId, userId, status, message } = params;
+
+  const { error } = await supabase
+    .from('stripe_webhook_events')
+    .update({
+      status,
+      stripe_customer_id: customerId || null,
+      user_id: userId || null,
+      message: message || null,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('event_id', event.id);
+
+  if (error && error.code !== '42P01') {
+    console.error('Stripe event status update failed:', error.message);
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
@@ -276,6 +389,30 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ received: true, skipped: 'non_revenue_event' });
     }
 
+    const idempotency = await reserveStripeEvent(event);
+
+    if (idempotency.duplicate) {
+      await logAnalytics('stripe_webhook_duplicate_skipped', {
+        event_type: event.type,
+        event_id: event.id,
+      });
+
+      return res.status(200).json({
+        received: true,
+        duplicate: true,
+        skipped: 'duplicate_stripe_event',
+        event_type: event.type,
+      });
+    }
+
+    if (!idempotency.reserved) {
+      return res.status(500).json({
+        received: false,
+        error: 'stripe_event_idempotency_reserve_failed',
+        event_type: event.type,
+      });
+    }
+
     const customerId = extractCustomerId(event);
 
     await logAnalytics('stripe_webhook_customer_extracted', {
@@ -290,6 +427,13 @@ export default async function handler(req: any, res: any) {
         event_type: event.type,
         event_id: event.id,
         message: 'No Stripe customer ID found on revenue signal event',
+      });
+
+      await markStripeEventProcessed({
+        event,
+        customerId: null,
+        status: 'skipped',
+        message: 'no_customer',
       });
 
       return res.status(200).json({ received: true, skipped: 'no_customer' });
@@ -311,6 +455,13 @@ export default async function handler(req: any, res: any) {
         message: userError.message,
       });
 
+      await markStripeEventProcessed({
+        event,
+        customerId,
+        status: 'failed',
+        message: 'user_lookup_error',
+      });
+
       return res.status(200).json({ received: true, skipped: 'user_lookup_error' });
     }
 
@@ -323,6 +474,13 @@ export default async function handler(req: any, res: any) {
         metadataUserId: resolved.metadataUserId,
         customerEmail: resolved.customerEmail,
         message: 'No user found for Stripe customer ID, metadata user id, or checkout customer email',
+      });
+
+      await markStripeEventProcessed({
+        event,
+        customerId,
+        status: 'failed',
+        message: 'no_user_match',
       });
 
       return res.status(200).json({ received: true, skipped: 'no_user_match' });
@@ -386,12 +544,33 @@ export default async function handler(req: any, res: any) {
         message: insertError.message,
       }, user.id);
 
+      await markStripeEventProcessed({
+        event,
+        customerId,
+        userId: user.id,
+        status: 'failed',
+        message: 'revenue_analytics_insert_failed',
+      });
+
       return res.status(200).json({ received: true, warning: 'revenue_analytics_insert_failed' });
     }
 
+    await markStripeEventProcessed({
+      event,
+      customerId,
+      userId: user.id,
+      status: 'processed',
+      message: idempotency.protectionUnavailable ? 'processed_without_idempotency_table' : null,
+    });
+
     console.log('✅ Stripe revenue analytics logged for user:', user.id, 'event:', event.type);
 
-    return res.status(200).json({ received: true, revenue_logged: true, event_type: event.type });
+    return res.status(200).json({
+      received: true,
+      revenue_logged: true,
+      event_type: event.type,
+      idempotency: idempotency.protectionUnavailable ? 'unavailable_table_missing' : 'reserved',
+    });
   } catch (err: any) {
     console.error('❌ Stripe webhook processing error:', err.message);
 
