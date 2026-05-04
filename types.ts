@@ -142,6 +142,12 @@ export interface User {
   partnerDetailType?: 'ibm_ring' | 'sam_assembly' | null;
   partnerDetailValue?: string | null;
 
+  // Stripe billing snapshot used by entitlement checks.
+  stripeStatus?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripePriceId?: string | null;
+
   // Founding Circle identity layer
   foundingCircleMember?: boolean;
   foundingJoinedAt?: string | null;

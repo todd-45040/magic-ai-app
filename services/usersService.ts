@@ -23,6 +23,10 @@ type ExistingPartnerRow = {
   partner_campaign?: string | null;
   partner_detail_type?: string | null;
   partner_detail_value?: string | null;
+  stripe_status?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  stripe_price_id?: string | null;
 } | null;
 
 const asTrimmed = (value: unknown): string | null => {
@@ -98,6 +102,10 @@ const normalizeUserRow = (row: any): User => {
     ...(partnerContext.partnerCampaign ? { partnerCampaign: partnerContext.partnerCampaign } : {}),
     ...(partnerContext.partnerDetailType ? { partnerDetailType: partnerContext.partnerDetailType as any } : {}),
     ...(partnerContext.partnerDetailValue ? { partnerDetailValue: partnerContext.partnerDetailValue } : {}),
+    ...(row?.stripe_status ? { stripeStatus: row.stripe_status } : {}),
+    ...(row?.stripe_customer_id ? { stripeCustomerId: row.stripe_customer_id } : {}),
+    ...(row?.stripe_subscription_id ? { stripeSubscriptionId: row.stripe_subscription_id } : {}),
+    ...(row?.stripe_price_id ? { stripePriceId: row.stripe_price_id } : {}),
 
     // Founding Circle identity layer
     foundingCircleMember: Boolean(row?.founding_circle_member ?? false),
@@ -180,7 +188,7 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     try {
       const { data: existingRow } = await supabase
         .from(USERS_TABLE)
-        .select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,ibm_ring,sam_assembly,partner_source,partner_campaign,partner_detail_type,partner_detail_value')
+        .select('membership,is_admin,trial_end_date,signup_source,requested_trial_days,ibm_ring,sam_assembly,partner_source,partner_campaign,partner_detail_type,partner_detail_value,stripe_status,stripe_customer_id,stripe_subscription_id,stripe_price_id')
         .eq('id', uid)
         .maybeSingle();
       existing = (existingRow as any) || null;

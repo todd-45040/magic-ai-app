@@ -40,12 +40,27 @@ function activeTrial(trialEndDate: any): boolean {
   return Number.isFinite(ms) && ms > Date.now();
 }
 
+function activePaidStripe(profile: any): boolean {
+  const status = String(profile?.stripe_status || '').trim().toLowerCase();
+  const hasStripeIdentity = Boolean(profile?.stripe_subscription_id || profile?.stripe_customer_id);
+  return hasStripeIdentity && (status === 'active' || status === 'trialing');
+}
+
 export function resolveServerEntitlement(profile: any): ConversionEntitlementTier {
   if (profile?.is_admin || String(profile?.membership || '') === 'admin') return 'admin';
   const membership = String(profile?.membership || 'free').trim().toLowerCase();
+
+  // Canonical production access rule:
+  // active trial_end_date grants Professional access; active Stripe grants paid access
+  // even if frontend membership hydration is briefly stale after checkout.
+  if (membership === 'trial' && activeTrial(profile?.trial_end_date)) return 'professional';
+  if (activePaidStripe(profile)) {
+    if (membership === 'amateur' || membership === 'performer' || membership === 'semi-pro') return 'amateur';
+    return 'professional';
+  }
+
   if (membership === 'professional') return 'professional';
   if (membership === 'amateur' || membership === 'performer' || membership === 'semi-pro') return 'amateur';
-  if (membership === 'trial' && activeTrial(profile?.trial_end_date)) return 'professional';
   return 'free';
 }
 
@@ -58,7 +73,7 @@ export async function getServerUserProfile(req: any): Promise<
 
   const { data, error } = await auth.admin
     .from('users')
-    .select('id,email,membership,is_admin,trial_end_date,partner_source,signup_source,requested_trial_days')
+    .select('id,email,membership,is_admin,trial_end_date,stripe_status,stripe_customer_id,stripe_subscription_id,stripe_price_id,partner_source,signup_source,requested_trial_days')
     .eq('id', auth.userId)
     .maybeSingle();
 

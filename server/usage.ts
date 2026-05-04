@@ -152,10 +152,20 @@ function isUnlimitedAdmin(profile: any): boolean {
   return Boolean(profile?.is_admin) || String(profile?.membership || '').trim() === 'admin';
 }
 
+function hasActivePaidStripe(profile: any): boolean {
+  const status = String(profile?.stripe_status || '').trim().toLowerCase();
+  const hasStripeIdentity = Boolean(profile?.stripe_subscription_id || profile?.stripe_customer_id);
+  return hasStripeIdentity && (status === 'active' || status === 'trialing');
+}
+
 function resolveEffectiveMembership(profile: any): Membership {
   if (isUnlimitedAdmin(profile)) return 'admin';
   const raw = String(profile?.membership || 'free').trim();
   if (raw === 'trial') return isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
+  if (hasActivePaidStripe(profile)) {
+    if (raw === 'amateur' || raw === 'performer' || raw === 'semi-pro') return 'amateur';
+    return 'professional';
+  }
   if (raw === 'performer' || raw === 'semi-pro') return 'amateur';
   if (raw === 'professional' || raw === 'amateur' || raw === 'expired' || raw === 'free' || raw === 'admin') return raw as Membership;
   return 'free';
@@ -376,7 +386,7 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
       .from('users')
       .update(uplift)
       .eq('id', userId)
-      .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+      .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
       .maybeSingle();
 
     if (error) {
@@ -398,7 +408,7 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
     .from('users')
     .update(next)
     .eq('id', userId)
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .maybeSingle();
 
 
@@ -774,7 +784,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   }
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .eq('id', userId)
     .maybeSingle();
 
@@ -1153,7 +1163,7 @@ export async function enforceAiUsage(
   // Authed user: enforce against public.users table
   const { data: profileData, error: profileErr } = await admin
     .from('users')
-    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id, quota_live_audio_minutes, quota_image_gen, quota_identify, quota_video_uploads, quota_reset_date, daily_live_audio_minutes_used, daily_live_audio_reset_date, daily_video_uploads_used, daily_video_uploads_reset_date')
     .eq('id', userId)
     .maybeSingle();
 

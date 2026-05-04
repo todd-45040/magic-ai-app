@@ -45,14 +45,34 @@ export function hasExpiredTrial(user?: User | null): boolean {
   return tier === 'trial' && typeof user.trialEndDate === 'number' && Number.isFinite(user.trialEndDate) && user.trialEndDate <= Date.now();
 }
 
+export function hasActivePaidSubscription(user?: User | null): boolean {
+  if (!user) return false;
+  const status = String((user as any).stripeStatus || (user as any).stripe_status || '').trim().toLowerCase();
+  const hasStripeIdentity = Boolean(
+    (user as any).stripeSubscriptionId ||
+    (user as any).stripe_subscription_id ||
+    (user as any).stripeCustomerId ||
+    (user as any).stripe_customer_id
+  );
+  return hasStripeIdentity && (status === 'active' || status === 'trialing');
+}
+
 export function getEffectiveMembership(user?: User | null): CanonicalTier {
   if (!user) return 'free';
   const tier = normalizeTier(user.membership);
-  if (tier === 'admin' || tier === 'professional' || tier === 'amateur') {
-    return tier;
-  }
-  if (isActiveTrialUser(user)) {
+  if (tier === 'admin') return 'admin';
+
+  // Billing/access source of truth:
+  // - active trial_end_date grants Professional access during partner/free trials
+  // - active Stripe subscription grants paid access even if UI state is stale immediately after checkout
+  if (isActiveTrialUser(user)) return 'professional';
+  if (hasActivePaidSubscription(user)) {
+    if (tier === 'amateur' || tier === 'professional') return tier;
     return 'professional';
+  }
+
+  if (tier === 'professional' || tier === 'amateur') {
+    return tier;
   }
   return 'free';
 }

@@ -3,6 +3,20 @@ import { requireSupabaseAuth } from './_auth.js';
 // Legacy tiers are accepted and normalized server-side.
 type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
 
+function hasActivePaidStripe(profile: any): boolean {
+  const status = String(profile?.stripe_status || '').trim().toLowerCase();
+  const hasStripeIdentity = Boolean(profile?.stripe_subscription_id || profile?.stripe_customer_id);
+  return hasStripeIdentity && (status === 'active' || status === 'trialing');
+}
+
+function effectiveMembership(profile: any): Membership {
+  const raw = String(profile?.membership || 'free').trim().toLowerCase() as Membership;
+  const trialEnd = Number(profile?.trial_end_date || 0);
+  if (raw === 'trial') return Number.isFinite(trialEnd) && trialEnd > Date.now() ? 'professional' : 'free';
+  if (hasActivePaidStripe(profile)) return raw === 'amateur' || raw === 'performer' || raw === 'semi-pro' ? 'amateur' : 'professional';
+  return raw || 'free';
+}
+
 function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'expired' {
   switch (m) {
     case 'professional':
@@ -122,7 +136,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -133,7 +147,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'free';
+    membership = effectiveMembership(profile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -219,7 +233,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date')
+    .select('id, membership, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -233,7 +247,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   if (profile) {
-    membership = (profile.membership as Membership) || 'free';
+    membership = effectiveMembership(profile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
