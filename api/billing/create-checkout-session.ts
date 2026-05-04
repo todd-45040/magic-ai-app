@@ -1,7 +1,7 @@
 import { requireSupabaseAuth } from '../_auth.js';
 import { getBillingConfig, getBillingPlanPlaceholder, isBillingCheckoutLookupKey } from '../../server/billing/billingConfig.js';
 import { resolveBillingStatusForUser } from '../../server/billing/status.js';
-import { createStripeCheckoutSession, fetchStripeSubscription, listStripeSubscriptionsByCustomer, updateStripeSubscription, type StripeSubscriptionRecord } from '../../server/billing/stripeClient.js';
+import { createStripeCheckoutSession, createStripeCustomer, fetchStripeSubscription, listStripeSubscriptionsByCustomer, updateStripeSubscription, type StripeSubscriptionRecord } from '../../server/billing/stripeClient.js';
 
 
 
@@ -112,7 +112,7 @@ export default async function handler(request: any, response: any) {
 
     const { data: profile, error: profileError } = await auth.admin
       .from('users')
-      .select('id, email, founding_circle_member, pricing_lock, founding_bucket')
+      .select('id, email, stripe_customer_id, founding_circle_member, pricing_lock, founding_bucket')
       .eq('id', auth.userId)
       .maybeSingle();
 
@@ -142,8 +142,61 @@ export default async function handler(request: any, response: any) {
       throw new Error(subscriptionRowError.message || 'Unable to inspect current subscription record.');
     }
 
-    const customerId = String(billingCustomer?.stripe_customer_id || subscriptionRow?.stripe_customer_id || '').trim() || undefined;
+    let customerId = String(
+      billingCustomer?.stripe_customer_id ||
+      subscriptionRow?.stripe_customer_id ||
+      profile?.stripe_customer_id ||
+      ''
+    ).trim() || undefined;
     const email = String(profile?.email || '').trim() || undefined;
+
+    // Permanent customer mapping fix:
+    // If this user does not already have a Stripe customer, create one before checkout,
+    // persist it in both legacy users.stripe_customer_id and billing_customers, and pass
+    // that same customer into Checkout. This prevents Stripe from creating an unmapped
+    // customer that the webhook cannot match later.
+    if (!customerId) {
+      const createdCustomer = await createStripeCustomer({
+        email,
+        metadata: {
+          user_id: auth.userId,
+          source: 'create_checkout_session',
+          environment_name: config.environmentName,
+        },
+      });
+
+      customerId = String(createdCustomer?.id || '').trim() || undefined;
+
+      if (!customerId) {
+        throw new Error('Stripe returned no customer id during checkout customer creation.');
+      }
+
+      const { error: userCustomerError } = await auth.admin
+        .from('users')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', auth.userId);
+
+      if (userCustomerError) {
+        throw new Error(`Unable to save Stripe customer id on user: ${userCustomerError.message}`);
+      }
+
+      const { error: billingCustomerUpsertError } = await auth.admin
+        .from('billing_customers')
+        .upsert([{
+          user_id: auth.userId,
+          stripe_customer_id: customerId,
+          email,
+          billing_provider: 'stripe',
+          provider_status: 'created_for_checkout',
+          synced_at: new Date().toISOString(),
+          source_updated_at: new Date().toISOString(),
+        }], { onConflict: 'user_id' });
+
+      if (billingCustomerUpsertError) {
+        throw new Error(`Unable to save billing customer record: ${billingCustomerUpsertError.message}`);
+      }
+    }
+
     const founderProtected = Boolean(
       billingStatus.founderProtected || profile?.founding_circle_member || String(profile?.pricing_lock || '').trim()
     );
@@ -210,7 +263,7 @@ export default async function handler(request: any, response: any) {
       cancel_url: cancelUrl,
       client_reference_id: auth.userId,
       customer: customerId,
-      customer_email: customerId ? undefined : email,
+      customer_email: undefined,
       allow_promotion_codes: !target.founderOnly,
       line_items: [{
         price: target.configuredStripePriceId,

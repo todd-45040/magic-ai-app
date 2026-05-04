@@ -68,6 +68,151 @@ function extractCustomerId(event: Stripe.Event): string | null {
   return null;
 }
 
+function normalizeEmail(value: any): string | null {
+  const email = String(value || '').trim().toLowerCase();
+  return email && email.includes('@') ? email : null;
+}
+
+function extractUserId(event: Stripe.Event): string | null {
+  const object: any = event.data.object;
+  const candidates = [
+    object?.metadata?.user_id,
+    object?.client_reference_id,
+    object?.subscription_details?.metadata?.user_id,
+  ];
+
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+function extractCustomerEmail(event: Stripe.Event): string | null {
+  const object: any = event.data.object;
+  const candidates = [
+    object?.customer_details?.email,
+    object?.customer_email,
+    object?.receipt_email,
+    object?.billing_details?.email,
+  ];
+
+  for (const candidate of candidates) {
+    const email = normalizeEmail(candidate);
+    if (email) return email;
+  }
+  return null;
+}
+
+async function syncCustomerMapping(params: {
+  userId: string;
+  customerId: string;
+  email?: string | null;
+  eventType: string;
+  eventId: string;
+}) {
+  const nowIso = new Date().toISOString();
+
+  const { error: userUpdateError } = await supabase
+    .from('users')
+    .update({ stripe_customer_id: params.customerId })
+    .eq('id', params.userId);
+
+  if (userUpdateError) {
+    await logAnalytics('stripe_webhook_error', {
+      stage: 'customer_mapping_user_update',
+      event_type: params.eventType,
+      event_id: params.eventId,
+      customerId: params.customerId,
+      message: userUpdateError.message,
+    }, params.userId);
+  }
+
+  const { error: billingCustomerError } = await supabase
+    .from('billing_customers')
+    .upsert([{
+      user_id: params.userId,
+      stripe_customer_id: params.customerId,
+      email: params.email || null,
+      billing_provider: 'stripe',
+      provider_status: 'webhook_mapped',
+      synced_at: nowIso,
+      source_updated_at: nowIso,
+    }], { onConflict: 'user_id' });
+
+  if (billingCustomerError) {
+    await logAnalytics('stripe_webhook_error', {
+      stage: 'customer_mapping_billing_customer_upsert',
+      event_type: params.eventType,
+      event_id: params.eventId,
+      customerId: params.customerId,
+      message: billingCustomerError.message,
+    }, params.userId);
+  }
+}
+
+async function resolveUserForEvent(event: Stripe.Event, customerId: string) {
+  const object: any = event.data.object;
+  const metadataUserId = extractUserId(event);
+  const customerEmail = extractCustomerEmail(event);
+
+  // 1. Canonical match: Stripe customer id on users table.
+  let { data: user, error: userError } = await supabase
+    .from('users')
+    .select('id, email, stripe_customer_id')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle();
+
+  if (userError) return { user: null, error: userError, matchedBy: 'stripe_customer_id', metadataUserId, customerEmail };
+  if (user) return { user, error: null, matchedBy: 'stripe_customer_id', metadataUserId, customerEmail };
+
+  // 2. Fallback match: checkout metadata/client_reference_id. This is the safest fallback
+  // because create-checkout-session sends the authenticated Supabase user id to Stripe.
+  if (metadataUserId) {
+    const byId = await supabase
+      .from('users')
+      .select('id, email, stripe_customer_id')
+      .eq('id', metadataUserId)
+      .maybeSingle();
+
+    if (byId.error) return { user: null, error: byId.error, matchedBy: 'metadata_user_id', metadataUserId, customerEmail };
+    if (byId.data) {
+      await syncCustomerMapping({
+        userId: byId.data.id,
+        customerId,
+        email: normalizeEmail(byId.data.email) || customerEmail,
+        eventType: event.type,
+        eventId: event.id,
+      });
+      return { user: { ...byId.data, stripe_customer_id: customerId }, error: null, matchedBy: 'metadata_user_id', metadataUserId, customerEmail };
+    }
+  }
+
+  // 3. Last-resort fallback: checkout customer email. Only use this for checkout sessions,
+  // where the purchaser's email is directly associated with the authenticated checkout flow.
+  if (event.type === 'checkout.session.completed' && customerEmail) {
+    const byEmail = await supabase
+      .from('users')
+      .select('id, email, stripe_customer_id')
+      .ilike('email', customerEmail)
+      .maybeSingle();
+
+    if (byEmail.error) return { user: null, error: byEmail.error, matchedBy: 'customer_email', metadataUserId, customerEmail };
+    if (byEmail.data) {
+      await syncCustomerMapping({
+        userId: byEmail.data.id,
+        customerId,
+        email: customerEmail,
+        eventType: event.type,
+        eventId: event.id,
+      });
+      return { user: { ...byEmail.data, stripe_customer_id: customerId }, error: null, matchedBy: 'customer_email', metadataUserId, customerEmail };
+    }
+  }
+
+  return { user: null, error: null, matchedBy: null, metadataUserId, customerEmail };
+}
+
 function isRevenueSignal(eventType: string): boolean {
   return [
     'checkout.session.completed',
@@ -149,11 +294,9 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ received: true, skipped: 'no_customer' });
     }
 
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('id, email, stripe_customer_id')
-      .eq('stripe_customer_id', customerId)
-      .maybeSingle();
+    const resolved = await resolveUserForEvent(event, customerId);
+    const user = resolved.user;
+    const userError = resolved.error;
 
     if (userError) {
       await logAnalytics('stripe_webhook_error', {
@@ -161,6 +304,9 @@ export default async function handler(req: any, res: any) {
         event_type: event.type,
         event_id: event.id,
         customerId,
+        matchedBy: resolved.matchedBy,
+        metadataUserId: resolved.metadataUserId,
+        customerEmail: resolved.customerEmail,
         message: userError.message,
       });
 
@@ -173,7 +319,9 @@ export default async function handler(req: any, res: any) {
         event_type: event.type,
         event_id: event.id,
         customerId,
-        message: 'No user found for Stripe customer ID',
+        metadataUserId: resolved.metadataUserId,
+        customerEmail: resolved.customerEmail,
+        message: 'No user found for Stripe customer ID, metadata user id, or checkout customer email',
       });
 
       return res.status(200).json({ received: true, skipped: 'no_user_match' });
@@ -183,6 +331,9 @@ export default async function handler(req: any, res: any) {
       event_type: event.type,
       event_id: event.id,
       customerId,
+      matchedBy: resolved.matchedBy,
+      metadataUserId: resolved.metadataUserId,
+      customerEmail: resolved.customerEmail,
     }, user.id);
 
     const analyticsRows: Array<Record<string, any>> = [];

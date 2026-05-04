@@ -130,6 +130,10 @@ async function stripeRequest<T>(path: string, body: Record<string, unknown>, env
   return json as T;
 }
 
+export async function createStripeCustomer(input: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
+  return stripeRequest<StripeCustomerRecord>('/v1/customers', input, env);
+}
+
 export async function createStripeCheckoutSession(input: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env) {
   return stripeRequest<StripeCheckoutSessionRecord>('/v1/checkout/sessions', input, env);
 }
