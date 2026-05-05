@@ -235,9 +235,13 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     let trialEndDate: number | null =
       (user as any).trialEndDate ?? (typeof existing?.trial_end_date === 'number' ? existing?.trial_end_date : null);
 
-    if (isAdmin || membership === 'admin') {
+    // Do not let browser-side profile hydration create admin access.
+    // Existing DB admin rows remain admin; new admin grants must be made server-side.
+    if (existingIsAdmin || existingMembership === 'admin') {
       membership = 'admin';
       trialEndDate = null;
+    } else if (membership === 'admin') {
+      membership = requestedMembership === 'trial' ? 'trial' : 'free';
     }
 
     // Trial logic must be explicit. Free stays free.
@@ -262,7 +266,8 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
       id: uid,
       email,
       membership,
-      is_admin: isAdmin,
+      // Browser clients must not grant admin. Preserve existing DB admin state only.
+      is_admin: Boolean(existingIsAdmin),
       generation_count: typeof user.generationCount === 'number' ? user.generationCount : 0,
       last_reset_date: user.lastResetDate ?? new Date().toISOString(),
       trial_end_date: membership === 'trial' ? trialEndDate : null,
