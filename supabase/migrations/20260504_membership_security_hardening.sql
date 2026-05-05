@@ -1,6 +1,6 @@
 -- Magic AI Wizard membership/security hardening
 -- Purpose: prevent authenticated browser clients from self-upgrading membership,
--- extending trials, setting admin flags, or writing Stripe entitlement fields.
+-- extending trials, setting admin/founder flags, or writing Stripe/pricing entitlement fields.
 -- Service-role API/webhook code is still allowed to manage these columns.
 
 create or replace function public.maw_guard_user_entitlement_columns()
@@ -29,6 +29,15 @@ begin
       raise exception 'Client profile inserts may not set admin access.';
     end if;
 
+    -- Founder/pricing fields are protected entitlement fields.
+    -- They must only be assigned by service-role API code after server-side validation.
+    if coalesce(new.founding_circle_member, false) = true
+      or coalesce(new.is_founder, false) = true
+      or coalesce(new.pricing_lock, '') <> ''
+      or coalesce(new.founding_bucket, '') <> '' then
+      raise exception 'Client profile inserts may not write founder or pricing entitlement fields.';
+    end if;
+
     -- Client-created trial dates must be reasonable: no more than 31 days out.
     if lower(coalesce(new.membership, 'free')) = 'trial' then
       if new.trial_end_date is null or new.trial_end_date < v_now_ms or new.trial_end_date > v_max_trial_ms then
@@ -54,7 +63,11 @@ begin
       or coalesce(new.stripe_customer_id, '') is distinct from coalesce(old.stripe_customer_id, '')
       or coalesce(new.stripe_subscription_id, '') is distinct from coalesce(old.stripe_subscription_id, '')
       or coalesce(new.stripe_price_id, '') is distinct from coalesce(old.stripe_price_id, '')
-      or coalesce(new.stripe_status, '') is distinct from coalesce(old.stripe_status, '') then
+      or coalesce(new.stripe_status, '') is distinct from coalesce(old.stripe_status, '')
+      or coalesce(new.founding_circle_member, false) is distinct from coalesce(old.founding_circle_member, false)
+      or coalesce(new.pricing_lock, '') is distinct from coalesce(old.pricing_lock, '')
+      or coalesce(new.founding_bucket, '') is distinct from coalesce(old.founding_bucket, '')
+      or coalesce(new.is_founder, false) is distinct from coalesce(old.is_founder, false) then
       raise exception 'Only server-side billing/auth code may change entitlement columns.';
     end if;
 
@@ -72,4 +85,4 @@ for each row
 execute function public.maw_guard_user_entitlement_columns();
 
 comment on function public.maw_guard_user_entitlement_columns() is
-'Prevents authenticated browser clients from self-upgrading or editing protected entitlement fields; service_role remains allowed.';
+'Prevents authenticated browser clients from self-upgrading or editing protected entitlement/founder/pricing fields; service_role remains allowed.';

@@ -247,10 +247,18 @@ export const registerOrUpdateUser = async (user: User, uid: string): Promise<voi
     // Trial logic must be explicit. Free stays free.
     const paidOrPrivilegedTiers = ['amateur', 'professional', 'performer', 'semi-pro', 'admin'] as Membership[];
     const requestedExplicitTrial = requestedMembership === 'trial';
-    const existingActiveTrial = existingMembership === 'trial' && typeof existing?.trial_end_date === 'number' && existing.trial_end_date > Date.now();
+    const existingTrialEndDate = typeof existing?.trial_end_date === 'number' ? existing.trial_end_date : null;
+    const existingTrial = existingMembership === 'trial' && typeof existingTrialEndDate === 'number';
+    const existingActiveTrial = Boolean(existingTrial && existingTrialEndDate! > Date.now());
 
     if (paidOrPrivilegedTiers.includes(membership)) {
       // keep as-is
+    } else if (existingTrial) {
+      // Preserve trial membership and trial_end_date exactly as stored.
+      // Trial expiration is computed from trial_end_date; the browser must not downgrade
+      // membership or clear trial_end_date because those are protected entitlement fields.
+      membership = 'trial';
+      trialEndDate = existingTrialEndDate;
     } else if (requestedExplicitTrial || existingActiveTrial) {
       membership = 'trial';
       if (!trialEndDate || !Number.isFinite(Number(trialEndDate))) {
@@ -369,18 +377,22 @@ export const addUser = async (email: string, membership: Membership): Promise<Us
 };
 
 export const checkAndUpdateUserTrialStatus = async (user: User, uid: string): Promise<User> => {
-  try {
-    const trialEnd = (user as any).trialEndDate;
-    if (user.membership === 'trial' && typeof trialEnd === 'number' && trialEnd < Date.now()) {
-      const { error } = await supabase
-        .from(USERS_TABLE)
-        .update({ membership: 'free' })
-        .eq('id', uid);
-      if (error) throw error;
-      return { ...user, membership: 'free' as Membership };
-    }
-  } catch (error) {
-    console.error('Failed to check/update trial status in Supabase', error);
-  }
-  return user;
+  // Compatibility wrapper retained for existing App.tsx call sites.
+  // SECURITY: Do not mutate membership/trial_end_date from browser code.
+  // Trial and paid access are computed from immutable billing fields:
+  // - trialEndDate > Date.now() grants temporary Professional access
+  // - stripeStatus active/trialing grants paid access
+  // Expired trials remain recorded as trial rows; entitlement helpers decide effective access.
+  void uid;
+  const trialEndDate = Number((user as any).trialEndDate || 0);
+  const stripeStatus = String((user as any).stripeStatus || (user as any).stripe_status || '').trim().toLowerCase();
+  const hasProAccess =
+    (Number.isFinite(trialEndDate) && trialEndDate > Date.now()) ||
+    stripeStatus === 'active' ||
+    stripeStatus === 'trialing';
+
+  return {
+    ...user,
+    ...(hasProAccess ? { hasProAccess } : {}),
+  } as User;
 };
