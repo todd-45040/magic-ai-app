@@ -638,7 +638,7 @@ function computePriorityScore(idea: SavedIdea, opts: { usedInShows: number; last
     const pinned = opts.isPinned ? 6 : 0;
 
     // Type-based bias (small)
-    const typeBoost = (idea.type === 'blueprint') ? 6 : (idea.type === 'rehearsal' ? 4 : 0);
+    const typeBoost = (idea.category === 'blueprint') ? 6 : (idea.type === 'rehearsal' ? 4 : 0);
 
     return Math.round(novelty + lengthSignal + usage + recency + starred + pinned + typeBoost);
 }

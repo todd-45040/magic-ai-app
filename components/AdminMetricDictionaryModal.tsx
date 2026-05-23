@@ -69,7 +69,7 @@ export default function AdminMetricDictionaryModal({
               {Object.entries(ADMIN_METRIC_DICTIONARY.outcomes.mapping).map(([k, v]) => (
                 <div key={k} className="rounded-lg bg-black/30 border border-white/10 p-3">
                   <div className="font-mono text-xs opacity-80">{k}</div>
-                  <div className="mt-1 font-mono text-[11px] opacity-70">{(v as any[]).join(', ')}</div>
+                  <div className="mt-1 font-mono text-[11px] opacity-70">{(v as unknown as readonly unknown[]).join(', ')}</div>
                 </div>
               ))}
             </div>

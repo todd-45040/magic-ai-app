@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fetchSuggestions,
   updateSuggestionStatus,
@@ -20,7 +20,7 @@ export default function AdminSuggestionsModal({
 }) {
   const [rows, setRows] = useState<AppSuggestionRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<SuggestionStatus | "all">("all");
+  const [status] = useState<SuggestionStatus | "all">("all");
   const [error, setError] = useState<string | null>(null);
 
   async function load() {

@@ -35,8 +35,8 @@ export default function AdminLeadsPage() {
   const [kpiPulse, setKpiPulse] = useState(false);
 
   // Optional: page views + demo clicks (if you wire an analytics endpoint later)
-  const [pageViews, setPageViews] = useState<number | null>(null);
-  const [demoClicks, setDemoClicks] = useState<number | null>(null);
+  const [pageViews] = useState<number | null>(null);
+  const [demoClicks] = useState<number | null>(null);
 
   const windowLabel = useMemo(() => (ADMIN_WINDOWS.find((w) => w.days === days)?.label ?? `${days}d`), [days]);
 

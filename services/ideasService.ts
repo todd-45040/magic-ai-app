@@ -228,7 +228,7 @@ export async function saveIdea(
 
   const insertWithCategory = async (includeCategory: boolean) => {
     const insertPayload = includeCategory
-      ? { ...baseInsert, category: payload.category ?? null }
+      ? { ...baseInsert, category: ('category' in payload ? payload.category : null) ?? null }
       : baseInsert;
 
     return supabase

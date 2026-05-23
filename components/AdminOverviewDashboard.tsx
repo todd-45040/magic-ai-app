@@ -165,7 +165,7 @@ export default function AdminOverviewDashboard({ onGoUsers, onGoLeads }: { onGoU
     (async () => {
       try {
         setWatchErr(null);
-        const w = await fetchAdminWatchlist(days);
+        const w = await fetchAdminWatchlist({ days });
         if (alive) setWatchlist(w);
       } catch (e: any) {
         if (alive) setWatchErr(e?.message || 'Failed to load watchlist');
@@ -211,8 +211,13 @@ useEffect(() => {
     setNotesBusy(true);
     try {
       const r = await fetchAdminOpsNotes({ entity_type, entity_id, limit: 100 });
-      setNotes(r?.notes || []);
-      setNotesMissingTable(!!r?.missingTable);
+      if (r.ok) {
+        setNotes(r.notes || []);
+        setNotesMissingTable(!!r.missingTable);
+      } else {
+        setNotes([]);
+        setNotesMissingTable(!!r.missingTable);
+      }
     } catch {
       // ignore
     } finally {
@@ -230,7 +235,7 @@ useEffect(() => {
         note: noteDraft,
         resolved: resolved === true,
       });
-      if (r?.missingTable) {
+      if (!r.ok && r.missingTable) {
         setNotesMissingTable(true);
       } else {
         setNoteDraft('');
@@ -239,8 +244,13 @@ useEffect(() => {
           entity_id: notesEntity.entity_id,
           limit: 100,
         });
-        setNotes(rr?.notes || []);
-        setNotesMissingTable(!!rr?.missingTable);
+        if (rr.ok) {
+          setNotes(rr.notes || []);
+          setNotesMissingTable(!!rr.missingTable);
+        } else {
+          setNotes([]);
+          setNotesMissingTable(!!rr.missingTable);
+        }
       }
     } catch {
       // ignore
@@ -269,7 +279,7 @@ function buildEnvHealthSnapshot(s: AdminEnvSanity | null, e: string | null) {
     lines.push(`- STRIPE_SECRET_KEY: ${s.keys.stripe.STRIPE_SECRET_KEY ? 'YES' : 'NO'}`);
     lines.push(`- STRIPE_WEBHOOK_SECRET: ${s.keys.stripe.STRIPE_WEBHOOK_SECRET ? 'YES' : 'NO'}`);
 
-    lines.push(`Warnings: VITE-* secret-like vars present: ${s.warnings.vitePrefixedSecretsPresent ? 'YES' : 'NO'}`);
+    lines.push(`Warnings: VITE-* secret-like vars present: ${s.warnings?.vitePrefixedSecretsPresent ? 'YES' : 'NO'}`);
   } else if (e) {
     lines.push(`Error: ${e}`);
   }
@@ -323,12 +333,8 @@ const kUsers = data?.users || {};
   const returningTrend = (engagement?.returning_trend_30d || []) as any[];
   const mauDaily = (engagement?.mau_trend_30d_daily || []) as any[];
   const mauWeekly = (engagement?.wau_trend_12w_weekly || []) as any[];
-  const mauWeeklyRolling = (engagement?.mau_trend_12w_weekly || []) as any[];
   const adoptionTrend = engagement?.tool_adoption_trend_30d as any;
   const maxReturning = useMemo(() => Math.max(0, ...returningTrend.map((d: any) => Number(d?.returning_users || 0))), [returningTrend]);
-  const maxMauDaily = useMemo(() => Math.max(0, ...mauDaily.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauDaily]);
-  const maxMauWeekly = useMemo(() => Math.max(0, ...mauWeekly.map((d: any) => Number(d?.wau_7d || 0))), [mauWeekly]);
-  const maxMauWeeklyRolling = useMemo(() => Math.max(0, ...mauWeeklyRolling.map((d: any) => Number(d?.mau_rolling_30d || 0))), [mauWeeklyRolling]);
 
   const topByUsage = useMemo(() => (tools?.top_by_usage || []).slice(0, 8), [tools]);
   const topByCost = useMemo(() => (tools?.top_by_cost || []).slice(0, 8), [tools]);

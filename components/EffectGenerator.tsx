@@ -133,7 +133,7 @@ const normalizeEffectsPayload = (payload: any): ParsedEffect[] => {
 
   const sanitized = rawEffects
     .filter(Boolean)
-    .map((effect, index) => sanitizeEffect(effect, index))
+    .map((effect: unknown, index: number) => sanitizeEffect(effect, index))
     .slice(0, 3);
 
   while (sanitized.length < 3) {
@@ -323,7 +323,7 @@ const parseEffectsFromMarkdown = (markdown: string): ParsedEffect[] => {
 
       if (activeSection && current) {
         const prev = normalize(current[activeSection] as string);
-        current[activeSection] = normalize(prev ? `${prev}\n${line}` : line) as any;
+        current = { ...current, [activeSection]: normalize(prev ? `${prev}\n${line}` : line) } as ParsedEffect;
       }
     }
 
@@ -1297,7 +1297,7 @@ ${lastOutput}`
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
-                      onClick={handleGenerate}
+                      onClick={() => { void handleGenerate(); }}
                       disabled={isLoading || items.map(i=>i.trim()).filter(Boolean).length < 2}
                       className="w-full py-3 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-bold transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                   >

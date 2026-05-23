@@ -99,7 +99,7 @@ export default function AdminUsersPage() {
         return;
       }
       try {
-        const w = await fetchAdminWatchlist(days);
+        const w = await fetchAdminWatchlist({ days });
         const list = (w?.watchlist?.[watchMode] || []) as any[];
         const ids = list.map((x: any) => String(x.user_id || '')).filter(Boolean);
         if (alive) {

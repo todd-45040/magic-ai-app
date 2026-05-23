@@ -95,6 +95,11 @@ type SectionKey =
 type StructuredFieldValue = string | string[];
 type StructuredOutput = Partial<Record<SectionKey, StructuredFieldValue>>;
 
+function structuredFieldToText(value: StructuredFieldValue | undefined, fallback = ''): string {
+  if (Array.isArray(value)) return value.map((line) => String(line || '').trim()).filter(Boolean).join('\n');
+  return String(value ?? fallback ?? '');
+}
+
 const TABS: Array<{ key: SectionKey; label: string }> = [
   { key: 'stageLayout', label: 'Stage Layout' },
   { key: 'blockingPlan', label: 'Blocking Plan' },
@@ -283,21 +288,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number) {
   });
 }
 
-function extractSection(raw: string, header: string, nextHeaders: string[]) {
-  const start = raw.indexOf(header);
-  if (start === -1) return '';
-  const afterStart = raw.slice(start + header.length);
-  const nextIdxs = nextHeaders
-    .map((h) => {
-      const idx = afterStart.indexOf(h);
-      return idx === -1 ? Number.POSITIVE_INFINITY : idx;
-    })
-    .filter((n) => Number.isFinite(n));
-
-  const endRel = nextIdxs.length ? Math.min(...nextIdxs) : afterStart.length;
-  return afterStart.slice(0, endRel).trim();
-}
-
 const HEADERS = {
   stageLayout: '### STAGE_LAYOUT',
   blockingPlan: '### BLOCKING_PLAN',
@@ -319,18 +309,6 @@ const HEADERS = {
   safetyRiskAnalysis: '### SAFETY_RISK_ANALYSIS',
 } as const;
 
-function parseStructured(raw: string): StructuredOutput {
-  const out: StructuredOutput = { fullText: raw?.trim() || '' };
-  const all = Object.values(HEADERS);
-  if (!all.some((h) => raw.includes(h))) return out;
-
-  (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).forEach((key) => {
-    out[key] = extractSection(raw, HEADERS[key], all.filter((h) => h !== HEADERS[key]));
-  });
-
-  return out;
-}
-
 function buildStructuredPrompt(opts: {
   userInput: string;
   refineInstruction?: string | null;
@@ -350,6 +328,7 @@ function buildStructuredPrompt(opts: {
   const { userInput, refineInstruction, previousOutput, focusTag, context, responseMode = 'fast', demoMode = false } = opts;
 
   const contextLines: string[] = [];
+  if (opts.focusTag) contextLines.push(`Focus area: ${opts.focusTag}`);
   if (context?.clientName) contextLines.push(`Client / show: ${context.clientName}`);
   if (context?.venueType) contextLines.push(`Venue type: ${context.venueType}`);
   if (context?.stageSize) contextLines.push(`Stage size: ${context.stageSize}`);
@@ -504,7 +483,7 @@ function getToolSpecificInstruction(focusTag?: string | null, responseMode: Resp
 }
 
 function getAssistantStudioSpeedMode(
-  focusTag?: string | null,
+  _focusTag?: string | null,
   responseMode: ResponseMode = 'fast',
   demoMode = false
 ): 'fast' | 'full' {
@@ -845,7 +824,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   const handleCopy = async () => {
     if (!outputRaw) return;
     try {
-      const textToCopy = activeTab === 'fullText' ? outputRaw : output?.[activeTab] || outputRaw;
+      const textToCopy = activeTab === 'fullText' ? outputRaw : structuredFieldToText(output?.[activeTab], outputRaw);
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
@@ -882,7 +861,7 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         tags,
       });
 
-      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_save_plan', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: planTitle, preset: lastPreset || null, responseMode } });
+      void trackClientEvent({ tool: 'assistant_studio', action: 'assistant_save_plan', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title: 'Assistant Studio Output', preset: lastPreset || null, responseMode } });
       onIdeaSaved?.();
       setToast('Saved to Ideas ✓');
       window.setTimeout(() => setToast(null), 1400);
@@ -974,25 +953,25 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
         { title: 'Assistant Run – Safety Check', notes: `PART: Safety Check\n\n${output.safetyRiskAnalysis || output.safetyNotes || outputRaw}`, priority: 'high' as any },
       ];
     } else {
-      const sectionTasks: Array<[string, string | undefined]> = [
-        ['Stage Layout', output.stageLayout],
-        ['Blocking Plan', output.blockingPlan],
-        ['Assistant Positions', output.assistantPositions],
-        ['Cue Timeline', output.cueTimeline],
-        ['Prop Movement', output.propMovement],
-        ['Reveal Choreography', output.revealChoreography],
-        ['Volunteer Plan', output.volunteerPlan],
-        ['Assistant Instructions', output.assistantInstructions],
-        ['Volunteer Management', output.volunteerManagement],
-        ['Contingency Plan', output.contingencyPlan],
-        ['Safety Notes', output.safetyNotes],
-        ['Misdirection Windows', output.misdirectionWindows],
-        ['Prop Table Layout', output.propTableLayout],
-        ['Reset Order', output.resetOrder],
-        ['Assistant Access Path', output.assistantAccessPath],
-        ['Transition Plan', output.transitionPlan],
-        ['Lighting Cues', output.lightingCues],
-        ['Safety & Risk Analysis', output.safetyRiskAnalysis],
+      const sectionTasks: Array<[string, string]> = [
+        ['Stage Layout', structuredFieldToText(output.stageLayout)],
+        ['Blocking Plan', structuredFieldToText(output.blockingPlan)],
+        ['Assistant Positions', structuredFieldToText(output.assistantPositions)],
+        ['Cue Timeline', structuredFieldToText(output.cueTimeline)],
+        ['Prop Movement', structuredFieldToText(output.propMovement)],
+        ['Reveal Choreography', structuredFieldToText(output.revealChoreography)],
+        ['Volunteer Plan', structuredFieldToText(output.volunteerPlan)],
+        ['Assistant Instructions', structuredFieldToText(output.assistantInstructions)],
+        ['Volunteer Management', structuredFieldToText(output.volunteerManagement)],
+        ['Contingency Plan', structuredFieldToText(output.contingencyPlan)],
+        ['Safety Notes', structuredFieldToText(output.safetyNotes)],
+        ['Misdirection Windows', structuredFieldToText(output.misdirectionWindows)],
+        ['Prop Table Layout', structuredFieldToText(output.propTableLayout)],
+        ['Reset Order', structuredFieldToText(output.resetOrder)],
+        ['Assistant Access Path', structuredFieldToText(output.assistantAccessPath)],
+        ['Transition Plan', structuredFieldToText(output.transitionPlan)],
+        ['Lighting Cues', structuredFieldToText(output.lightingCues)],
+        ['Safety & Risk Analysis', structuredFieldToText(output.safetyRiskAnalysis)],
       ];
       tasks = sectionTasks
         .filter(([, value]) => !!value?.trim())
@@ -1145,10 +1124,10 @@ export default function AssistantStudio({ user, onIdeaSaved }: Props) {
   };
 
   const availableTabs = useMemo(() => {
-    const base = TABS.filter((t) => (t.key === 'fullText' ? true : !!output?.[t.key]));
+    const base: Array<{ key: SectionKey; label: string }> = TABS.filter((t) => (t.key === 'fullText' ? true : !!output?.[t.key]));
     if (!outputRaw) return base;
     const hasStructured = (Object.keys(HEADERS) as Array<keyof typeof HEADERS>).some((k) => !!output[k]);
-    if (!hasStructured) return [{ key: 'fullText', label: 'Full Text' }];
+    if (!hasStructured) return [{ key: 'fullText' as SectionKey, label: 'Full Text' }];
     if (!base.find((t) => t.key === 'fullText')) base.push({ key: 'fullText', label: 'Full Text' });
     return base;
   }, [output, outputRaw]);

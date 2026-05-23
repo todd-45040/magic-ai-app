@@ -577,7 +577,7 @@ Requirements:
           {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
           <button
-            onClick={generate}
+            onClick={() => { void generate(); }}
             className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-xl w-full font-semibold transition disabled:opacity-50"
             disabled={loading}
           >
