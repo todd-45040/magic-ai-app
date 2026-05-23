@@ -1,11 +1,11 @@
 // PARTNER IMPORT FIX BUILD: 20260420-042528
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase, isSupabaseConfigValid } from './supabase';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { Mode, User } from './types';
 import {
   registerOrUpdateUser,
   checkAndUpdateUserTrialStatus,
-  updateUserMembership,
   getUserProfile,
   reconcileFoundingLead,
 } from './services/usersService';
@@ -534,7 +534,7 @@ function App() {
     // Without this, a successful login can leave the user stuck on the Auth screen until reload.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (suppressSignupSessionRef.current && !isAuthCallbackFlow) {
         loginInProgressRef.current = false;
         setUser(null);
@@ -642,10 +642,6 @@ function App() {
 
     if (mode === 'live-feedback' && livePerformanceId) {
       return <LiveFeedbackView performanceId={livePerformanceId} />;
-    }
-
-    if (mode === 'audience-feedback') {
-      return <PublicFeedbackForm />;
     }
 
     if (mode === 'audience-feedback') {

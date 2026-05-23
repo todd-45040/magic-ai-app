@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User, Task } from '../types';
 import { generateResponse } from '../services/geminiService';
+import { MAGICIAN_SYSTEM_INSTRUCTION } from '../constants';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTasksToShow } from '../services/showsService';
 import { normalizeTier } from '../services/membershipService';
@@ -524,7 +525,7 @@ Output exactly these headings in this order (markdown):
 
     try {
       const prompt = promptForMode(outputMode, trimmed, selectedContexts);
-      const response = await withTimeout(generateResponse(prompt), 45000);
+      const response = await withTimeout(generateResponse(prompt, MAGICIAN_SYSTEM_INSTRUCTION, user), 45000);
 
       if (!mountedRef.current || reqId !== requestIdRef.current) return;
 
@@ -601,7 +602,7 @@ Output exactly these headings in this order (markdown):
     try {
       const base = `Optimize this Routine Blueprint for walkaround: minimize props, avoid table dependency, prioritize pocket-friendly items. Keep the same headings and stay non-exposure.\n\n${rawOutput}`;
       const prompt = promptForMode(outputMode, base, [...selectedContexts, 'Walkaround']);
-      const response = await withTimeout(generateResponse(prompt), 45000);
+      const response = await withTimeout(generateResponse(prompt, MAGICIAN_SYSTEM_INSTRUCTION, user), 45000);
 
       if (!mountedRef.current || reqId !== requestIdRef.current) return;
 

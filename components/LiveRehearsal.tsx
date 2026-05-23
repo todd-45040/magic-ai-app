@@ -138,11 +138,12 @@ const MIN_TRANSCRIBE_AUDIO_DURATION_MS = 1_200;
 const EMPTY_TRANSCRIPT_RETRY_MIN_CHARS = 8;
 const AUDIO_WARMUP_MS = 400;
 const FORCE_TRANSCRIBE_SOURCE: 'media_recorder' | 'pcm_wav' = 'pcm_wav';
+const getForceTranscribeSource = (): 'media_recorder' | 'pcm_wav' => FORCE_TRANSCRIBE_SOURCE;
 
 
-const traceTakeEvent = (takeId: string, event: string, data?: any) => {
+const traceTakeEvent = (takeId: string | number, event: string, data?: any) => {
   try {
-    const payload = { takeId, ...(data || {}) };
+    const payload = { takeId: String(takeId), ...(data || {}) };
 
     if (typeof pushDebug === 'function') {
       pushDebug(event, payload);
@@ -1450,18 +1451,18 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
 
     const handleServerMessage = async (message: LiveServerMessage) => {
         if (message.toolCall) {
-            for (const fc of message.toolCall.functionCalls) {
+            for (const fc of message.toolCall.functionCalls ?? []) {
                 handleToolCall(fc);
             }
         }
 
         if (message.serverContent?.inputTranscription) {
-            const text = message.serverContent.inputTranscription.text;
+            const text = String(message.serverContent.inputTranscription.text || '');
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
                 const next = last?.source === 'user' && !last.isFinal
                     ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
-                    : [...prev, { source: 'user', text, isFinal: false }];
+                    : [...prev, { source: 'user' as const, text, isFinal: false }];
                 transcriptionHistoryRef.current = next;
                 currentTakeUserTranscriptTextRef.current = next
                     .filter((t) => t?.source === 'user')
@@ -1473,12 +1474,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             });
         }
         if (message.serverContent?.outputTranscription) {
-            const text = message.serverContent.outputTranscription.text;
+            const text = String(message.serverContent.outputTranscription.text || '');
             setTranscriptionHistory(prev => {
                 const last = prev[prev.length - 1];
                 const next = last?.source === 'model' && !last.isFinal
                     ? [...prev.slice(0, -1), { ...last, text: last.text + text }]
-                    : [...prev, { source: 'model', text, isFinal: false }];
+                    : [...prev, { source: 'model' as const, text, isFinal: false }];
                 transcriptionHistoryRef.current = next;
                 return next;
             });
@@ -1570,12 +1571,12 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
                 : null;
 
         const preferredBlob =
-            FORCE_TRANSCRIBE_SOURCE === 'media_recorder'
+            getForceTranscribeSource() === 'media_recorder'
                 ? mediaRecorderBlob
                 : pcmBlob;
 
         const fallbackBlob =
-            FORCE_TRANSCRIBE_SOURCE === 'media_recorder'
+            getForceTranscribeSource() === 'media_recorder'
                 ? pcmBlob
                 : mediaRecorderBlob;
 
@@ -1630,7 +1631,7 @@ const LiveRehearsal: React.FC<LiveRehearsalProps & { onRequestUpgrade?: () => vo
             isValidForTranscription: snapshot.isValidForTranscription,
             forcedSource: FORCE_TRANSCRIBE_SOURCE,
             preferredSource: FORCE_TRANSCRIBE_SOURCE,
-            fallbackSource: FORCE_TRANSCRIBE_SOURCE === 'media_recorder' ? 'pcm_wav' : 'media_recorder',
+            fallbackSource: getForceTranscribeSource() === 'media_recorder' ? 'pcm_wav' : 'media_recorder',
             sourceComparison: {
                 mediaRecorderBytes: snapshot.recorderBytes,
                 mediaRecorderValid,

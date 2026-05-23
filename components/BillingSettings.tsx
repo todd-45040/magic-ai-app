@@ -58,10 +58,10 @@ const getPlanTierRank = (planKey?: string | null): number => {
 };
 
 const pickMostAuthoritativePlanKey = (...planKeys: Array<string | null | undefined>): string => {
-  return planKeys.reduce((best, candidate) =>
-    getPlanTierRank(candidate) > getPlanTierRank(best) ? String(candidate) : best,
-    'free'
-  );
+  return planKeys.reduce<string>((best, candidate) => {
+    const normalizedCandidate = candidate ?? 'free';
+    return getPlanTierRank(normalizedCandidate) > getPlanTierRank(best) ? normalizedCandidate : best;
+  }, 'free');
 };
 const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) => {
   const [status, setStatus] = useState<BillingStatusPayload | null>(null);

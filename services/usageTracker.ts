@@ -10,15 +10,16 @@ type Limits = {
   identify: number; // identify-a-trick analyses per day
 };
 
+const ADMIN_LIMIT = 999999;
+
 const DAILY_LIMITS: Record<CanonicalTier, Limits> = {
   free: { image: 0, video_upload: 0, live_minutes: 0, identify: 10 },
   expired: { image: 0, video_upload: 0, live_minutes: 0, identify: 0 },
   trial: { image: 2, video_upload: 1, live_minutes: 10, identify: 10 },
   amateur: { image: 8, video_upload: 1, live_minutes: 0, identify: 50 },
   professional: { image: 100, video_upload: 6, live_minutes: 60, identify: 100 },
+  admin: { image: ADMIN_LIMIT, video_upload: ADMIN_LIMIT, live_minutes: ADMIN_LIMIT, identify: ADMIN_LIMIT },
 };
-
-const ADMIN_LIMIT = 999999;
 
 function isAdminUser(user: User | null | undefined): boolean {
   if (!user) return false;
