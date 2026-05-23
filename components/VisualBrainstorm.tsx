@@ -1021,15 +1021,6 @@ const activeSession = useMemo(() => {
 
     try {
       localStorage.setItem('maw_effect_engine_visual_handoff', JSON.stringify(payload));
-      // Temporary compatibility key for older patch instructions/debugging.
-      localStorage.setItem('pipelineSession', JSON.stringify({
-        sourceType: 'image',
-        imageUrl,
-        prompt,
-        title,
-        lastStep: 'image',
-        createdAt: Date.now(),
-      }));
     } catch {
       // If storage is unavailable, still try to route the user.
     }

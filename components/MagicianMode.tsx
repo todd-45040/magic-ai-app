@@ -64,8 +64,6 @@ import BillingSettings from './BillingSettings';
 import type { BillingCycle } from '../services/planCatalog';
 import TrialConversionBanner from './TrialConversionBanner';
 import TrialCountdownCard from './TrialCountdownCard';
-import FirstIdeaConversionModal from './FirstIdeaConversionModal';
-import FirstWinGate from './FirstWinGate';
 import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { consume, getUsage } from '../services/usageTracker';
@@ -2763,9 +2761,6 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
 
 const MAGICIAN_STORAGE_key = 'magician_chat_history';
 const MAGICIAN_VIEW_STORAGE_KEY = 'magician_active_view';
-const FIRST_SESSION_ACTIVATION_STORAGE_KEY = 'maw_first_session_activation';
-const FIRST_SESSION_ACTIVATION_DISMISSED_KEY = 'maw_first_session_activation_dismissed';
-const FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY = 'maw_first_session_effect_generator_preset';
 
 const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage => ({
     id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -2985,10 +2980,8 @@ useEffect(() => {
     window.addEventListener('maw:conversion-friction-upgrade', handler as any);
     return () => window.removeEventListener('maw:conversion-friction-upgrade', handler as any);
   }, []);
-  const [showFirstIdeaConversionModal, setShowFirstIdeaConversionModal] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [showFirstSessionActivation, setShowFirstSessionActivation] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -3054,7 +3047,6 @@ useEffect(() => {
   const tierLabel = formatTierLabel(tier);
   const hasAnyIdeas = Array.isArray(ideas) && ideas.length > 0;
   const hasAnyShows = Array.isArray(shows) && shows.length > 0;
-  const shouldShowFirstSessionActivation = isTrialActive && !isExpired && !hasAnyIdeas;
 
   // Access mapping
   const hasAmateurAccess = (['trial', 'amateur', 'professional', 'admin'].includes(tier) && !isExpired) as boolean;
@@ -3526,52 +3518,6 @@ useEffect(() => {
     }
   }, [isExpired]);
 
-  useEffect(() => {
-    const storageKey = `${FIRST_SESSION_ACTIVATION_DISMISSED_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
-    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
-    const shouldShow = shouldShowFirstSessionActivation && activeView === 'dashboard';
-    if (!shouldShow) {
-      setShowFirstSessionActivation(false);
-      return;
-    }
-    try {
-      const dismissed = localStorage.getItem(storageKey) === '1';
-      const alreadyStarted = localStorage.getItem(startedKey) === '1';
-      setShowFirstSessionActivation(!dismissed && !alreadyStarted);
-    } catch {
-      setShowFirstSessionActivation(true);
-    }
-  }, [activeView, shouldShowFirstSessionActivation, user?.email]);
-
-  const dismissFirstSessionActivation = () => {
-    const storageKey = `${FIRST_SESSION_ACTIVATION_DISMISSED_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
-    try { localStorage.setItem(storageKey, '1'); } catch {}
-    setShowFirstSessionActivation(false);
-  };
-
-  const launchFirstSessionActivation = (target: 'effect-generator' | 'show-planner') => {
-    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
-    try {
-      localStorage.setItem(startedKey, '1');
-      if (target === 'effect-generator') {
-        localStorage.setItem(FIRST_SESSION_EFFECT_GENERATOR_PRESET_KEY, '1');
-      }
-    } catch {}
-
-    void logUserActivity({
-      tool_name: target,
-      event_type: 'tool_used',
-      success: true,
-      metadata: {
-        entry_point: 'first_session_activation',
-        has_existing_show: hasAnyShows,
-        days_remaining: typeof daysRemaining === 'number' ? daysRemaining : null,
-      },
-    });
-
-    setShowFirstSessionActivation(false);
-    setActiveView(target);
-  };
   // Chat history is intentionally NOT persisted across reloads to avoid stale sessions / auto-resume issues.
   // (no persistence)
   
@@ -3919,25 +3865,15 @@ useEffect(() => {
   };
 
   const handleIdeaSaved = (message: string) => {
-    const startedKey = `${FIRST_SESSION_ACTIVATION_STORAGE_KEY}:${String(user?.email || 'guest').toLowerCase()}`;
-    try { localStorage.removeItem(startedKey); } catch {}
-
     const nextIdeaCount = Number(Array.isArray(ideas) ? ideas.length : 0) + 1;
     maybeLogHighIntentUser(nextIdeaCount, 'idea_saved');
 
-    const conversionModalKey = `maw_first_idea_conversion_modal:${String(user?.email || 'guest').toLowerCase()}`;
+    // Keep passive analytics for the first saved idea, but do not trigger any
+    // first-idea ownership modal, first-win gate, or forced activation flow.
     if (nextIdeaCount === 1) {
-      try {
-        if (localStorage.getItem(conversionModalKey) !== '1') {
-          localStorage.setItem(conversionModalKey, '1');
-          setShowFirstIdeaConversionModal(true);
-        }
-      } catch {
-        setShowFirstIdeaConversionModal(true);
-      }
       void logIbmConversionEvent(user, 'first_idea_saved', {
         location: activeView,
-        conversion_moment: 'ownership_modal',
+        conversion_moment: 'passive_save_only',
       });
     }
 
@@ -5093,24 +5029,6 @@ const renderIntentSubnav = () => {
             onUpgrade={handleUpgrade}
             variant={isExpired ? 'trial-expired' : 'locked-tool'}
             user={user as any}
-          />
-        )}
-        {showFirstIdeaConversionModal && (
-          <FirstIdeaConversionModal
-            user={user}
-            onClose={() => setShowFirstIdeaConversionModal(false)}
-            onViewIdeas={() => {
-              setShowFirstIdeaConversionModal(false);
-              setActiveView('saved-ideas');
-            }}
-            onUpgrade={() => {
-              void logIbmConversionEvent(user, 'upgrade_clicked', {
-                location: 'first_idea_conversion_modal',
-                active_view: activeView,
-              });
-              setShowFirstIdeaConversionModal(false);
-              setIsUpgradeModalOpen(true);
-            }}
           />
         )}
         {isHelpModalOpen && <HelpModal

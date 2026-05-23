@@ -37,7 +37,35 @@ const DISCLAIMER_ACKNOWLEDGED_KEY = 'magician_ai_disclaimer_acknowledged';
 const DisclaimerModalAny = DisclaimerModal as any;
 const AppSuggestionModalAny = AppSuggestionModal as any;
 
+const clearRetiredActivationStorage = () => {
+  try {
+    const exactKeys = [
+      'pipelineSession',
+      'maw_first_session_effect_generator_preset',
+    ];
+    exactKeys.forEach((key) => localStorage.removeItem(key));
+
+    const prefixes = [
+      'maw_first_session_activation',
+      'maw_first_session_activation_dismissed',
+      'maw_first_idea_conversion_modal',
+    ];
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i) || '';
+      if (prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}:`))) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Local storage may be unavailable in some browser privacy modes.
+  }
+};
+
 function App() {
+  useEffect(() => {
+    clearRetiredActivationStorage();
+  }, []);
+
   const [mode, setMode] = useState<Mode>('selection');
   const [user, setUser] = useState<User | null>(null);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
