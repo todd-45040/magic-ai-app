@@ -49,17 +49,39 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onSelectMode }) => {
       </div>
 
       <div className="mt-10 text-center">
-        <a
-          href="/NewAccount_Instructions.pdf"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-5 py-3 rounded-md border border-violet-500/40 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20 hover:border-violet-400 transition-colors text-sm font-medium"
+        <button
+          onClick={() => {
+            try { localStorage.setItem('maw_demo_mode', 'true'); } catch {}
+            const base = window.location.pathname.startsWith('/app') ? '/app' : '';
+            const url = new URL(window.location.href);
+            // Always route to the app root so Demo Mode can't be blocked by
+            // other public routes (e.g. /founding-circle).
+            url.pathname = `${base}/`;
+            url.searchParams.set('demo', '1');
+            window.location.href = url.toString();
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-slate-700 text-slate-300 hover:text-white hover:border-amber-400/60 hover:bg-slate-800 transition-colors text-sm"
         >
-          New Account Setup Instructions (PDF)
-        </a>
-        <p className="mt-2 text-xs text-slate-500">
-          Step-by-step instructions for creating and confirming your new account.
-        </p>
+          <span className="font-semibold">Demo Mode</span>
+          <span className="text-slate-500">(for talks)</span>
+        </button>
+        <p className="mt-2 text-xs text-slate-500">Opens a presentation-ready demo with sample data. Changes are not saved.</p>
+
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => {
+              const base = window.location.pathname.startsWith('/app') ? '/app' : '';
+              window.location.href = `${base}/founding-circle`;
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-amber-400/25 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 hover:border-amber-400/40 transition-colors text-sm"
+            title="Join the Founding Circle"
+          >
+            <span className="font-semibold">Founding Circle</span>
+            <span className="text-amber-200/70">(early access)</span>
+          </button>
+          <div className="mt-2 text-xs text-slate-500">Identity badge • ADMC pricing lock • early tool access</div>
+        </div>
       </div>
     </div>
   );

@@ -4598,15 +4598,8 @@ ${action.payload.content}`;
           if (intentWorkspaceOverride === 'rehearse' || intentWorkspaceOverride === 'manage') {
             return renderLockedIntentWorkspace(intentWorkspaceOverride);
           }
-          if (showFirstSessionActivation) {
-            return (
-              <FirstWinGate
-                user={user}
-                onNavigate={(view) => setActiveView(view as any)}
-                onDismiss={dismissFirstSessionActivation}
-              />
-            );
-          }
+          // Activation onboarding temporarily disabled.
+          // Users now land directly on the main dashboard experience.
           return (
             <>
             <div className="px-4 md:px-6 pt-6">
