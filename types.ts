@@ -449,6 +449,8 @@ export type MagicianView =
   | 'patter-engine'
   | 'mentalism-assistant'
   | 'marketing-campaign'
+  | 'refine-idea'
+  | 'draft-email'
   | 'client-proposals'
   | 'booking-pitches'
   | 'contract-generator'

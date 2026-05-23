@@ -1,4 +1,4 @@
-import { Type } from "@google/genai";
+import { Modality, Type } from "@google/genai";
 import { supabase } from '../supabase';
 import type { ChatMessage, TrickIdentificationResult, User } from '../types';
 import { getAiProvider } from './aiProviderService';
@@ -694,7 +694,7 @@ export const identifyTrickFromImage = async (
   };
 
   const body: GeminiGenerateBody = {
-    model,
+    model: 'gemini-2.5-flash',
     contents: {
       parts: [
         { text: prompt },

@@ -124,7 +124,7 @@ function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageSta
   const mergedUsage = {
     used: Math.max(Number(quota?.daily?.used ?? 0), Number(localUsage.used ?? 0)),
     limit: Number(quota?.daily?.limit ?? localUsage.limit),
-    remaining: Math.min(Number(quota?.daily?.remaining ?? localUsage.remaining), Number(localUsage.remaining ?? 0 || localUsage.limit)),
+    remaining: Math.min(Number(quota?.daily?.remaining ?? localUsage.remaining), Number((localUsage.remaining ?? 0) || localUsage.limit)),
   };
   return buildRowFromUsage('video_uploads', 'Video Rehearsal Uploads', mergedUsage);
 }

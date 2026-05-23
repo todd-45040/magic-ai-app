@@ -2712,8 +2712,16 @@ ${prompt}`);
   );
 };
 
+interface MagicianModeProps {
+  onBack: () => void;
+  user: User;
+  onUpgrade: (updatedUser?: User) => void;
+  onLogout?: () => void;
+}
+
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'dashboard': 'chat',
+    'assistant-home': 'chat',
     'chat': 'chat',
     'live-rehearsal': 'chat',
     'video-rehearsal': 'chat',
@@ -2728,6 +2736,10 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'show-feedback': 'chat',
     'patter-engine': 'chat',
     'marketing-campaign': 'chat',
+    'client-proposals': 'chat',
+    'booking-pitches': 'chat',
+    'refine-idea': 'chat',
+    'draft-email': 'chat',
     'contract-generator': 'chat',
     'assistant-studio': 'chat',
     'director-mode': 'chat',
@@ -2745,6 +2757,7 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'global-search': 'search',
     'search': 'search',
     'magic-dictionary': 'magic-dictionary',
+    'billing-settings': 'chat',
     'admin': 'admin',
 };
 
@@ -3250,7 +3263,7 @@ useEffect(() => {
     };
 
     void fetchUsage();
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event: string) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         void fetchUsage();
       }
@@ -3725,8 +3738,8 @@ useEffect(() => {
    * IMPORTANT: Keep this function defined (even if the tour logic changes)
    * so callers don't crash at runtime.
    */
-  const demoGuardSetActiveView = (tab: string) => {
-    setActiveView(tab);
+  const demoGuardSetActiveView = (tab: MagicianView) => {
+    setActiveView(tab as MagicianView);
   };
 
   const handleSend = async (prompt?: string) => {
@@ -4414,7 +4427,7 @@ useEffect(() => {
       });
     }
 
-    setActiveView(view);
+    setActiveView(view as MagicianView);
   };
 
   const handleDeepLink = (view: MagicianView, primaryId: string, secondaryId?: string) => {
@@ -4613,7 +4626,7 @@ ${action.payload.content}`;
                 Everything you need to create effects, rehearse performances, and manage your shows.
               </p>
               <p className="mt-4 mb-6 text-sm text-white/55">
-                Welcome back, {user.name || (user.email ? user.email.split('@')[0] : 'magician')}.
+                Welcome back, {user.email ? user.email.split('@')[0] : 'magician'}.
               </p>
             </div>
 
@@ -4716,7 +4729,6 @@ ${action.payload.content}`;
               onOpenPatterEngine={() => setActiveView('patter-engine')}
               onOpenDirectorMode={() => setActiveView('director-mode')}
               onRequestUpgrade={() => { logLockedFeatureClick('live_rehearsal', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
-              onReset={handleResetIdentifyTrick}
             />
           );
         case 'video-rehearsal': return <VideoRehearsal onIdeaSaved={() => handleIdeaSaved('Video analysis saved!')} user={user} />;
@@ -4812,13 +4824,13 @@ ${action.payload.content}`;
               onOpenDirectorMode={() => setActiveView('director-mode')}
             />
           );
-        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} onNavigateToContracts={() => setActiveView('contract-generator')} onNavigateToMarketing={() => setActiveView('marketing-campaign')} onNavigateToFeedback={() => setActiveView('audience-feedback')} />;
+        case 'client-management': return <ClientManagement onClientsUpdate={handleClientsUpdate} onAiSpark={handleAiSpark} onOpenShowPlanner={handleOpenShowPlannerFromClient} onNavigateToContracts={() => setActiveView('contract-generator')} onNavigateToMarketing={() => setActiveView('marketing-campaign')} onNavigateToFeedback={() => setActiveView('show-feedback')} />;
         case 'member-management': return <MemberManagement />;
         case 'effect-generator': return <EffectGenerator onIdeaSaved={() => handleIdeaSaved('Effect ideas saved!')} />;
-        case 'magic-wire': return <MagicWire currentUser={user} onIdeaSaved={() => handleIdeaSaved('News article saved!')} />;
-        case 'global-search': return <GlobalSearch shows={shows} ideas={ideas} onNavigate={handleDeepLink} />;
+        case 'magic-wire': return <MagicWire />;
+        case 'global-search': return <GlobalSearch shows={shows} ideas={ideas} onNavigate={(view, primaryId, secondaryId) => handleDeepLink(view as MagicianView, primaryId, secondaryId)} />;
         case 'admin':
-          return user?.isAdmin ? <AdminPanel user={user} /> : <Dashboard user={user} onNavigate={handleNavigate} />;
+          return user?.isAdmin ? <AdminPanel user={user} /> : <Dashboard user={user} shows={shows} feedback={feedback} ideas={ideas} onNavigate={handleNavigate} onShowsUpdate={handleShowsUpdate} onPromptClick={handlePromptClick} />;
         case 'identify':
           return (
             <IdentifyTab
@@ -4832,7 +4844,7 @@ ${action.payload.content}`;
               identifySaved={!!identifySavedIdeaId}
               identifySaving={identifySaving}
               identifyIsStrong={identifyIsStrong}
-              fileInputRef={fileInputRef}
+              fileInputRef={fileInputRef as React.RefObject<HTMLInputElement>}
               handleImageUpload={handleImageUpload}
               handleIdentifyClick={handleIdentifyClick}
               onSave={handleIdentifySave}
@@ -4845,11 +4857,12 @@ ${action.payload.content}`;
               refining={identifyRefining}
               lastRefine={identifyLastRefine}
               onRequestUpgrade={() => { logLockedFeatureClick('identify_trick', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }}
+              onReset={handleResetIdentifyTrick}
             />
           );
         case 'publications': return <PublicationsTab />;
         case 'community': return <CommunityTab />;
-        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} usageQuota={usageSnapshot?.quota} onPromptClick={handlePromptClick} />;
+        case 'chat': default: return <ChatView messages={messages} isLoading={isLoading} recentlySaved={recentlySaved} handleSaveIdea={handleSaveIdea} handleFeedback={handleFeedback} messagesEndRef={messagesEndRef as React.RefObject<HTMLDivElement>} showAngleRiskForm={showAngleRiskForm} trickName={trickName} setTrickName={setTrickName} audienceType={audienceType} setAudienceType={setAudienceType} handleAngleRiskSubmit={handleAngleRiskSubmit} onCancelAngleRisk={() => { setShowAngleRiskForm(false); setTrickName(''); setAudienceType(null); }} showRehearsalForm={showRehearsalForm} routineDescription={routineDescription} setRoutineDescription={setRoutineDescription} targetDuration={targetDuration} setTargetDuration={setTargetDuration} handleRehearsalSubmit={handleRehearsalSubmit} onCancelRehearsal={() => { setShowRehearsalForm(false); setRoutineDescription(''); setTargetDuration(''); }} onFileChange={handleRoutineScriptUpload} showInnovationEngineForm={showInnovationEngineForm} effectToInnovate={effectToInnovate} setEffectToInnovate={setEffectToInnovate} handleInnovationEngineSubmit={handleInnovationEngineSubmit} onCancelInnovationEngine={() => { setShowInnovationEngineForm(false); setEffectToInnovate(''); }} prompts={MAGICIAN_PROMPTS} user={user} hasAmateurAccess={hasAmateurAccess} hasSemiProAccess={hasSemiProAccess} hasProfessionalAccess={hasProfessionalAccess} usageQuota={usageSnapshot?.quota} onPromptClick={handlePromptClick} />;
     }
   }
 
@@ -4988,7 +5001,7 @@ const renderIntentSubnav = () => {
 
     const subBtn = (label: string, onClick: () => void, isActive?: boolean, locked?: boolean) => (
       <button
-        key={label === "Assistant's Studio" ? (<><span>Assistant's Studio</span><span className="ml-2 text-[9px] px-1.5 py-0.5 rounded bg-indigo-500 text-white uppercase">Beta</span></>) : label}
+        key={label}
         onClick={onClick}
         className={[
           'relative z-[85] whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold border transition-colors cursor-pointer pointer-events-auto',
@@ -5103,17 +5116,7 @@ const renderIntentSubnav = () => {
         {isHelpModalOpen && <HelpModal
             onClose={() => setIsHelpModalOpen(false)}
             onNavigate={(view) => {
-              setActiveView(view);
-
-      // Support deep-link navigation payloads (used by Effect Engine -> Show Planner imports)
-      try {
-        const primaryId = String(ce?.detail?.primaryId ?? ce?.detail?.showId ?? '');
-        const secondaryId = String(ce?.detail?.secondaryId ?? ce?.detail?.taskId ?? '');
-        if (view === 'show-planner') {
-          if (primaryId) setInitialShowId(primaryId);
-          if (secondaryId) setInitialTaskId(secondaryId);
-        }
-      } catch {}
+              setActiveView(view as MagicianView);
               setIsHelpModalOpen(false);
             }}
             contextView={activeView}
@@ -5185,7 +5188,7 @@ const renderIntentSubnav = () => {
             <button onClick={() => setIsHelpModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Help" aria-label="Open help center">
                 <QuestionMarkIcon className="w-6 h-6" />
             </button>
-            <AccountMenu user={user} onLogout={onLogout} onOpenBilling={() => setActiveView('billing-settings')} />
+            <AccountMenu user={user} onLogout={onLogout ?? (() => {})} onOpenBilling={() => setActiveView('billing-settings')} />
         </div>
       </header>
       <TrialConversionBanner user={user} location="app" onPrimaryAction={handleTrialConversionPrimaryAction} />
