@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppDispatch, useAppState, refreshShows, refreshIdeas } from '../store';
 import * as showsService from '../services/showsService';
 import * as ideasService from '../services/ideasService';

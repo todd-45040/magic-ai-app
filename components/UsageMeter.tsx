@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchUsageStatus, type UsageStatus } from '../services/usageStatusService';
 import { getUsage } from '../services/usageTracker';
 import type { User } from '../types';

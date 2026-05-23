@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, useContext, ReactNode, useRef, useEffect } from 'react';
+import { createContext, useState, useCallback, useContext, ReactNode, useRef, useEffect } from 'react';
 
 interface ToastAction {
   label: string;

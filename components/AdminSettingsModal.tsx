@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchAdminAiStatus, fetchAdminEnvSanity, fetchAdminSettings, saveAdminSettings, type AdminAIProvider, type AdminAiStatus, type AdminEnvSanity } from '../services/adminSettingsService';
 
 export default function AdminSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {

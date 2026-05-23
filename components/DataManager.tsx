@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { exportData, importData, clearAllData, type ExportSelection } from '../services/dataService';
 import { DatabaseIcon, DownloadIcon, UploadIcon, TrashIcon, CheckIcon } from './icons';
 

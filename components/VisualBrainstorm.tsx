@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { generateImages, editImageWithPrompt, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';

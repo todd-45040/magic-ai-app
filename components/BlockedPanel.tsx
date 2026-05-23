@@ -1,4 +1,3 @@
-import React from 'react';
 import type { BlockedUx } from '../services/blockedUx';
 import { LockIcon, WandIcon, ShuffleIcon } from './icons';
 

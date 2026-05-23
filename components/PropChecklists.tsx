@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { User, Task } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { MAGICIAN_SYSTEM_INSTRUCTION } from '../constants';

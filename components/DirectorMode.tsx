@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Type } from "@google/genai";
 import { saveIdea } from '../services/ideasService';
 import { CohesionActions } from './CohesionActions';

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase } from '../supabase';
 import { logUserActivity } from '../services/userActivityService';
 
@@ -37,7 +37,7 @@ function getSignupContext() {
   }
 }
 
-export default function Auth({ onLoginSuccess, onLogin, onBack }: AuthProps) {
+export default function Auth({ onLoginSuccess, onBack }: AuthProps) {
 
 const initialMode = (() => {
   try {

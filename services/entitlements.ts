@@ -1,5 +1,5 @@
 import type { Show, User } from '../types';
-import { normalizeTier, type CanonicalTier } from './membershipService.js';
+import { type CanonicalTier } from './membershipService.js';
 import { getPlanLimits, getEffectiveEntitlementTier } from './planCatalog.js';
 import { getTierLimit } from './usageService.js';
 

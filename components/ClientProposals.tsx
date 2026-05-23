@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileTextIcon, TrashIcon, BackIcon, SearchIcon, CopyIcon } from './icons';
 import { getClientProposals, deleteClientProposal, type ClientProposal } from '../services/proposalsService';
 

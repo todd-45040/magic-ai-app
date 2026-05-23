@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { saveIdea } from "../services/ideasService";
 import { supabase } from "../supabase";
 import { trackClientEvent } from "../services/telemetryClient";

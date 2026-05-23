@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getPerformanceById, addReaction } from '../services/performanceService';
 import { getShowById } from '../services/showsService';
 import type { Show, ReactionType } from '../types';

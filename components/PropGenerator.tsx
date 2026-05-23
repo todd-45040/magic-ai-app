@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PropBuildInstructions, PropConcept, Task, User } from "../types";
 import { saveIdea } from "../services/ideasService";
 import { createShow, addTasksToShow } from "../services/showsService";

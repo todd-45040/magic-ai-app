@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Type } from '@google/genai';
 import { generateResponse, generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';

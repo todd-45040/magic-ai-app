@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
 import { downloadCsv } from './adminCsv';
 import { fetchAdminWaitlistLeads } from '../services/adminLeadsService';

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { User, Membership } from '../types';
 import { getUsers, updateUserMembership, deleteUser, addUser } from '../services/usersService';
 import { TrashIcon, UsersCogIcon } from './icons';

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import { BILLING_PLAN_CATALOG, formatPriceCents, resolveBillingPlanKey, type BillingCycle } from '../services/planCatalog';
 import { createPortalSession, fetchBillingStatus, type BillingStatusPayload } from '../services/billingClient';

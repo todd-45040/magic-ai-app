@@ -1,4 +1,3 @@
-import React from 'react';
 import { ADMIN_WINDOWS, type AdminWindowDays } from '../utils/adminMetrics';
 
 export default function AdminWindowSelector({

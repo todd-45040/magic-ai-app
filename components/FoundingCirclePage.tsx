@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '../types';
 import { supabase } from '../supabase';
 import { StarIcon, LockIcon, CheckIcon, UsersIcon } from './icons';

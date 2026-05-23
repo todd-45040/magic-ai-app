@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Mode, User } from '../types';
 
 type Props = {

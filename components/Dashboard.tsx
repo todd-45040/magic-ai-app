@@ -7,7 +7,7 @@ import { supabase } from '../supabase';
 import { normalizeTier, getEffectiveMembershipTier, isActiveTrialUser } from '../services/membershipService';
 import { getTrialPromptCopy } from '../services/trialMessaging';
 import { logTrialExpiredOnce, logTrialPromptViewed } from '../services/ibmConversionTracking';
-import { RabbitIcon, ClockIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
+import { RabbitIcon, BookmarkIcon, WandIcon, MicrophoneIcon, StageCurtainsIcon, LightbulbIcon, UsersCogIcon, ChecklistIcon, FileTextIcon, ImageIcon, BookIcon, CustomizeIcon, DragHandleIcon, EyeIcon, EyeOffIcon, ChevronDownIcon } from './icons';
 
 interface DashboardProps {
     variant?: 'home' | 'full';

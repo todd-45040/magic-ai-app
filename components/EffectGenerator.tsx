@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { EFFECT_GENERATOR_SYSTEM_INSTRUCTION } from '../constants';

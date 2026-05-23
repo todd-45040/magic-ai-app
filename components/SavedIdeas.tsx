@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
 import { getShows, createShow, updateShow, addTaskToShow } from '../services/showsService';
-import type { SavedIdea, Transcription, IdeaType, IdeaCategory, Show, AiSparkAction } from '../types';
+import type { SavedIdea, Transcription, IdeaCategory, Show, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
 import ShareButton from './ShareButton';
 import NextStepPanel from './NextStepPanel';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { AMATEUR_FEATURES, PROFESSIONAL_FEATURES } from '../constants';
 import { BackIcon, CheckIcon, WandIcon } from './icons';
 

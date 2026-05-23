@@ -1,4 +1,3 @@
-import React from 'react';
 import { ADMIN_METRIC_DICTIONARY, CORE_ACTIVATION_TOOLS, ADMIN_WINDOWS } from '../utils/adminMetrics';
 
 export default function AdminMetricDictionaryModal({

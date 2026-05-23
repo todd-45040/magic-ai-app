@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { CheckIcon, WandIcon, ShieldIcon } from './icons';
 import { getFounderLockLabel, getUpgradeUxCopy, isFounderProtected } from '../services/upgradeUx';
 import type { BillingCycle } from '../services/planCatalog';

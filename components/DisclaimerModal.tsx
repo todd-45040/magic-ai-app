@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShieldIcon } from './icons';
 
 interface DisclaimerModalProps {

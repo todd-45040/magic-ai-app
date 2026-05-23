@@ -87,7 +87,7 @@ export function seedDemoData(): void {
       title: 'Finalize opening script',
       notes: 'Tighten the first 30 seconds and add a clear applause cue.',
       priority: 'High',
-      status: 'In Progress',
+      status: 'To-Do',
       dueDate: now + 1000 * 60 * 60 * 24 * 2,
       createdAt: now - 1000 * 60 * 60 * 24,
       tags: ['demo', 'script'],
@@ -97,7 +97,7 @@ export function seedDemoData(): void {
       title: 'Prop checklist (walk-around)',
       notes: 'Deck, coins, rubber bands, Sharpie, business cards.',
       priority: 'Medium',
-      status: 'Todo',
+      status: 'To-Do',
       dueDate: now + 1000 * 60 * 60 * 24 * 3,
       createdAt: now - 1000 * 60 * 60 * 12,
       tags: ['demo', 'props'],
@@ -121,7 +121,7 @@ export function seedDemoData(): void {
 
   const demoIdea: SavedIdea = {
     id: 'demo-idea-1',
-    type: 'patter',
+    type: 'text',
     title: 'Ambitious Card (Closer)',
     content:
       '“You know what I love about a single card? No matter how many times you try to lose it… it refuses to stay lost.”\n\nBeat 1: Quick selection + signature.\nBeat 2: First rise (fast).\nBeat 3: Repeat with a pause for the laugh line.\nBeat 4: Final rise as the applause cue.',

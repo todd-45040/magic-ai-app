@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchStripeReadiness, fetchStripeWebhookHealth, fetchFounderCounts, manualFounderClaim, type FounderCountResult, type StripeReadinessResult, type StripeWebhookHealthResult } from '../services/adminStripeReadinessService';
 
 function Badge({ ok, label }: { ok: boolean; label: string }) {

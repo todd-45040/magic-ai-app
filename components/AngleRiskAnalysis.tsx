@@ -5,7 +5,7 @@ import { generateResponse } from '../services/geminiService';
 import StageDiagram, { type BlockingPoint, type SeatView, type Zone } from './rehearsal/StageDiagram';
 import { saveIdea } from '../services/ideasService';
 import { createShow, addTaskToShow } from '../services/showsService';
-import { ChevronDownIcon, EyeIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
+import { ChevronDownIcon, SaveIcon, ShareIcon, ShieldIcon, VideoIcon, WandIcon } from './icons';
 import FormattedText from './FormattedText';
 import { useToast } from './ToastProvider';
 import { trackClientEvent } from '../services/telemetryClient';
@@ -486,12 +486,12 @@ const togglePanel = (key: PanelKey) => {
         content: `Routine: ${routineName}\nMode: ${mode}\nAudience: ${setup}\n\nFocus:\n${focusText || '(none)'}\n\n---\n\n${analysis}`,
         tags: normalizedTags,
       } as any);
-      toast.showToast('Saved to My Ideas', 'success');
+      toast.showToast('Saved to My Ideas');
       void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_saved', metadata: { routineName: routineName.trim(), mode, setup } });
       onIdeaSaved?.();
     } catch (e) {
       console.error(e);
-      toast.showToast('Could not save idea.', 'error');
+      toast.showToast('Could not save idea.');
     }
   };
 
@@ -509,7 +509,7 @@ const togglePanel = (key: PanelKey) => {
         status: 'To-Do',
       } as any);
 
-      toast.showToast('Saved to Show Planner', 'success');
+      toast.showToast('Saved to Show Planner');
       if (onDeepLinkShowPlanner) {
         onDeepLinkShowPlanner(show.id);
       } else {
@@ -518,7 +518,7 @@ const togglePanel = (key: PanelKey) => {
       }
     } catch (e) {
       console.error(e);
-      toast.showToast('Could not save to Show Planner.', 'error');
+      toast.showToast('Could not save to Show Planner.');
     }
   };  
   // Helper used by both the initial analysis and the refinement loop.
@@ -569,7 +569,7 @@ ${routineSteps.trim()}` : null,
     } catch (e: any) {
       console.error(e);
       void trackClientEvent({ tool: 'angle_risk', action: 'angle_risk_analysis_error', metadata: { routineName: routineName.trim(), mode, setup, message: e?.message || 'unknown error' }, outcome: 'ERROR_UPSTREAM', error_code: 'ANGLE_RISK_ANALYSIS_ERROR' });
-      toast.showToast('Angle/Risk analysis failed. Please try again.', 'error');
+      toast.showToast('Angle/Risk analysis failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -601,10 +601,10 @@ ${routineSteps.trim()}` : null,
     try {
       const text = await generateResponse(prompt, ANGLE_RISK_ANALYSIS_SYSTEM_INSTRUCTION, user);
       setAnalysis(text);
-      toast.showToast('Refinement generated', 'success');
+      toast.showToast('Refinement generated');
     } catch (e: any) {
       console.error(e);
-      toast.showToast('Refinement failed. Please try again.', 'error');
+      toast.showToast('Refinement failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -630,7 +630,7 @@ ${routineSteps.trim()}` : null,
       onNavigate('video-rehearsal');
       return;
     }
-    toast.showToast('Video Rehearsal navigation is not available in this build.', 'info');
+    toast.showToast('Video Rehearsal navigation is not available in this build.');
   };
 
   // Phase 6D: utility CTAs
@@ -639,9 +639,9 @@ ${routineSteps.trim()}` : null,
     try {
       const shareText = `Angle/Risk Analysis — ${routineName.trim() || 'Routine'}\nMode: ${mode} | Audience: ${setup}\n\n${analysis}`;
       await navigator.clipboard.writeText(shareText);
-      toast.showToast('Copied share text to clipboard', 'success');
+      toast.showToast('Copied share text to clipboard');
     } catch {
-      toast.showToast('Could not copy to clipboard.', 'error');
+      toast.showToast('Could not copy to clipboard.');
     }
   };
 
@@ -656,7 +656,7 @@ ${routineSteps.trim()}` : null,
     setPropsText('Floating sphere, foulard cloth, side table, limited backstage space.');
     setRoutineSteps(['Introduction with cloth display', 'Secret setup under the foulard', 'Floating sequence and audience focus shifts', 'Reveal and applause cue', 'Cleanup and reset before next piece'].join('\n'));
     setFocusText('Watch right-side exposure during the float, posture tells during the secret setup, and reset safety between routines.');
-    toast.showToast('Demo routine loaded', 'success');
+    toast.showToast('Demo routine loaded');
     setTimeout(() => routineNameRef.current?.focus(), 0);
   };
 
@@ -673,7 +673,7 @@ ${routineSteps.trim()}` : null,
     setKeyMoments([]);
     setFocusText('');
     setRoutineSteps(DEFAULT_ROUTINE_STEPS.join('\n'));
-    toast.showToast('Ready for a new analysis', 'info');
+    toast.showToast('Ready for a new analysis');
     setTimeout(() => routineNameRef.current?.focus(), 0);
   };
 

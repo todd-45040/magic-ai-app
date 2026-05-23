@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AdminWindowSelector from './AdminWindowSelector';
 import { snapAdminWindowDays } from '../utils/adminMetrics';
 import { fetchAdminUsageDashboard } from '../services/adminUsageDashboardService';

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import type { User } from "../types";
 import { getTrialPromptCopy } from "../services/trialMessaging";
 import { logTrialExpiredOnce, logTrialPromptViewed } from "../services/ibmConversionTracking";

@@ -4,11 +4,11 @@ import { supabase } from '../supabase';
 
 export function logEvent(
   event_name: string,
-  payload: any = {},
+  payload: Record<string, unknown> = {},
   partner_source?: string
 ) {
   try {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: { access_token?: string } | null } }) => {
       const token = data.session?.access_token;
 
       if (!token) {
@@ -33,20 +33,20 @@ export function logEvent(
           const text = await response.text().catch(() => '');
           console.warn('Telemetry endpoint error:', response.status, text);
         }
-      }).catch((err) => {
+      }).catch((err: unknown) => {
         console.warn('Telemetry request failed:', err);
       });
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       console.warn('Telemetry session lookup failed:', err);
     });
-  } catch (err) {
+  } catch (err: unknown) {
     console.warn('Telemetry failed:', err);
   }
 }
 
 export async function logEventAsync(
   event_name: string,
-  payload: any = {},
+  payload: Record<string, unknown> = {},
   partner_source?: string
 ): Promise<void> {
   try {
@@ -76,7 +76,7 @@ export async function logEventAsync(
       const text = await response.text().catch(() => '');
       console.warn('Telemetry endpoint error:', response.status, text);
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.warn('Telemetry failed:', err);
   }
 }

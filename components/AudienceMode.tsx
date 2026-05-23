@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ChatMessage, PredefinedPrompt, TrickIdentificationResult, AudienceTab, Question } from '../types';
 import { generateResponse } from '../services/geminiService';
 import { identifyTrickFromImageServer } from '../services/identifyService';

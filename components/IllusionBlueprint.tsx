@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 
 import { generateImages, generateStructuredResponse } from '../services/geminiService';

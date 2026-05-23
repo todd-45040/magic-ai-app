@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { generateResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';
 import { MAGIC_RESEARCH_SYSTEM_INSTRUCTION } from '../constants';

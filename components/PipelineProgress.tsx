@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getPipelineSession, type PipelineSession, type PipelineStep } from '../services/pipelineSessionService';
 
 const STEPS: PipelineStep[] = ['image', 'effect', 'script', 'routine', 'show'];

@@ -1,6 +1,6 @@
 
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { BackIcon } from './icons';
 
 interface PassphraseInputProps {

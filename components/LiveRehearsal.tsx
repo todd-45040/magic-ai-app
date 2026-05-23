@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 // NOTE: This project does not depend on react-router-dom. Navigation is handled
 // by the parent App shell (props callback) and/or a simple location redirect.
 import { LiveServerMessage, FunctionCall } from '@google/genai';

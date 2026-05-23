@@ -1,4 +1,4 @@
-import type { DashboardLayout, DashboardWidget, WidgetId } from '../types';
+import type { DashboardLayout, DashboardWidget } from '../types';
 import {
     RabbitIcon,
     ClockIcon,

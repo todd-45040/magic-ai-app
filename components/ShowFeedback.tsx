@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { Feedback, Show } from '../types';
 import { fetchShowFeedback, buildShowFeedbackUrl } from '../services/showFeedbackService';
 import { StarIcon, UsersIcon, QrCodeIcon, CopyIcon } from './icons';

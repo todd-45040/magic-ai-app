@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Client, AiSparkAction, Feedback, Show } from '../types';
 import { getClients, addClient, updateClient, deleteClient } from '../services/clientsService';

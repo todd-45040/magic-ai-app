@@ -1,5 +1,5 @@
 
-import { PredefinedPrompt, Persona, MagicTheoryModule, MagicTerm, User } from './types';
+import { PredefinedPrompt, Persona, MagicTheoryModule, User } from './types';
 import { Type } from '@google/genai';
 import { 
     BookIcon,
@@ -12,7 +12,6 @@ import {
     ShuffleIcon,
     SearchIcon,
     BookmarkIcon,
-    CalendarIcon,
     ChecklistIcon,
     CrossIcon,
     UsersIcon,

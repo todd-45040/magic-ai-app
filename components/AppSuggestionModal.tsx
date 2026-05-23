@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { addSuggestion } from '../services/suggestionService';
 import { ChatBubbleIcon, CheckIcon, WandIcon } from './icons';

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ShareIcon, CheckIcon } from './icons';
 
 interface ShareButtonProps {

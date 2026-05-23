@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { submitShowFeedback } from '../services/showFeedbackService';
 import { StarIcon, WandIcon } from './icons';
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ASSISTANT_STUDIO_SYSTEM_INSTRUCTION } from '../constants';
 import { generateStructuredResponse } from '../services/geminiService';
 import { saveIdea } from '../services/ideasService';

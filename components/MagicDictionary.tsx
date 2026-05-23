@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MAGIC_DICTIONARY_TERMS, MAGIC_TECHNIQUE_TERMS } from '../constants';
 import type { AiSparkAction, Membership } from '../types';
 import { useAppState } from '../store';

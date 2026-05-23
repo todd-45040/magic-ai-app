@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { generateResponseWithParts, normalizeAiUserFacingError, getHighCostToolNotice } from '../services/geminiService';
 import BlockedPanel from './BlockedPanel';
 import { normalizeBlockedUx } from '../services/blockedUx';

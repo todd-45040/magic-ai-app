@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { User } from '../types';
 import { getMembershipDaysRemaining, hasExpiredTrial, isActiveTrialUser } from '../services/membershipService';
 import { getPartnerTrialBadgeLabel, isPartnerTrialUser } from '../services/trialMessaging';

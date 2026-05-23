@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { MAGIC_THEORY_CURRICULUM, MAGIC_THEORY_TUTOR_SYSTEM_INSTRUCTION } from '../constants';
 import type { ChatMessage, MagicTheoryModule, MagicTheoryLesson, User } from '../types';
 import { generateResponse } from '../services/geminiService';
@@ -163,7 +163,7 @@ const MagicTheoryTutor: React.FC<MagicTheoryTutorProps> = ({ user }) => {
     const startTrack = (trackId: TrackId) => {
         const track = TRACKS.find(t => t.id === trackId)!;
         if (track.unlockAt > 0 && completedCount < track.unlockAt) {
-            showToast(`Locked — complete ${track.unlockAt} lessons to unlock.`, { variant: 'info' });
+            showToast(`Locked — complete ${track.unlockAt} lessons to unlock.`);
             return;
         }
         setSelectedTrack(trackId);
