@@ -74,8 +74,8 @@ async function postJoin(payload: any, token?: string | null) {
   return j;
 }
 
-export default function FoundingCirclePage(props: { user: User | null; onBack: () => void }) {
-  const { user, onBack } = props as any;
+export default function FoundingCirclePage(props: { user: User | null; onBack: () => void; onJoined?: () => void | Promise<void> }) {
+  const { user, onBack } = props;
 
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -169,7 +169,7 @@ export default function FoundingCirclePage(props: { user: User | null; onBack: (
 
       // Ask the parent to refresh the user profile so the Founding badge appears immediately.
       try {
-        if (typeof (props as any)?.onJoined === 'function') (props as any).onJoined();
+        if (typeof props.onJoined === 'function') void props.onJoined();
       } catch {}
     } catch (e: any) {
       setMsg(e?.message || 'Could not join. Please try again.');

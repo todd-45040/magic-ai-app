@@ -89,7 +89,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ user, onUpgrade }) =>
     return () => {
       active = false;
     };
-  }, [user?.membership, user?.stripe_subscription_id, user?.stripe_status, user?.stripe_price_id]);
+  }, [user?.membership, user?.stripeSubscriptionId, user?.stripeStatus, user?.stripePriceId]);
 
   const statusPlanKey = status?.planKey || 'free';
   const membershipPlanKey = normalizeMembershipToPlanKey(user?.membership, user?.trialEndDate);

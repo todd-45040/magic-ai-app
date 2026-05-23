@@ -9,11 +9,51 @@ export type ToolPolicy = {
   maxPromptChars?: number;
   maxContextChars?: number;
   maxFileBytes?: number;
+  /** Runtime safety windows used by requestSafety. Defaults are applied by normalizeToolPolicy. */
+  cooldownMs?: number;
+  duplicateWindowMs?: number;
+  /** Backward-compatible aliases used by older server guards. */
+  payloadMaxBytes?: number;
+  promptMaxChars?: number;
+  contextMaxChars?: number;
+  imageMaxBytes?: number;
   maxClipDurationSeconds?: number;
   allowedMimePrefixes?: string[];
 };
 
 const FIVE_MIN = 5 * 60_000;
+const DEFAULT_COOLDOWN_MS = 1200;
+const DEFAULT_DUPLICATE_WINDOW_MS = 30_000;
+
+function normalizeToolPolicy(policy: ToolPolicy): ToolPolicy {
+  const maxBodyBytes = policy.maxBodyBytes ?? policy.payloadMaxBytes ?? 2 * 1024 * 1024;
+  const maxPromptChars = policy.maxPromptChars ?? policy.promptMaxChars ?? 6000;
+  const maxContextChars = policy.maxContextChars ?? policy.contextMaxChars ?? 12000;
+  const maxFileBytes = policy.maxFileBytes ?? policy.imageMaxBytes;
+
+  return {
+    ...policy,
+    maxBodyBytes,
+    maxPromptChars,
+    maxContextChars,
+    maxFileBytes,
+    payloadMaxBytes: maxBodyBytes,
+    promptMaxChars: maxPromptChars,
+    contextMaxChars: maxContextChars,
+    imageMaxBytes: maxFileBytes,
+    cooldownMs: policy.cooldownMs ?? DEFAULT_COOLDOWN_MS,
+    duplicateWindowMs: policy.duplicateWindowMs ?? DEFAULT_DUPLICATE_WINDOW_MS,
+  };
+}
+
+export function getCooldownHeaders(tool: string, untilEpochMs: number): Record<string, string> {
+  const retryAfterSeconds = Math.max(1, Math.ceil((untilEpochMs - Date.now()) / 1000));
+  return {
+    'X-AI-Cooldown-Tool': tool,
+    'X-AI-Cooldown-Until': String(untilEpochMs),
+    'Retry-After': String(retryAfterSeconds),
+  };
+}
 
 export const TOOL_POLICIES: Record<string, ToolPolicy> = {
   chat: {
@@ -67,5 +107,5 @@ export function normalizePlan(plan?: string | null): 'trial' | 'amateur' | 'prof
 }
 
 export function getToolPolicy(tool: string): ToolPolicy {
-  return TOOL_POLICIES[tool] || TOOL_POLICIES.chat;
+  return normalizeToolPolicy(TOOL_POLICIES[tool] || TOOL_POLICIES.chat);
 }

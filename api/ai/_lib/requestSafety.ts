@@ -22,17 +22,17 @@ function approxTextLen(payload: any): number {
 export function ensureInputWithinPolicy(payload: any, tool: string): { ok: true } | { ok: false; status: number; error_code: string; message: string } {
   const policy = getToolPolicy(tool);
   const prompt = typeof payload?.prompt === 'string' ? payload.prompt : '';
-  if (prompt.length > policy.promptMaxChars) {
-    return { ok: false, status: 413, error_code: 'AI_INVALID_INPUT', message: `That request is too large. Keep prompts under ${policy.promptMaxChars} characters.` };
+  if (prompt.length > (policy.maxPromptChars ?? 6000)) {
+    return { ok: false, status: 413, error_code: 'AI_INVALID_INPUT', message: `That request is too large. Keep prompts under ${(policy.maxPromptChars ?? 6000)} characters.` };
   }
   const textLen = approxTextLen(payload);
-  if (textLen > policy.contextMaxChars + policy.promptMaxChars) {
+  if (textLen > (policy.maxContextChars ?? 12000) + (policy.maxPromptChars ?? 6000)) {
     return { ok: false, status: 413, error_code: 'AI_INVALID_INPUT', message: 'That request is too large. Please shorten your input and try again.' };
   }
-  if (typeof payload?.imageBase64 === 'string' && policy.imageMaxBytes) {
+  if (typeof payload?.imageBase64 === 'string' && (policy.maxFileBytes ?? 0)) {
     const bytes = Buffer.byteLength(payload.imageBase64, 'utf8');
-    if (bytes > policy.imageMaxBytes * 1.37) {
-      return { ok: false, status: 413, error_code: 'AI_INVALID_INPUT', message: `Image payload is too large. Keep uploads under ${Math.ceil(policy.imageMaxBytes / 1024 / 1024)} MB.` };
+    if (bytes > (policy.maxFileBytes ?? 0) * 1.37) {
+      return { ok: false, status: 413, error_code: 'AI_INVALID_INPUT', message: `Image payload is too large. Keep uploads under ${Math.ceil((policy.maxFileBytes ?? 0) / 1024 / 1024)} MB.` };
     }
   }
   return { ok: true };
@@ -42,7 +42,7 @@ export async function startProtectedRequest(opts: StartOpts): Promise<any> {
   const { req, res, tool, payloadForFingerprint, endpoint, provider, model } = opts;
   const policy = getToolPolicy(tool);
   const bodySize = getApproxBodySizeBytes(req);
-  if (bodySize > policy.payloadMaxBytes) {
+  if (bodySize > (policy.maxBodyBytes ?? 2 * 1024 * 1024)) {
     return jsonError(res, 413, { ok: false, error_code: 'AI_INVALID_INPUT', message: 'That request is too large. Please shorten your input and try again.', retryable: false });
   }
   const auth = await requireSupabaseAuth(req);
@@ -84,14 +84,14 @@ export async function startProtectedRequest(opts: StartOpts): Promise<any> {
     return res.status(200).json(dup.cached);
   }
 
-  markProcessing(fingerprint, policy.duplicateWindowMs);
-  cooldowns.set(cooldownKey, now + policy.cooldownMs);
+  markProcessing(fingerprint, (policy.duplicateWindowMs ?? 30_000));
+  cooldowns.set(cooldownKey, now + (policy.cooldownMs ?? 1200));
   return { ok: true, fingerprint, auth, identityKey, policy, bodySize };
 }
 
 export function completeProtectedRequest(fingerprint: string, responsePayload: any, tool: string) {
   const policy = getToolPolicy(tool);
-  markCompleted(fingerprint, responsePayload, policy.duplicateWindowMs);
+  markCompleted(fingerprint, responsePayload, (policy.duplicateWindowMs ?? 30_000));
 }
 
 export function failProtectedRequest(fingerprint?: string) {
