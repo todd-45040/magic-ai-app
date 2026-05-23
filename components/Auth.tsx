@@ -103,6 +103,7 @@ const initialMode = (() => {
     }
 
     // Friendly common cases
+    if (lower.includes('email not confirmed')) return 'Email not confirmed yet. Please click the confirmation link in your email. If you just clicked it, open the latest confirmation email or request a new confirmation link.';
     if (lower.includes('invalid login credentials')) return 'That email/password combination didn\'t work. Please try again.';
     if (lower.includes('user already registered')) return 'That email is already registered. Try logging in instead.';
     if (lower.includes('email address') && lower.includes('is invalid')) return 'That email looks invalid. Please remove any spaces and try again.';

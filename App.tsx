@@ -170,25 +170,47 @@ function App() {
     const exchangeAuthCodeIfPresent = async () => {
       try {
         const currentUrl = new URL(window.location.href);
-        const hasCode = Boolean(currentUrl.searchParams.get('code'));
-        const hasAuthHash = Boolean(
-          currentUrl.hash &&
-          (currentUrl.hash.includes('access_token=') || currentUrl.hash.includes('refresh_token='))
-        );
+        const searchParams = currentUrl.searchParams;
+        const hashParams = new URLSearchParams((currentUrl.hash || '').replace(/^#/, ''));
 
-        if (hasCode) {
+        const code = searchParams.get('code');
+        const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash');
+        const type = searchParams.get('type') || hashParams.get('type') || 'signup';
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        // Supabase can return email confirmation in multiple formats depending on
+        // project settings and email-template configuration:
+        // 1) PKCE code: /app/?mode=auth-callback&code=...
+        // 2) token_hash: /app/?mode=auth-callback&token_hash=...&type=signup
+        // 3) implicit hash: /app/#access_token=...&refresh_token=...
+        // Handle all three so a confirmed user lands in the app instead of being
+        // sent back to Login with a stale "Email not confirmed" state.
+        if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
           if (error) throw error;
-          routeAuthCallbackToHome();
           return;
         }
 
-        if (hasAuthHash) {
-          await new Promise(resolve => window.setTimeout(resolve, 250));
-          routeAuthCallbackToHome();
+        if (tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type as any,
+          });
+          if (error) throw error;
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) throw error;
+          return;
         }
       } catch (error) {
-        console.error('Auth code exchange failed:', error);
+        console.error('Auth callback exchange failed:', error);
       }
     };
 
@@ -444,8 +466,9 @@ function App() {
             return;
           }
           setUser(null);
-          setMode(prev => (prev === 'magician' ? 'selection' : prev));
-          if (isAuthCallbackFlow) cleanupAuthCallbackUrl();
+          setMode(prev => (prev === 'magician' ? 'auth' : prev));
+          // Keep the callback URL intact when no session was created so the user
+          // can retry/reload and we can troubleshoot expired or blocked links.
         }
       } catch (error) {
         console.error('Auth sync error:', error);
