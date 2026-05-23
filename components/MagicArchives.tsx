@@ -943,7 +943,7 @@ if (edges.length) addConnections(edges);
     const topic =
       view?.kind === 'creator' ? `Creator Deep Dive: ${view.data?.name ?? query}` :
       view?.kind === 'timeline' ? `Magic Timeline: ${view.data?.eraLabel ?? query}` :
-      view?.kind === 'compare' ? `Compare: ${view.data?.a ?? compareA} vs ${view.data?.b ?? compareB}` :
+      view?.kind === 'compare' ? `Compare: ${view.data?.topicA ?? compareA} vs ${view.data?.topicB ?? compareB}` :
       query;
 
     const lines: string[] = [];
@@ -978,7 +978,7 @@ if (edges.length) addConnections(edges);
       const baseTitle =
         view?.kind === 'creator' ? (view.data?.name ?? query) :
         view?.kind === 'timeline' ? (view.data?.eraLabel ?? query) :
-        view?.kind === 'compare' ? `${view.data?.a ?? compareA} vs ${view.data?.b ?? compareB}` :
+        view?.kind === 'compare' ? `${view.data?.topicA ?? compareA} vs ${view.data?.topicB ?? compareB}` :
         query;
 
       const taskTitle = `Archive Insight: ${String(baseTitle || 'Magic Archives').trim()}`.slice(0, 120);

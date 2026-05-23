@@ -319,6 +319,7 @@ type StressTestReport = {
     suspicion_points: StressFinding[];
     recommended_patches: StressPatch[];
     optional_script_adjustments: string[];
+    persona_reports?: unknown[];
 };
 
 type ColdReadingPhrases = {

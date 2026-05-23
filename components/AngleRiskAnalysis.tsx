@@ -1197,7 +1197,7 @@ ${routineSteps.trim()}` : null,
                         )
                       })}
 
-                      {(decoratedOutput?.questionsItems.length > 0) && renderPanel({
+                      {((decoratedOutput?.questionsItems?.length ?? 0) > 0) && renderPanel({
                         keyName: 'refinement-questions',
                         title: 'Refinement Questions',
                         subtitle: 'Answer a question below to sharpen the next analysis pass.',
@@ -1213,7 +1213,7 @@ ${routineSteps.trim()}` : null,
                               </button>
                             </div>
                             <ol className="list-decimal space-y-2 pl-5 text-sm text-white/80">
-                              {decoratedOutput.questionsItems.slice(0, 8).map((q, i) => (
+                              {(decoratedOutput?.questionsItems ?? []).slice(0, 8).map((q, i) => (
                                 <li key={`${i}-${q.slice(0, 12)}`} className="leading-relaxed">{q}</li>
                               ))}
                             </ol>

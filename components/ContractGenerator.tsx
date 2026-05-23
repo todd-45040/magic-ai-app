@@ -31,7 +31,16 @@ interface ContractGeneratorProps {
     onIdeaSaved: () => void;
 }
 
-type ContractSections = Required<NonNullable<Show['contract']>>;
+type ContractSections = {
+    performanceDetails: string;
+    paymentTerms: string;
+    technicalRequirements: string;
+    cancellationPolicy: string;
+    forceMajeure: string;
+    signatureBlock: string;
+    generatedAt?: number;
+    clientId?: string;
+};
 
 type PreviewContract = {
     performerName: string;
@@ -805,7 +814,7 @@ Guidelines:
     };
 
     const updateSection = (key: keyof ContractSections, value: string) => {
-        setResult((prev) => (prev ? { ...prev, [key]: value } : prev));
+        setResult((prev: ContractSections | null) => (prev ? { ...prev, [key]: value } : prev));
     };
 
     return (
@@ -1547,7 +1556,7 @@ const IntegrationHintsCard: React.FC<{ selectedShow: Show | null; selectedClient
     </CardShell>
 );
 
-const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?: boolean; className?: string; children: React.ReactNode }> = ({ onClick, disabled, primary, className, children }) => (
+const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?: boolean; className?: string; children: React.ReactNode }> = ({ onClick, disabled, primary, className = '', children }) => (
     <button
         onClick={onClick}
         disabled={disabled}
@@ -1555,7 +1564,7 @@ const ActionButton: React.FC<{ onClick: () => void; disabled?: boolean; primary?
             primary
                 ? 'border border-purple-400/25 bg-purple-600 text-white hover:bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.22)] disabled:border-white/10 disabled:bg-slate-700 disabled:shadow-none'
                 : 'border border-white/10 bg-slate-900/70 text-slate-200 hover:bg-slate-800 disabled:bg-slate-800/60 disabled:text-slate-500'
-        } disabled:cursor-not-allowed`}
+        } disabled:cursor-not-allowed ${className}`}
     >
         {children}
     </button>
