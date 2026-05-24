@@ -198,7 +198,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     savePromptLoggedRef.current = true;
     void logEvent('guided_creator_save_prompt_seen', {
       path: selectedPath.id,
-      version: 'phase_5',
+      version: 'phase_7',
       result_title: generatedResult.title,
       elapsed_ms: Date.now() - sessionStartedAtRef.current,
     });
@@ -208,7 +208,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     if (hasLoggedViewRef.current) return;
     hasLoggedViewRef.current = true;
     sessionStartedAtRef.current = Date.now();
-    void logEvent('guided_creator_viewed', { entry: 'guided_creator_session', version: 'phase_5' });
+    void logEvent('guided_creator_viewed', { entry: 'guided_creator_session', version: 'phase_7' });
   }, []);
 
   const handlePathSelect = (path: GuidedCreatorPath) => {
@@ -224,7 +224,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setSaveState('idle');
     setSavedGuidedIdea(null);
     savePromptLoggedRef.current = false;
-    void logEvent('guided_creator_path_selected', { path, entry: 'guided_creator_session', version: 'phase_5' });
+    void logEvent('guided_creator_path_selected', { path, entry: 'guided_creator_session', version: 'phase_7' });
     onPathSelect?.(path);
   };
 
@@ -238,7 +238,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       return;
     }
     setGenerationError(null);
-    void logEvent('guided_creator_step_completed', { path: selectedPath.id, step_id: currentStep.id, step_number: currentStepIndex + 1, total_question_steps: selectedPath.steps.length, version: 'phase_5' });
+    void logEvent('guided_creator_step_completed', { path: selectedPath.id, step_id: currentStep.id, step_number: currentStepIndex + 1, total_question_steps: selectedPath.steps.length, version: 'phase_7' });
     setCurrentStepIndex((previous) => previous + 1);
   };
 
@@ -262,7 +262,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setGeneratedResult(null);
     setSavedGuidedIdea(null);
     setActionStatus('idle');
-    void logEvent('guided_creator_generation_started', { path: selectedPath.id, version: 'phase_5', service: 'geminiService.generateStructuredResponse' });
+    void logEvent('guided_creator_generation_started', { path: selectedPath.id, version: 'phase_7', service: 'geminiService.generateStructuredResponse' });
 
     try {
       const structured = await generateStructuredResponse(
@@ -274,12 +274,12 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       );
       const result = normalizeResult(structured, selectedPath, answers);
       setGeneratedResult(result);
-      void logEvent('guided_creator_generation_completed', { path: selectedPath.id, version: 'phase_5', result_title: result.title });
+      void logEvent('guided_creator_generation_completed', { path: selectedPath.id, version: 'phase_7', result_title: result.title });
       onComplete?.(selectedPath.id);
     } catch (error) {
       const message = normalizeAiUserFacingError(error);
       setGenerationError(message);
-      void logEvent('guided_creator_generation_failed', { path: selectedPath.id, error: message, version: 'phase_5' });
+      void logEvent('guided_creator_generation_failed', { path: selectedPath.id, error: message, version: 'phase_7' });
     } finally {
       setIsGenerating(false);
     }
@@ -335,10 +335,10 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
         result: generatedResult,
         answers,
       });
-      void logEvent('guided_creator_result_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, elapsed_ms: elapsedMs });
+      void logEvent('guided_creator_result_saved', { path: selectedPath.id, version: 'phase_7', title: generatedResult.title, elapsed_ms: elapsedMs });
       if (existingIdeaCount === 0) {
-        void logEvent('guided_creator_first_idea_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, time_to_first_save_ms: elapsedMs });
-        void logEvent('time_to_first_save', { source: 'guided_creator', path: selectedPath.id, elapsed_ms: elapsedMs, version: 'phase_5' });
+        void logEvent('guided_creator_first_idea_saved', { path: selectedPath.id, version: 'phase_7', title: generatedResult.title, time_to_first_save_ms: elapsedMs });
+        void logEvent('time_to_first_save', { source: 'guided_creator', path: selectedPath.id, elapsed_ms: elapsedMs, version: 'phase_7' });
       }
     } catch (error) {
       setSaveState('idle');
@@ -408,7 +408,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setGeneratedResult(null);
     setGenerationError(null);
     setActionStatus('idle');
-    void logEvent('guided_creator_refine_clicked', { path: selectedPath?.id || 'unknown', version: 'phase_5' });
+    void logEvent('guided_creator_refine_clicked', { path: selectedPath?.id || 'unknown', version: 'phase_7' });
   };
 
   const renderStepInput = () => {
@@ -424,15 +424,15 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     <>
       <div className="mx-auto max-w-3xl text-center">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.35em] text-yellow-300/80">Guided Creator Session</p>
-        <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl">Welcome to Magic AI Wizard.</h1>
+        <h1 className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-violet-400 bg-clip-text text-4xl font-black tracking-tight text-transparent drop-shadow-[0_0_24px_rgba(168,85,247,0.28)] sm:text-5xl lg:text-6xl">Welcome to Magic AI Wizard.</h1>
         <p className="mt-5 text-xl text-slate-200 sm:text-2xl">Let’s create something together.</p>
         <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">Choose one starting point. The next step will stay focused, collaborative, and simple.</p>
-        {onSkip && <button type="button" onClick={onSkip} className="mt-6 text-sm font-medium text-slate-400 underline decoration-slate-600 underline-offset-4 transition-colors hover:text-slate-200 hover:decoration-slate-300">Skip to dashboard</button>}
+        {onSkip && <button type="button" onClick={onSkip} className="mt-6 text-sm font-medium text-purple-200 underline decoration-purple-400/50 underline-offset-4 transition-colors hover:text-purple-100 hover:decoration-purple-200">Skip to dashboard</button>}
       </div>
       <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
         {guidedCreatorPaths.map((path) => {
           const Icon = path.icon;
-          return <button key={path.id} type="button" onClick={() => handlePathSelect(path.id)} className="group flex h-full flex-col rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-left shadow-2xl shadow-black/20 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-yellow-300/50 hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-yellow-300/50"><span className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-yellow-300/20 bg-yellow-300/10 text-yellow-200 transition-colors group-hover:border-yellow-300/50 group-hover:bg-yellow-300/20"><Icon className="h-7 w-7" /></span><span className="text-xl font-bold text-yellow-100">{path.title}</span><span className="mt-3 text-sm leading-6 text-slate-300">{path.description}</span><span className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-slate-500 group-hover:text-slate-400">{path.helperText}</span></button>;
+          return <button key={path.id} type="button" onClick={() => handlePathSelect(path.id)} className="group flex h-full flex-col rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-left shadow-2xl shadow-black/20 backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:border-purple-300/60 hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-purple-300/50"><span className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-purple-300/30 bg-purple-500/15 text-purple-200 transition-colors group-hover:border-purple-300/60 group-hover:bg-purple-500/25"><Icon className="h-7 w-7" /></span><span className="text-xl font-bold text-yellow-100">{path.title}</span><span className="mt-3 text-sm leading-6 text-slate-300">{path.description}</span><span className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-slate-500 group-hover:text-slate-400">{path.helperText}</span></button>;
         })}
       </div>
     </>
@@ -536,9 +536,9 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
 
   return (
     <main className="relative min-h-[calc(100vh-5rem)] overflow-hidden bg-slate-950 text-white">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.22),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(234,179,8,0.16),transparent_34%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.22),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(124,58,237,0.14),transparent_34%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-300/40 to-transparent" />
-      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col justify-center px-4 py-12 sm:px-6 lg:px-8">{selectedPath ? renderWizard() : renderPathCards()}</section>
+      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl flex-col justify-start px-4 pb-16 pt-14 sm:px-6 sm:pt-16 lg:px-8 lg:pt-20">{selectedPath ? renderWizard() : renderPathCards()}</section>
     </main>
   );
 }
