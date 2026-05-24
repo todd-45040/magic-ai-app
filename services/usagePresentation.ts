@@ -37,10 +37,11 @@ export type NormalizedUsageSnapshot = {
 };
 
 function normalizePlan(membership?: string | null, user?: User | null) {
-  if (user && isActiveTrialUser(user)) return 'professional';
+  if (user && isActiveTrialUser(user)) return 'trial';
   if (membership === 'admin') return 'admin';
   if (membership === 'professional' || membership === 'semi-pro' || membership === 'performer') return 'professional';
   if (membership === 'amateur') return 'amateur';
+  if (membership === 'trial') return 'trial';
   return 'free';
 }
 
@@ -48,6 +49,7 @@ export function formatPlanLabel(plan: string) {
   if (plan === 'admin') return 'Admin';
   if (plan === 'professional') return 'Professional';
   if (plan === 'amateur') return 'Amateur';
+  if (plan === 'trial') return 'Trial';
   return 'Free';
 }
 
@@ -55,12 +57,14 @@ function getDailyAiLimitForPlan(plan: string) {
   if (plan === 'admin') return 10000;
   if (plan === 'professional') return 1000;
   if (plan === 'amateur') return 200;
+  if (plan === 'trial') return 50;
   return 20;
 }
 
 function getBurstLimitForPlan(plan: string) {
   if (plan === 'admin' || plan === 'professional') return 120;
   if (plan === 'amateur') return 60;
+  if (plan === 'trial') return 50;
   return 20;
 }
 
@@ -83,8 +87,31 @@ function buildRowFromUsage(key: string, label: string, usage: { used: number; li
   };
 }
 
-function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
+function buildImageRow(user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
+  const image = serverStatus?.quota?.image_gen;
+  const daily = image?.daily;
+  if (daily && typeof daily.limit === 'number' && !isLargePlaceholder(daily.limit)) {
+    return buildRowFromUsage('image_gen', 'Image Generation', {
+      used: Number(daily.used ?? 0),
+      limit: Number(daily.limit ?? 0),
+      remaining: Number(daily.remaining ?? Math.max(0, Number(daily.limit ?? 0) - Number(daily.used ?? 0))),
+    });
+  }
+  const localUsage = user ? getUsage(user, 'image') : { used: 0, limit: 0, remaining: 0 };
+  return buildRowFromUsage('image_gen', 'Image Generation', localUsage);
+}
+
+function buildIdentifyRow(user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
   const identify = serverStatus?.quota?.identify;
+  const daily = identify?.daily;
+  if (daily && typeof daily.limit === 'number' && !isLargePlaceholder(daily.limit)) {
+    return buildRowFromUsage('identify', 'Identify a Trick', {
+      used: Number(daily.used ?? 0),
+      limit: Number(daily.limit ?? 0),
+      remaining: Number(daily.remaining ?? Math.max(0, Number(daily.limit ?? 0) - Number(daily.used ?? 0))),
+    });
+  }
+
   if (identify && typeof identify.limit === 'number' && typeof identify.remaining === 'number' && !isLargePlaceholder(identify.limit)) {
     const used = Math.max(0, Number(identify.limit) - Number(identify.remaining));
     return {
@@ -99,14 +126,10 @@ function buildIdentifyRow(serverStatus?: UsageStatus | null): ToolUsageRow {
     };
   }
 
-  return {
-    key: 'identify',
-    label: 'Identify a Trick',
-    period: 'untracked',
-    summary: 'Not tracked yet',
-    detail: 'Usage tracking coming soon',
-  };
+  const localUsage = user ? getUsage(user, 'identify') : { used: 0, limit: 0, remaining: 0 };
+  return buildRowFromUsage('identify', 'Identify a Trick', localUsage);
 }
+
 
 function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
   const quota = serverStatus?.quota?.video_uploads;
@@ -130,7 +153,7 @@ function buildVideoRow(plan: string, user?: User | null, serverStatus?: UsageSta
 }
 
 export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: UsageStatus | null): NormalizedUsageSnapshot {
-  const plan = normalizePlan(serverStatus?.membership ?? user?.membership);
+  const plan = normalizePlan(serverStatus?.membership ?? user?.membership, user);
   const planLabel = formatPlanLabel(plan);
 
   const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
@@ -140,8 +163,6 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
   const burstRemaining = Number(serverStatus?.burstRemaining ?? burstLimit);
 
   const liveUsage = user ? getUsage(user, 'live_minutes') : { used: 0, limit: 0, remaining: 0 };
-  const imageUsage = user ? getUsage(user, 'image') : { used: 0, limit: 0, remaining: 0 };
-
   const liveHeader = {
     used: Number(serverStatus?.liveUsed ?? serverStatus?.quota?.live_audio_minutes?.daily?.used ?? liveUsage.used),
     limit: Number(serverStatus?.liveLimit ?? serverStatus?.quota?.live_audio_minutes?.daily?.limit ?? liveUsage.limit),
@@ -150,8 +171,8 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
 
   const toolRows: ToolUsageRow[] = [
     buildRowFromUsage('live_audio_minutes', 'Live Rehearsal (Audio)', liveHeader, 'min'),
-    buildRowFromUsage('image_gen', 'Image Generation', imageUsage),
-    buildIdentifyRow(serverStatus),
+    buildImageRow(user, serverStatus),
+    buildIdentifyRow(user, serverStatus),
     buildVideoRow(plan, user, serverStatus),
   ];
 

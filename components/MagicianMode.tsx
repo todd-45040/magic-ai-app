@@ -3122,6 +3122,7 @@ useEffect(() => {
       if (tier === 'amateur') return 'amateur';
       if (tier === 'expired') return 'expired';
       if (tier === 'free') return 'free';
+      if (isActiveTrialUser(user)) return 'trial';
       return 'trial';
     };
 
@@ -3129,6 +3130,7 @@ useEffect(() => {
       if (plan === 'admin') return 10000;
       if (plan === 'professional') return 1000;
       if (plan === 'amateur') return 200;
+      if (plan === 'trial') return 50;
       if (plan === 'expired') return 0;
       return 20;
     };
@@ -3137,6 +3139,7 @@ useEffect(() => {
       if (plan === 'admin') return 120;
       if (plan === 'professional') return 120;
       if (plan === 'amateur') return 60;
+      if (plan === 'trial') return 50;
       if (plan === 'expired') return 0;
       return 20;
     };
@@ -3168,10 +3171,10 @@ useEffect(() => {
       }
       if (plan === 'trial') {
         return {
-          live_audio_minutes: { limit: 20, remaining: 20, dailyLimit: 20, hidden: false },
-          image_gen: { limit: 2, remaining: 2, hidden: false },
-          identify: { limit: 10, remaining: 10, hidden: false },
-          video_uploads: { limit: 1, remaining: 1, dailyLimit: 1, hidden: false },
+          live_audio_minutes: { limit: 300, remaining: 300, dailyLimit: 60, hidden: false },
+          image_gen: { limit: 30, remaining: 30, dailyLimit: 3, hidden: false },
+          identify: { limit: 40, remaining: 40, dailyLimit: 6, hidden: false },
+          video_uploads: { limit: 20, remaining: 20, dailyLimit: 2, hidden: false },
         };
       }
       if (plan === 'free') {
@@ -3199,7 +3202,7 @@ useEffect(() => {
     };
 
     const buildUsageSnapshot = (serverStatus?: UsageStatus | null) => {
-      const plan = user?.isAdmin ? 'admin' : (effectiveTier === 'professional' ? 'professional' : normalizePlan(serverStatus?.membership));
+      const plan = user?.isAdmin ? 'admin' : normalizePlan(serverStatus?.membership);
       const dailyAiLimit = Number(serverStatus?.limit ?? getDailyAiLimitForPlan(plan));
       const dailyAiUsed = Number(serverStatus?.used ?? user?.generationCount ?? 0);
       const dailyAiRemaining = Number(serverStatus?.remaining ?? Math.max(0, dailyAiLimit - dailyAiUsed));
@@ -3246,9 +3249,9 @@ useEffect(() => {
             limit: Number(imageQuota.limit ?? imageUsage.limit),
             hidden: defaults.image_gen.hidden || imageAccess.state === 'locked',
             daily: {
-              used: imageUsage.used,
-              limit: imageUsage.limit,
-              remaining: imageUsage.remaining,
+              used: Number((imageQuota as any)?.daily?.used ?? imageUsage.used),
+              limit: Number((imageQuota as any)?.daily?.limit ?? imageUsage.limit),
+              remaining: Number((imageQuota as any)?.daily?.remaining ?? imageUsage.remaining),
             },
           },
           identify: {

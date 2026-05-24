@@ -131,11 +131,11 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
             <>
               <div className="text-[12px] text-slate-400">
                 Daily: <span className="tabular-nums text-slate-300">{daily.used}</span> / <span className="tabular-nums">{daily.limit}</span>{opts?.unit ? ` ${opts.unit}` : ''}
-                {key === 'image_gen' && monthlyRemaining !== null && typeof limit === 'number' ? (
+                {(key === 'image_gen' || key === 'identify') && monthlyRemaining !== null && typeof limit === 'number' ? (
                   <span className="ml-2 text-slate-500">• {plan === 'trial' ? 'Trial remaining' : 'Monthly remaining'}: <span className="tabular-nums text-slate-300">{monthlyRemaining}</span> / <span className="tabular-nums">{limit}</span></span>
                 ) : null}
               </div>
-              {(key === 'live_audio_minutes' || key === 'image_gen') && progressPct !== null && (
+              {(key === 'live_audio_minutes' || key === 'image_gen' || key === 'identify') && progressPct !== null && (
                 <div className="h-1.5 max-w-[400px] rounded-full bg-black/20 overflow-hidden border border-white/5">
                   <div className="h-full bg-white/20" style={{ width: `${progressPct}%` }} aria-hidden="true" />
                 </div>

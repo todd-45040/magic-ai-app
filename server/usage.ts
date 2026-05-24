@@ -975,6 +975,16 @@ if (profile) {
   const dailyVideoLimit = clampInt(getDailyVideoUploadLimit(tier));
   const dailyVideoRemaining = Math.max(0, dailyVideoLimit - dailyVideoUsed);
 
+  const dailyImageLimit = clampInt(getDailyMeteredToolLimit(tier, 'image_generation') ?? 0);
+  const dailyImageGenerationUsed = await getChargedToolRequestsToday(admin, userId, 'image_generation');
+  const dailyVisualBrainstormUsed = await getChargedToolRequestsToday(admin, userId, 'visual_brainstorm');
+  const dailyImageUsed = dailyImageGenerationUsed + dailyVisualBrainstormUsed;
+  const dailyImageRemaining = Math.max(0, dailyImageLimit - dailyImageUsed);
+
+  const dailyIdentifyLimit = clampInt(getDailyMeteredToolLimit(tier, 'identify_trick') ?? 0);
+  const dailyIdentifyUsed = await getChargedToolUnitsToday(admin, userId, 'identify_trick');
+  const dailyIdentifyRemaining = Math.max(0, dailyIdentifyLimit - dailyIdentifyUsed);
+
   return {
     ok: true,
     membership: tier as any,
@@ -996,8 +1006,16 @@ if (profile) {
         limit: monthlyDefaults.quota_live_audio_minutes,
         daily: { used: dailyLiveUsed, limit: dailyLiveLimit, remaining: dailyLiveRemaining },
       },
-      image_gen: { remaining: profile?.quota_image_gen ?? null, limit: monthlyDefaults.quota_image_gen },
-      identify: { remaining: profile?.quota_identify ?? null, limit: monthlyDefaults.quota_identify },
+      image_gen: {
+        remaining: profile?.quota_image_gen ?? null,
+        limit: monthlyDefaults.quota_image_gen,
+        daily: { used: dailyImageUsed, limit: dailyImageLimit, remaining: dailyImageRemaining },
+      },
+      identify: {
+        remaining: profile?.quota_identify ?? null,
+        limit: monthlyDefaults.quota_identify,
+        daily: { used: dailyIdentifyUsed, limit: dailyIdentifyLimit, remaining: dailyIdentifyRemaining },
+      },
       video_uploads: {
         remaining: profile?.quota_video_uploads ?? null,
         limit: monthlyDefaults.quota_video_uploads,
