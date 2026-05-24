@@ -424,7 +424,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     <>
       <div className="mx-auto max-w-3xl text-center">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.35em] text-yellow-300/80">Guided Creator Session</p>
-        <h1 className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-violet-400 bg-clip-text text-4xl font-black tracking-tight text-transparent drop-shadow-[0_0_24px_rgba(168,85,247,0.28)] sm:text-5xl md:text-5xl md:text-6xl font-bold whitespace-nowrap leading-tight tracking-tight whitespace-nowrap">Magicians' AI Wizard.</h1>
+        <h1 className="bg-gradient-to-r from-fuchsia-300 via-purple-300 to-violet-400 bg-clip-text text-4xl font-black tracking-tight text-transparent drop-shadow-[0_0_24px_rgba(168,85,247,0.28)] sm:text-5xl md:text-5xl md:text-6xl font-bold whitespace-nowrap leading-tight tracking-tight whitespace-nowrap">Magicians' AI Wizard</h1>
         <p className="mt-5 text-xl text-slate-200 sm:text-2xl">Let’s create something together.</p>
         <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">Choose one starting point. The next step will stay focused, collaborative, and simple.</p>
         {onSkip && <button type="button" onClick={onSkip} className="mt-6 text-sm font-medium text-purple-200 underline decoration-purple-400/50 underline-offset-4 transition-colors hover:text-purple-100 hover:decoration-purple-200">Skip to dashboard</button>}
