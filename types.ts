@@ -438,6 +438,7 @@ export type MagicianTab =
 export type MagicianView =
   | MagicianTab
   | 'assistant-home'
+  | 'guided-creator'
   | 'live-rehearsal'
   | 'visual-brainstorm'
   | 'saved-ideas'

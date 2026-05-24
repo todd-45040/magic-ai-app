@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { FileTextIcon, StageCurtainsIcon, WandIcon } from './icons';
 import { logEvent } from '../services/analyticsService';
 
-type GuidedCreatorPath = 'new-effect' | 'improve-patter' | 'prepare-performance';
+export type GuidedCreatorPath = 'new-effect' | 'improve-patter' | 'prepare-performance';
 
 type GuidedCreatorPathCard = {
   id: GuidedCreatorPath;
@@ -12,8 +12,9 @@ type GuidedCreatorPathCard = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-type GuidedCreatorSessionProps = {
+export type GuidedCreatorSessionProps = {
   onPathSelect?: (path: GuidedCreatorPath) => void;
+  onSkip?: () => void;
 };
 
 const guidedCreatorPaths: GuidedCreatorPathCard[] = [
@@ -40,7 +41,7 @@ const guidedCreatorPaths: GuidedCreatorPathCard[] = [
   },
 ];
 
-export default function GuidedCreatorSession({ onPathSelect }: GuidedCreatorSessionProps) {
+export default function GuidedCreatorSession({ onPathSelect, onSkip }: GuidedCreatorSessionProps) {
   const hasLoggedViewRef = useRef(false);
 
   useEffect(() => {
@@ -80,6 +81,15 @@ export default function GuidedCreatorSession({ onPathSelect }: GuidedCreatorSess
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">
             Choose one starting point. The next step will stay focused, collaborative, and simple.
           </p>
+          {onSkip && (
+            <button
+              type="button"
+              onClick={onSkip}
+              className="mt-6 text-sm font-medium text-slate-400 underline decoration-slate-600 underline-offset-4 transition-colors hover:text-slate-200 hover:decoration-slate-300"
+            >
+              Skip to dashboard
+            </button>
+          )}
         </div>
 
         <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">

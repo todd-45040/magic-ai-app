@@ -61,6 +61,7 @@ import MagicDictionary from './MagicDictionary';
 import AdminPanel from './AdminPanel';
 import AppSuggestionModal from './AppSuggestionModal';
 import BillingSettings from './BillingSettings';
+import GuidedCreatorSession, { type GuidedCreatorPath } from './GuidedCreatorSession';
 import type { BillingCycle } from '../services/planCatalog';
 import TrialConversionBanner from './TrialConversionBanner';
 import TrialCountdownCard from './TrialCountdownCard';
@@ -2719,6 +2720,7 @@ interface MagicianModeProps {
 
 const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'dashboard': 'chat',
+    'guided-creator': 'chat',
     'assistant-home': 'chat',
     'chat': 'chat',
     'live-rehearsal': 'chat',
@@ -2761,6 +2763,7 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
 
 const MAGICIAN_STORAGE_key = 'magician_chat_history';
 const MAGICIAN_VIEW_STORAGE_KEY = 'magician_active_view';
+const GUIDED_CREATOR_DISMISSED_KEY = 'maw_guided_creator_dismissed';
 
 const createChatMessage = (role: 'user' | 'model', text: string): ChatMessage => ({
     id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -2883,6 +2886,7 @@ useEffect(() => {
 
       const validViews: MagicianView[] = [
         'dashboard',
+        'guided-creator',
         'chat',
         'show-planner',
         'effect-generator',
@@ -2963,6 +2967,59 @@ useEffect(() => {
   window.addEventListener('maw:go-dashboard', handler as any);
   return () => window.removeEventListener('maw:go-dashboard', handler as any);
 }, []);
+
+  useEffect(() => {
+    if (isDemoMode || user?.isAdmin) return;
+    if (activeView !== 'dashboard') return;
+
+    const hasSavedIdeas = Array.isArray(ideas) && ideas.length > 0;
+    if (hasSavedIdeas) return;
+
+    try {
+      if (localStorage.getItem(GUIDED_CREATOR_DISMISSED_KEY) === 'true') return;
+    } catch {
+      // If localStorage is unavailable, do not force the guided route.
+      return;
+    }
+
+    setActiveView('guided-creator');
+  }, [activeView, ideas, isDemoMode, user?.isAdmin]);
+
+  const markGuidedCreatorDismissed = () => {
+    try { localStorage.setItem(GUIDED_CREATOR_DISMISSED_KEY, 'true'); } catch {}
+  };
+
+  const handleStartGuidedCreator = () => {
+    try { localStorage.removeItem(GUIDED_CREATOR_DISMISSED_KEY); } catch {}
+    setActiveView('guided-creator');
+  };
+
+  const handleSkipGuidedCreator = () => {
+    markGuidedCreatorDismissed();
+    void logEvent('guided_creator_skipped', {
+      source: 'guided_creator_session',
+      active_view: activeView,
+      version: 'phase_2',
+    });
+    setActiveView('dashboard');
+  };
+
+  const handleGuidedCreatorPathSelect = (path: GuidedCreatorPath) => {
+    markGuidedCreatorDismissed();
+    void logEvent('guided_creator_completed', {
+      path,
+      source: 'guided_creator_session',
+      version: 'phase_2',
+    });
+
+    const pathToView: Record<GuidedCreatorPath, MagicianView> = {
+      'new-effect': 'effect-generator',
+      'improve-patter': 'patter-engine',
+      'prepare-performance': 'show-planner',
+    };
+
+    setActiveView(pathToView[path] || 'dashboard');
+  };
 
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -4543,6 +4600,13 @@ ${action.payload.content}`;
 
   const renderContent = () => {
     switch(activeView) {
+        case 'guided-creator':
+          return (
+            <GuidedCreatorSession
+              onPathSelect={handleGuidedCreatorPathSelect}
+              onSkip={handleSkipGuidedCreator}
+            />
+          );
         case 'dashboard': {
           if (intentWorkspaceOverride === 'rehearse' || intentWorkspaceOverride === 'manage') {
             return renderLockedIntentWorkspace(intentWorkspaceOverride);
@@ -4564,6 +4628,14 @@ ${action.payload.content}`;
               <p className="mt-4 mb-6 text-sm text-white/55">
                 Welcome back, {user.email ? user.email.split('@')[0] : 'magician'}.
               </p>
+              <button
+                type="button"
+                onClick={handleStartGuidedCreator}
+                className="inline-flex items-center gap-2 rounded-full border border-yellow-300/30 bg-yellow-300/10 px-4 py-2 text-sm font-semibold text-yellow-100 transition-colors hover:border-yellow-300/60 hover:bg-yellow-300/20"
+              >
+                <WandIcon className="h-4 w-4" />
+                Start Guided Creator Session
+              </button>
             </div>
 
             {/* Primary Action */}
