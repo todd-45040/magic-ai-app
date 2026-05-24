@@ -3259,6 +3259,14 @@ useEffect(() => {
               limit: Number((imageQuota as any)?.daily?.limit ?? imageUsage.limit),
               remaining: Number((imageQuota as any)?.daily?.remaining ?? imageUsage.remaining),
             },
+            // Preserve the server's event-ledger monthly usage values.
+            // Without this, UsageLimitsCard falls back to `limit - remaining`, which
+            // can invert legacy trial balances and show fresh users as 30/30 used.
+            monthly: {
+              used: Number((imageQuota as any)?.monthly?.used ?? Math.max(0, Number(imageQuota.limit ?? defaults.image_gen.limit) - Number(imageQuota.remaining ?? defaults.image_gen.remaining))),
+              limit: Number((imageQuota as any)?.monthly?.limit ?? imageQuota.limit ?? defaults.image_gen.limit),
+              remaining: Number((imageQuota as any)?.monthly?.remaining ?? imageQuota.remaining ?? defaults.image_gen.remaining),
+            },
           },
           identify: {
             remaining: normalizeTrialLegacyMonthlyRemaining(identifyQuota.remaining, identifyQuota.limit, defaults.identify.remaining),
@@ -3268,6 +3276,11 @@ useEffect(() => {
               used: Number((identifyQuota as any)?.daily?.used ?? identifyUsage.used),
               limit: Number((identifyQuota as any)?.daily?.limit ?? identifyUsage.limit),
               remaining: Number((identifyQuota as any)?.daily?.remaining ?? identifyUsage.remaining),
+            },
+            monthly: {
+              used: Number((identifyQuota as any)?.monthly?.used ?? Math.max(0, Number(identifyQuota.limit ?? defaults.identify.limit) - normalizeTrialLegacyMonthlyRemaining(identifyQuota.remaining, identifyQuota.limit, defaults.identify.remaining))),
+              limit: Number((identifyQuota as any)?.monthly?.limit ?? identifyQuota.limit ?? defaults.identify.limit),
+              remaining: Number((identifyQuota as any)?.monthly?.remaining ?? normalizeTrialLegacyMonthlyRemaining(identifyQuota.remaining, identifyQuota.limit, defaults.identify.remaining)),
             },
           },
           video_uploads: {
