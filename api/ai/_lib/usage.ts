@@ -745,8 +745,16 @@ export async function getAiUsageStatus(req: any): Promise<{
       limit?: number;
       daily?: { used: number; limit: number; remaining: number };
     };
-    image_gen: { remaining: number | null; limit?: number };
-    identify: { remaining: number | null; limit?: number };
+    image_gen: {
+      remaining: number | null;
+      limit?: number;
+      daily?: { used: number; limit: number; remaining: number };
+    };
+    identify: {
+      remaining: number | null;
+      limit?: number;
+      daily?: { used: number; limit: number; remaining: number };
+    };
     video_uploads: {
       remaining: number | null;
       limit?: number;
