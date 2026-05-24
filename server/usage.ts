@@ -176,6 +176,37 @@ async function getChargedToolUnitsToday(admin: any, userId: string, tool: ToolKe
   }
 }
 
+
+async function getChargedToolUnitsThisMonth(admin: any, userId: string, tools: ToolKey | ToolKey[], resetDateISO?: string | null): Promise<number> {
+  try {
+    const monthStart = resetDateISO ? new Date(resetDateISO) : new Date();
+    if (!resetDateISO || Number.isNaN(monthStart.getTime())) {
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+    }
+    const toolList = Array.isArray(tools) ? tools : [tools];
+    const { data, error } = await admin
+      .from('ai_usage_events')
+      .select('charged_units')
+      .eq('user_id', userId)
+      .in('tool', toolList)
+      .eq('outcome', 'SUCCESS_CHARGED')
+      .gte('occurred_at', monthStart.toISOString());
+
+    if (error) {
+      console.error('Monthly tool usage lookup error:', error);
+      return 0;
+    }
+
+    return Array.isArray(data)
+      ? data.reduce((sum, row) => sum + clampInt(row?.charged_units), 0)
+      : 0;
+  } catch (err) {
+    console.error('Monthly tool usage lookup failed:', err);
+    return 0;
+  }
+}
+
 function getDailyAiLimit(tier: string): number {
   return getUsageQuotaConfigForMembership(tier).dailyAiLimit;
 }
@@ -808,21 +839,25 @@ export async function getAiUsageStatus(req: any): Promise<{
       remaining: number | null;
       limit?: number;
       daily?: { used: number; limit: number; remaining: number };
+      monthly?: { used: number; limit: number; remaining: number };
     };
     image_gen: {
       remaining: number | null;
       limit?: number;
       daily?: { used: number; limit: number; remaining: number };
+      monthly?: { used: number; limit: number; remaining: number };
     };
     identify: {
       remaining: number | null;
       limit?: number;
       daily?: { used: number; limit: number; remaining: number };
+      monthly?: { used: number; limit: number; remaining: number };
     };
     video_uploads: {
       remaining: number | null;
       limit?: number;
       daily?: { used: number; limit: number; remaining: number };
+      monthly?: { used: number; limit: number; remaining: number };
     };
     resetAt: string | null;
     nextResetAt?: string | null;
@@ -1021,6 +1056,17 @@ if (profile) {
   const dailyIdentifyUsed = await getChargedToolUnitsToday(admin, userId, 'identify_trick');
   const dailyIdentifyRemaining = Math.max(0, dailyIdentifyLimit - dailyIdentifyUsed);
 
+  const quotaResetDateISO = profile?.quota_reset_date ? new Date(profile.quota_reset_date).toISOString() : null;
+  const monthlyImageRemaining = safeMonthlyRemainingForResponse(membership, profile, 'quota_image_gen', monthlyDefaults.quota_image_gen);
+  const monthlyIdentifyRemaining = safeMonthlyRemainingForResponse(membership, profile, 'quota_identify', monthlyDefaults.quota_identify);
+  const monthlyImageUsageFromEvents = await getChargedToolUnitsThisMonth(admin, userId, ['image_generation', 'visual_brainstorm'], quotaResetDateISO);
+  const monthlyIdentifyUsageFromEvents = await getChargedToolUnitsThisMonth(admin, userId, 'identify_trick', quotaResetDateISO);
+  // Display monthly usage as "used / limit" from the usage event ledger.
+  // Do not derive this from remaining balances: legacy trial rows can still hold
+  // old quota values, which made fresh users appear as `Monthly used: 30 / 30`.
+  const monthlyImageUsed = Math.min(monthlyDefaults.quota_image_gen, monthlyImageUsageFromEvents);
+  const monthlyIdentifyUsed = Math.min(monthlyDefaults.quota_identify, monthlyIdentifyUsageFromEvents);
+
   return {
     ok: true,
     membership: tier as any,
@@ -1043,14 +1089,16 @@ if (profile) {
         daily: { used: dailyLiveUsed, limit: dailyLiveLimit, remaining: dailyLiveRemaining },
       },
       image_gen: {
-        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_image_gen', monthlyDefaults.quota_image_gen),
+        remaining: monthlyImageRemaining,
         limit: monthlyDefaults.quota_image_gen,
         daily: { used: dailyImageUsed, limit: dailyImageLimit, remaining: dailyImageRemaining },
+        monthly: { used: monthlyImageUsed, limit: monthlyDefaults.quota_image_gen, remaining: Math.max(0, monthlyDefaults.quota_image_gen - monthlyImageUsed) },
       },
       identify: {
-        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_identify', monthlyDefaults.quota_identify),
+        remaining: monthlyIdentifyRemaining,
         limit: monthlyDefaults.quota_identify,
         daily: { used: dailyIdentifyUsed, limit: dailyIdentifyLimit, remaining: dailyIdentifyRemaining },
+        monthly: { used: monthlyIdentifyUsed, limit: monthlyDefaults.quota_identify, remaining: Math.max(0, monthlyDefaults.quota_identify - monthlyIdentifyUsed) },
       },
       video_uploads: {
         remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_video_uploads', monthlyDefaults.quota_video_uploads),

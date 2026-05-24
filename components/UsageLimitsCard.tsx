@@ -77,11 +77,17 @@ export default function UsageLimitsCard({ usageSnapshot, error, onRequestUpgrade
       : hasDaily
         ? Math.max(0, Number(daily.limit) - Number(daily.used))
         : null;
-    const monthlyRemaining = typeof remaining === 'number' ? Number(remaining) : null;
-    const monthlyLimit = typeof limit === 'number' ? Number(limit) : null;
-    const monthlyUsed = monthlyRemaining !== null && monthlyLimit !== null
-      ? Math.max(0, monthlyLimit - monthlyRemaining)
-      : null;
+    const monthlyRemaining = typeof node?.monthly?.remaining === 'number'
+      ? Number(node.monthly.remaining)
+      : (typeof remaining === 'number' ? Number(remaining) : null);
+    const monthlyLimit = typeof node?.monthly?.limit === 'number'
+      ? Number(node.monthly.limit)
+      : (typeof limit === 'number' ? Number(limit) : null);
+    const monthlyUsed = typeof node?.monthly?.used === 'number'
+      ? Number(node.monthly.used)
+      : monthlyRemaining !== null && monthlyLimit !== null
+        ? Math.max(0, monthlyLimit - monthlyRemaining)
+        : null;
 
     const display = (() => {
       if (locked) return '🔒 Pro';
