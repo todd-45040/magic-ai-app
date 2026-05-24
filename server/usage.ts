@@ -112,6 +112,70 @@ function getDailyVideoUploadLimit(tier: string): number {
   return getUsageQuotaConfigForMembership(tier).dailyToolLimits.video_uploads;
 }
 
+function getDailyMeteredToolLimit(tier: string, tool?: ToolKey | null): number | null {
+  const limits = getUsageQuotaConfigForMembership(tier).dailyToolLimits as any;
+  switch (tool) {
+    case 'image_generation':
+    case 'visual_brainstorm':
+      return Number(limits.image_generations ?? 0);
+    case 'identify_trick':
+      return Number(limits.identify_trick ?? 0);
+    default:
+      return null;
+  }
+}
+
+
+async function getChargedToolRequestsToday(admin: any, userId: string, tool: ToolKey): Promise<number> {
+  try {
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const { count, error } = await admin
+      .from('ai_usage_events')
+      .select('request_id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('tool', tool)
+      .eq('outcome', 'SUCCESS_CHARGED')
+      .gte('occurred_at', dayStart.toISOString());
+
+    if (error) {
+      console.error('Daily tool request lookup error:', error);
+      return 0;
+    }
+
+    return clampInt(count);
+  } catch (err) {
+    console.error('Daily tool request lookup failed:', err);
+    return 0;
+  }
+}
+
+async function getChargedToolUnitsToday(admin: any, userId: string, tool: ToolKey): Promise<number> {
+  try {
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const { data, error } = await admin
+      .from('ai_usage_events')
+      .select('charged_units')
+      .eq('user_id', userId)
+      .eq('tool', tool)
+      .eq('outcome', 'SUCCESS_CHARGED')
+      .gte('occurred_at', dayStart.toISOString());
+
+    if (error) {
+      console.error('Daily tool usage lookup error:', error);
+      return 0;
+    }
+
+    return Array.isArray(data)
+      ? data.reduce((sum, row) => sum + clampInt(row?.charged_units), 0)
+      : 0;
+  } catch (err) {
+    console.error('Daily tool usage lookup failed:', err);
+    return 0;
+  }
+}
+
 function getDailyAiLimit(tier: string): number {
   return getUsageQuotaConfigForMembership(tier).dailyAiLimit;
 }
@@ -161,7 +225,7 @@ function hasActivePaidStripe(profile: any): boolean {
 function resolveEffectiveMembership(profile: any): Membership {
   if (isUnlimitedAdmin(profile)) return 'admin';
   const raw = String(profile?.membership || 'free').trim();
-  if (raw === 'trial') return isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
+  if (raw === 'trial') return isTrialActive(profile?.trial_end_date) ? 'trial' : 'free';
   if (hasActivePaidStripe(profile)) {
     if (raw === 'amateur' || raw === 'performer' || raw === 'semi-pro') return 'amateur';
     return 'professional';
@@ -366,19 +430,35 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
   const defaults = defaultMonthlyQuotas(membership);
 
   if (!needsMonthlyReset(resetDateISO, now)) {
-    if (!shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
+    const activeTrialProfile = String(profile?.membership || '').trim() === 'trial' && isTrialActive(profile?.trial_end_date);
+    const activeTrialQuotaOverCap = activeTrialProfile && String(membership || '').trim() === 'trial' && (
+      clampInt(profile?.quota_live_audio_minutes) > defaults.quota_live_audio_minutes ||
+      clampInt(profile?.quota_image_gen) > defaults.quota_image_gen ||
+      clampInt(profile?.quota_identify) > defaults.quota_identify ||
+      clampInt(profile?.quota_video_uploads) > defaults.quota_video_uploads
+    );
 
-    const uplift: any = {};
-    if (clampInt(profile?.quota_live_audio_minutes) === clampInt(defaultMonthlyQuotas('free').quota_live_audio_minutes)) {
+    if (!activeTrialQuotaOverCap && !shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
+
+    const uplift: any = activeTrialQuotaOverCap
+      ? {
+          quota_live_audio_minutes: defaults.quota_live_audio_minutes,
+          quota_image_gen: defaults.quota_image_gen,
+          quota_identify: defaults.quota_identify,
+          quota_video_uploads: defaults.quota_video_uploads,
+        }
+      : {};
+
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_live_audio_minutes) === clampInt(defaultMonthlyQuotas('free').quota_live_audio_minutes)) {
       uplift.quota_live_audio_minutes = defaults.quota_live_audio_minutes;
     }
-    if (clampInt(profile?.quota_image_gen) === clampInt(defaultMonthlyQuotas('free').quota_image_gen)) {
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_image_gen) === clampInt(defaultMonthlyQuotas('free').quota_image_gen)) {
       uplift.quota_image_gen = defaults.quota_image_gen;
     }
-    if (clampInt(profile?.quota_identify) === clampInt(defaultMonthlyQuotas('free').quota_identify)) {
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_identify) === clampInt(defaultMonthlyQuotas('free').quota_identify)) {
       uplift.quota_identify = defaults.quota_identify;
     }
-    if (clampInt(profile?.quota_video_uploads) === clampInt(defaultMonthlyQuotas('free').quota_video_uploads)) {
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_video_uploads) === clampInt(defaultMonthlyQuotas('free').quota_video_uploads)) {
       uplift.quota_video_uploads = defaults.quota_video_uploads;
     }
 
@@ -801,7 +881,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
+      membership = isTrialActive(profile?.trial_end_date) ? 'trial' : 'free';
     }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
@@ -1182,7 +1262,7 @@ export async function enforceAiUsage(
   if (profile) {
     membership = (profile.is_admin ? 'admin' : (profile.membership as Membership)) || 'trial';
     if (normalizeTier(membership as any) === 'trial') {
-      membership = isTrialActive(profile?.trial_end_date) ? 'professional' : 'free';
+      membership = isTrialActive(profile?.trial_end_date) ? 'trial' : 'free';
     }
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
@@ -1235,6 +1315,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
   const policy = (TOOL_POLICIES as any)[toolKey] as ToolPolicy;
 
   const norm = normalizeTier(membership as any);
+  const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
 
   // Hard gate by tier (ex: video_rehearsal is pro-only)
   if (tierRank(norm) < tierRank(policy.minTier)) {
@@ -1267,6 +1348,50 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
     };
   }
 
+
+  const dailyToolLimit = getDailyMeteredToolLimit(norm, policy.key);
+  if (dailyToolLimit !== null && Number.isFinite(dailyToolLimit) && dailyToolLimit >= 0) {
+    const dailyUsed = policy.key === 'image_generation' || policy.key === 'visual_brainstorm'
+      ? await getChargedToolRequestsToday(admin, userId, policy.key)
+      : await getChargedToolUnitsToday(admin, userId, policy.key);
+    const dailyUnits = policy.key === 'image_generation' || policy.key === 'visual_brainstorm' ? 1 : units;
+
+    if (dailyUsed + dailyUnits > dailyToolLimit) {
+      await safeLogUsageEvent({
+        request_id: requestId,
+        actor_type: 'user',
+        user_id: userId,
+        identity_key: identity_key,
+        ip_hash,
+        tool: opts?.tool ?? null,
+        endpoint: req?.url ?? null,
+        outcome: 'BLOCKED_QUOTA',
+        http_status: 429,
+        error_code: 'USAGE_LIMIT_REACHED',
+        retryable: true,
+        units: costUnits,
+        charged_units: 0,
+        membership: norm,
+        user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+        estimated_cost_usd: 0,
+      });
+      await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'daily_limit', membership: norm, remainingDaily: Math.max(0, dailyToolLimit - dailyUsed), remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
+      return {
+        ok: false,
+        status: 429,
+        error: 'Daily quota exceeded for this tool.',
+        error_code: 'USAGE_LIMIT_REACHED',
+        retryable: true,
+        membership: norm as any,
+        remaining: Math.max(0, dailyToolLimit - dailyUsed),
+        limit: dailyToolLimit,
+        resetAt: nextResetAtISO(),
+        resetTz: RESET_TZ,
+        resetHourLocal: RESET_HOUR_LOCAL,
+      };
+    }
+  }
+
   // Ensure monthly quotas are initialized/reset (best-effort)
   if (profile) {
     profile = await ensureMonthlyQuotas(admin, userId, membership, profile);
@@ -1274,7 +1399,6 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   const col = policy.quotaColumn;
   const currentRemaining = Number((profile as any)?.[col] ?? 0);
-  const units = Number.isFinite(costUnits) ? Math.max(0, Math.ceil(costUnits)) : 0;
 
   if (currentRemaining < units) {
     await safeLogUsageEvent({

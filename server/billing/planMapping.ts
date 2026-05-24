@@ -50,6 +50,8 @@ export type UsageQuotaConfig = {
   };
   dailyToolLimits: {
     live_audio_minutes: number;
+    image_generations: number;
+    identify_trick: number;
     video_uploads: number;
   };
 };
@@ -202,6 +204,8 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
       },
       dailyToolLimits: {
         live_audio_minutes: 9999,
+        image_generations: 9999,
+        identify_trick: 9999,
         video_uploads: 9999,
       },
     };
@@ -219,6 +223,8 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
       },
       dailyToolLimits: {
         live_audio_minutes: 0,
+        image_generations: 0,
+        identify_trick: 0,
         video_uploads: 0,
       },
     };
@@ -226,17 +232,19 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
 
   if (planAlias === 'trial') {
     return {
-      dailyAiLimit: 10,
-      burstLimit: 10,
+      dailyAiLimit: 50,
+      burstLimit: 50,
       monthlyToolQuotas: {
         quota_live_audio_minutes: 300,
-        quota_image_gen: 2,
-        quota_identify: 10,
-        quota_video_uploads: 1,
+        quota_image_gen: 30,
+        quota_identify: 40,
+        quota_video_uploads: 20,
       },
       dailyToolLimits: {
-        live_audio_minutes: 10,
-        video_uploads: 1,
+        live_audio_minutes: 60,
+        image_generations: 3,
+        identify_trick: 6,
+        video_uploads: 2,
       },
     };
   }
@@ -271,6 +279,14 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
         billingPlanKey === 'professional' ? 60
         : billingPlanKey === 'amateur' ? 45
         : 10,
+      image_generations:
+        billingPlanKey === 'professional' ? 1000
+        : billingPlanKey === 'amateur' ? 20
+        : 0,
+      identify_trick:
+        billingPlanKey === 'professional' ? 1000
+        : billingPlanKey === 'amateur' ? 10
+        : 0,
       video_uploads:
         billingPlanKey === 'professional' ? 6
         : billingPlanKey === 'amateur' ? 1
