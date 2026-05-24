@@ -4600,9 +4600,13 @@ ${action.payload.content}`;
         case 'guided-creator':
           return (
             <GuidedCreatorSession
+              user={user}
               onPathSelect={handleGuidedCreatorPathSelect}
               onSkip={handleSkipGuidedCreator}
               onComplete={handleGuidedCreatorComplete}
+              onGoDashboard={() => setActiveView('dashboard')}
+              onOpenPatterEngine={() => setActiveView('patter-engine')}
+              onOpenShowPlanner={() => setActiveView('show-planner')}
             />
           );
         case 'dashboard': {
