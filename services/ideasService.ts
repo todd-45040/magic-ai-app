@@ -248,9 +248,9 @@ export async function saveIdea(
 ): Promise<SavedIdea> {
   const uid = await requireUserId();
 
-  const payload =
+  const payload: SaveIdeaInput =
     typeof a === 'string'
-      ? ({ type: a, content: b ?? '', title: c, tags: d } as const)
+      ? { type: a, content: b ?? '', title: c, tags: d }
       : a;
 
   await enforceSavedIdeaFriction(uid, payload.type);
