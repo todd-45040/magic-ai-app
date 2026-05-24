@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { User } from '../types';
+import type { AiSparkAction, SavedIdea, User } from '../types';
 import { generateStructuredResponse, normalizeAiUserFacingError } from '../services/geminiService';
+import { startGuidedCreatorPipeline, updatePipelineSession } from '../services/pipelineSessionService';
 import { CREATIVE_VAULT_TAG, GUIDED_CREATOR_VAULT_TAG, getSavedIdeaCount, saveIdea } from '../services/ideasService';
 import { logEvent } from '../services/analyticsService';
-import { CalendarIcon, CheckIcon, FileTextIcon, SaveIcon, StageCurtainsIcon, WandIcon } from './icons';
+import { CheckIcon, FileTextIcon, SaveIcon, StageCurtainsIcon, WandIcon } from './icons';
+import NextStepPanel from './NextStepPanel';
+import PipelineProgress from './PipelineProgress';
 import SaveActionBar from './shared/SaveActionBar';
 
 export type GuidedCreatorPath = 'new-effect' | 'improve-patter' | 'prepare-performance';
@@ -44,6 +47,7 @@ export type GuidedCreatorSessionProps = {
   onGoDashboard?: () => void;
   onOpenPatterEngine?: () => void;
   onOpenShowPlanner?: () => void;
+  onOpenLiveRehearsal?: () => void;
 };
 
 type GuidedCreatorAnswers = Record<string, string>;
@@ -170,7 +174,7 @@ const resultToSaveText = (path: GuidedCreatorPathCard, result: GuidedCreatorResu
   `Next Steps:\n${result.nextSteps.map((step) => `- ${step}`).join('\n')}`,
 ].join('\n');
 
-export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onComplete, onGoDashboard, onOpenPatterEngine, onOpenShowPlanner }: GuidedCreatorSessionProps) {
+export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onComplete, onGoDashboard, onOpenPatterEngine, onOpenShowPlanner, onOpenLiveRehearsal }: GuidedCreatorSessionProps) {
   const hasLoggedViewRef = useRef(false);
   const savePromptLoggedRef = useRef(false);
   const sessionStartedAtRef = useRef<number>(Date.now());
@@ -182,6 +186,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
   const [generatedResult, setGeneratedResult] = useState<GuidedCreatorResult | null>(null);
   const [actionStatus, setActionStatus] = useState<ActionStatus>('idle');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [savedGuidedIdea, setSavedGuidedIdea] = useState<SavedIdea | null>(null);
 
   const selectedPath = useMemo(() => guidedCreatorPaths.find((path) => path.id === selectedPathId) || null, [selectedPathId]);
   const currentStep = selectedPath?.steps[currentStepIndex];
@@ -214,8 +219,10 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setAnswers(buildInitialAnswers(nextPath));
     setGenerationError(null);
     setGeneratedResult(null);
+    setSavedGuidedIdea(null);
     setActionStatus('idle');
     setSaveState('idle');
+    setSavedGuidedIdea(null);
     savePromptLoggedRef.current = false;
     void logEvent('guided_creator_path_selected', { path, entry: 'guided_creator_session', version: 'phase_5' });
     onPathSelect?.(path);
@@ -242,6 +249,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       setGeneratedResult(null);
       setActionStatus('idle');
       setSaveState('idle');
+      setSavedGuidedIdea(null);
       return;
     }
     setCurrentStepIndex((previous) => previous - 1);
@@ -252,6 +260,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setIsGenerating(true);
     setGenerationError(null);
     setGeneratedResult(null);
+    setSavedGuidedIdea(null);
     setActionStatus('idle');
     void logEvent('guided_creator_generation_started', { path: selectedPath.id, version: 'phase_5', service: 'geminiService.generateStructuredResponse' });
 
@@ -301,7 +310,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
         createdAt: new Date().toISOString(),
       });
 
-      await saveIdea({
+      const savedIdea = await saveIdea({
         type: 'text',
         title: generatedResult.title,
         content,
@@ -317,6 +326,15 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
 
       setActionStatus('saved');
       setSaveState('saved');
+      setSavedGuidedIdea(savedIdea);
+      startGuidedCreatorPipeline({
+        path: selectedPath.id,
+        title: generatedResult.title,
+        summary: generatedResult.summary,
+        script: generatedResult.script,
+        result: generatedResult,
+        answers,
+      });
       void logEvent('guided_creator_result_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, elapsed_ms: elapsedMs });
       if (existingIdeaCount === 0) {
         void logEvent('guided_creator_first_idea_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, time_to_first_save_ms: elapsedMs });
@@ -341,9 +359,10 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     };
     try {
       localStorage.setItem(PATTER_ENGINE_PREFILL_KEY, JSON.stringify(payload));
+      updatePipelineSession('script', { title: generatedResult.title, script: generatedResult.script });
       setActionStatus('queued');
     } catch {}
-    void logEvent('guided_creator_send_to_patter', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title });
+    void logEvent('guided_creator_send_to_patter', { path: selectedPath.id, version: 'phase_6', title: generatedResult.title });
     onOpenPatterEngine?.();
   };
 
@@ -363,11 +382,27 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     };
     try {
       localStorage.setItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY, JSON.stringify(payload));
+      updatePipelineSession('show', { title: generatedResult.title, routine: payload });
       setActionStatus('queued');
     } catch {}
-    void logEvent('guided_creator_add_to_show_planner', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title });
+    void logEvent('guided_creator_add_to_show_planner', { path: selectedPath.id, version: 'phase_6', title: generatedResult.title });
     onOpenShowPlanner?.();
   };
+
+
+
+  const handleRehearseIt = () => {
+    if (!selectedPath || !generatedResult) return;
+    updatePipelineSession('routine', { title: generatedResult.title, script: generatedResult.script });
+    void logEvent('guided_creator_rehearse_it_clicked', { path: selectedPath.id, version: 'phase_6', title: generatedResult.title });
+    try {
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'live-rehearsal' } }));
+    } catch {}
+    onOpenLiveRehearsal?.();
+  };
+
+  const noopAiSpark = (_action: AiSparkAction) => {};
+  const noopPromote = (_idea: SavedIdea) => {};
 
   const handleRefine = () => {
     setGeneratedResult(null);
@@ -425,27 +460,45 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
           </div>
         </div>
         {actionStatus !== 'idle' && <p className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{actionStatus === 'saved' ? 'Saved to your Creative Vault.' : 'Queued for the next Magic AI Wizard tool.'}</p>}
-        <SaveActionBar
-          className="mt-6 border-yellow-300/25 bg-slate-950/55"
-          title="This is your activation moment."
-          subtitle="Save this to your Creative Vault so Magic AI Wizard can help you keep building it."
-          primary={{
-            label: 'Save this to your Creative Vault',
-            onClick: handleSaveIdea,
-            loading: saveState === 'saving',
-            disabled: saveState === 'saved',
-            icon: <SaveIcon className="h-4 w-4" />,
-          }}
-          saved={saveState === 'saved'}
-          savingLabel="Saving to your Creative Vault..."
-          savedLabel="Saved to your Creative Vault"
-          secondaryLeft={{ label: 'Generate patter', onClick: handleSendToPatter, icon: <FileTextIcon className="h-4 w-4" />, tone: 'secondary' }}
-          secondaryRight={{ label: 'Add to show planner', onClick: handleAddToShowPlanner, icon: <CalendarIcon className="h-4 w-4" />, tone: 'secondary' }}
-          utilities={[
-            { label: 'Refine this', onClick: handleRefine, icon: <WandIcon className="h-4 w-4" /> },
-            { label: 'Go to dashboard', onClick: onGoDashboard || (() => {}), disabled: !onGoDashboard },
-          ]}
-        />
+        {saveState === 'saved' && savedGuidedIdea ? (
+          <div className="mt-6 space-y-4">
+            <PipelineProgress compact />
+            <NextStepPanel
+              idea={savedGuidedIdea}
+              title={generatedResult.title}
+              body={resultToSaveText(selectedPath, generatedResult)}
+              source="guided_creator"
+              heading="Saved. Now choose one next step."
+              subheading="Magic AI Wizard will reveal only the next three useful actions so you can keep building without opening the full toolbox."
+              showRoutineShortcut={false}
+              onAiSpark={noopAiSpark}
+              onAddToShow={() => handleAddToShowPlanner()}
+              onPromoteToRoutine={noopPromote}
+              onWritePatter={() => handleSendToPatter()}
+              onRehearse={() => handleRehearseIt()}
+            />
+          </div>
+        ) : (
+          <SaveActionBar
+            className="mt-6 border-yellow-300/25 bg-slate-950/55"
+            title="This is your activation moment."
+            subtitle="Save this to your Creative Vault so Magic AI Wizard can help you keep building it."
+            primary={{
+              label: 'Save this to your Creative Vault',
+              onClick: handleSaveIdea,
+              loading: saveState === 'saving',
+              disabled: saveState === 'saved',
+              icon: <SaveIcon className="h-4 w-4" />,
+            }}
+            saved={saveState === 'saved'}
+            savingLabel="Saving to your Creative Vault..."
+            savedLabel="Saved to your Creative Vault"
+            utilities={[
+              { label: 'Refine this', onClick: handleRefine, icon: <WandIcon className="h-4 w-4" /> },
+              { label: 'Go to dashboard', onClick: onGoDashboard || (() => {}), disabled: !onGoDashboard },
+            ]}
+          />
+        )}
       </div>
     );
   };

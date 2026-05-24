@@ -1,7 +1,7 @@
 import { logEvent } from './analyticsService';
 
 export type PipelineStep = 'image' | 'effect' | 'script' | 'routine' | 'show';
-export type PipelineSourceType = 'image' | 'effect' | 'script' | 'routine' | 'manual';
+export type PipelineSourceType = 'image' | 'effect' | 'script' | 'routine' | 'manual' | 'guided_creator';
 
 export interface PipelineSession {
   id: string;
@@ -43,6 +43,7 @@ export function getPipelineSession(): PipelineSession | null {
 
 export function savePipelineSession(session: PipelineSession): PipelineSession {
   try { localStorage.setItem(PIPELINE_SESSION_KEY, JSON.stringify(session)); } catch {}
+  try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: session })); } catch {}
   return session;
 }
 
@@ -75,6 +76,39 @@ export function startPipelineSession(input: Partial<PipelineSession> & { sourceT
   appendHistory(session);
   void logEvent('pipeline_session_started', { session_id: session.id, source_type: session.sourceType, step: session.lastStep });
   return session;
+}
+
+
+export function startGuidedCreatorPipeline(input: {
+  path: string;
+  title: string;
+  summary?: string | null;
+  script?: string | null;
+  result?: any;
+  answers?: Record<string, string>;
+}): PipelineSession {
+  const normalizedPath = String(input.path || 'new-effect');
+  const firstStep: PipelineStep = normalizedPath === 'improve-patter'
+    ? 'script'
+    : normalizedPath === 'prepare-performance'
+      ? 'routine'
+      : 'effect';
+
+  return startPipelineSession({
+    sourceType: 'guided_creator',
+    lastStep: firstStep,
+    title: input.title || 'Guided Creator idea',
+    prompt: input.summary || null,
+    effect: {
+      source: 'guided_creator',
+      path: normalizedPath,
+      title: input.title,
+      summary: input.summary || null,
+      result: input.result || null,
+      answers: input.answers || {},
+    },
+    script: input.script || null,
+  });
 }
 
 export function updatePipelineSession(step: PipelineStep, patch: Partial<PipelineSession> = {}): PipelineSession {

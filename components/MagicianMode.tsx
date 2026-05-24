@@ -4607,6 +4607,7 @@ ${action.payload.content}`;
               onGoDashboard={() => setActiveView('dashboard')}
               onOpenPatterEngine={() => setActiveView('patter-engine')}
               onOpenShowPlanner={() => setActiveView('show-planner')}
+              onOpenLiveRehearsal={() => setActiveView('live-rehearsal')}
             />
           );
         case 'dashboard': {

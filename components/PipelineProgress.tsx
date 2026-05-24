@@ -31,6 +31,9 @@ const PipelineProgress: React.FC<PipelineProgressProps> = ({ currentStep, compac
   const active = currentStep || session?.lastStep || 'image';
   const activeIndex = STEPS.indexOf(active);
   const title = session?.title || 'Creative pipeline';
+  const helper = session?.sourceType === 'guided_creator'
+    ? 'Guided path: Effect → Script → Routine → Show'
+    : 'Keep moving: Image → Effect → Script → Routine → Show';
 
   return (
     <div className={`rounded-2xl border border-purple-400/20 bg-slate-950/50 ${compact ? 'p-3' : 'p-4'} shadow-lg shadow-purple-950/20`}>
@@ -39,7 +42,7 @@ const PipelineProgress: React.FC<PipelineProgressProps> = ({ currentStep, compac
           <div className="text-xs uppercase tracking-[0.2em] text-purple-200/70">Creative Pipeline</div>
           <div className="text-sm font-semibold text-white">{title}</div>
         </div>
-        <div className="text-xs text-slate-400">Keep moving: Image → Effect → Script → Routine → Show</div>
+        <div className="text-xs text-slate-400">{helper}</div>
       </div>
       <div className="mt-3 grid grid-cols-5 gap-2">
         {STEPS.map((step, index) => {

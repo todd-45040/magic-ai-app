@@ -9,14 +9,34 @@ interface NextStepPanelProps {
   onAiSpark: (action: AiSparkAction) => void;
   onAddToShow: (idea: SavedIdea) => void;
   onPromoteToRoutine: (idea: SavedIdea) => void;
+  source?: 'saved_ideas' | 'guided_creator';
+  heading?: string;
+  subheading?: string;
+  showRoutineShortcut?: boolean;
+  onWritePatter?: (idea: SavedIdea) => void;
+  onRehearse?: (idea: SavedIdea) => void;
 }
+
 
 const buildIdeaContext = (title: string, body: string) => {
   const trimmedBody = (body || '').trim();
   return `Routine idea: ${title || 'Saved Idea'}${trimmedBody ? `\n\n${trimmedBody.slice(0, 2400)}` : ''}`;
 };
 
-const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSpark, onAddToShow, onPromoteToRoutine }) => {
+const NextStepPanel: React.FC<NextStepPanelProps> = ({
+  idea,
+  title,
+  body,
+  onAiSpark,
+  onAddToShow,
+  onPromoteToRoutine,
+  source = 'saved_ideas',
+  heading = 'You created an effect. Now turn it into a performance.',
+  subheading,
+  showRoutineShortcut = true,
+  onWritePatter,
+  onRehearse,
+}) => {
   const ideaContext = buildIdeaContext(title, body);
 
   React.useEffect(() => {
@@ -24,9 +44,9 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       idea_id: idea?.id ?? null,
       idea_type: idea?.type ?? null,
       title: title || idea?.title || null,
-      source: 'saved_ideas',
+      source,
     });
-  }, [idea?.id]);
+  }, [idea?.id, source]);
 
   const lastTrackedActionRef = React.useRef<{ action: string; at: number } | null>(null);
 
@@ -44,7 +64,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       idea_id: idea?.id ?? null,
       idea_type: idea?.type ?? null,
       title: title || idea?.title || null,
-      source: 'saved_ideas',
+      source,
     });
   };
 
@@ -53,18 +73,19 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="text-xs font-bold uppercase tracking-[0.22em] text-amber-200/80">Next step</div>
-          <h3 className="mt-1 text-lg font-bold text-yellow-200">You created an effect. Now turn it into a performance.</h3>
+          <h3 className="mt-1 text-lg font-bold text-yellow-200">{heading}</h3>
           <p className="mt-1 text-sm leading-6 text-slate-300">
-            Continue building <span className="font-semibold text-purple-100">{title || 'this saved idea'}</span> while the creative momentum is still fresh.
+            {subheading || <>Continue building <span className="font-semibold text-purple-100">{title || 'this saved idea'}</span> while the creative momentum is still fresh.</>}
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[520px]">
           <button
             type="button"
-            onPointerDownCapture={() => trackNextStepClick('generate_patter')}
+            onPointerDownCapture={() => trackNextStepClick('write_patter_for_this')}
             onClick={() => {
-              trackNextStepClick('generate_patter');
+              trackNextStepClick('write_patter_for_this');
+              if (onWritePatter) { onWritePatter(idea); return; }
               onAiSpark({
               type: 'custom-prompt',
               payload: {
@@ -74,7 +95,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
             }}
             className="rounded-xl border border-purple-400/25 bg-purple-500/15 px-3 py-3 text-left transition hover:bg-purple-500/25 hover:text-white"
           >
-            <div className="text-sm font-bold text-purple-100">🎭 Generate Patter</div>
+            <div className="text-sm font-bold text-purple-100">🎭 Write patter for this</div>
             <div className="mt-1 text-xs leading-5 text-slate-300">Create a usable script from this idea.</div>
           </button>
 
@@ -83,6 +104,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
             onPointerDownCapture={() => trackNextStepClick('rehearse_this')}
             onClick={() => {
               trackNextStepClick('rehearse_this');
+              if (onRehearse) { onRehearse(idea); return; }
               try {
                 window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'live-rehearsal' } }));
               } catch {}
@@ -95,7 +117,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
             }}
             className="rounded-xl border border-blue-400/25 bg-blue-500/10 px-3 py-3 text-left transition hover:bg-blue-500/20 hover:text-white"
           >
-            <div className="text-sm font-bold text-blue-100">🎙️ Rehearse This</div>
+            <div className="text-sm font-bold text-blue-100">🎙️ Rehearse it</div>
             <div className="mt-1 text-xs leading-5 text-slate-300">Prepare a practice path before performance.</div>
           </button>
 
@@ -105,13 +127,13 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
             onClick={() => { trackNextStepClick('add_to_show'); onAddToShow(idea); }}
             className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-left transition hover:bg-emerald-500/20 hover:text-white"
           >
-            <div className="text-sm font-bold text-emerald-100">📋 Add to Show</div>
+            <div className="text-sm font-bold text-emerald-100">📋 Add it to a show</div>
             <div className="mt-1 text-xs leading-5 text-slate-300">Place it into an existing show plan.</div>
           </button>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
+      {showRoutineShortcut ? <div className="mt-3 flex flex-wrap gap-2 border-t border-white/10 pt-3">
         <button
           type="button"
           onPointerDownCapture={() => trackNextStepClick('start_new_routine')}
@@ -120,7 +142,7 @@ const NextStepPanel: React.FC<NextStepPanelProps> = ({ idea, title, body, onAiSp
         >
           Start a new routine from this idea
         </button>
-      </div>
+      </div> : null}
     </section>
   );
 };
