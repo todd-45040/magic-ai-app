@@ -60,7 +60,7 @@ const About: React.FC<AboutProps> = ({ onBack }) => {
       features: [
         'Rehearsal coaching: 10 minutes per day',
         '1 active show in Show Planner',
-        'Image Generation: 2 during trial',
+        'Image Generation: up to 6 images/day during trial',
         'Video Rehearsal: 1 upload during trial',
       ],
     },

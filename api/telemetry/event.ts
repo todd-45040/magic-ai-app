@@ -172,7 +172,11 @@ export default async function handler(req: any, res: any) {
       error_code: body.error_code ? String(body.error_code) : null,
       retryable: body.retryable != null ? Boolean(body.retryable) : null,
       units: Number.isFinite(Number(body.units)) ? Number(body.units) : null,
-      charged_units: null,
+      // Client-side tool telemetry is used by the usage panel for Visual Brainstorm
+      // image-unit counts. When the client marks an event SUCCESS_CHARGED, persist
+      // the same units as charged_units so daily/monthly image usage reflects
+      // actual images generated, not just request count.
+      charged_units: outcome === 'SUCCESS_CHARGED' && Number.isFinite(Number(body.units)) ? Number(body.units) : 0,
       membership: null,
       provider: null,
       model: null,

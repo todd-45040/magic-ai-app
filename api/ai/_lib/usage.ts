@@ -1001,8 +1001,8 @@ if (profile) {
   const dailyVideoRemaining = Math.max(0, dailyVideoLimit - dailyVideoUsed);
 
   const dailyImageLimit = clampInt(getDailyMeteredToolLimit(tier, 'image_generation') ?? 0);
-  const dailyImageGenerationUsed = await getChargedToolRequestsToday(admin, userId, 'image_generation');
-  const dailyVisualBrainstormUsed = await getChargedToolRequestsToday(admin, userId, 'visual_brainstorm');
+  const dailyImageGenerationUsed = await getChargedToolUnitsToday(admin, userId, 'image_generation');
+  const dailyVisualBrainstormUsed = await getChargedToolUnitsToday(admin, userId, 'visual_brainstorm');
   const dailyImageUsed = dailyImageGenerationUsed + dailyVisualBrainstormUsed;
   const dailyImageRemaining = Math.max(0, dailyImageLimit - dailyImageUsed);
 
@@ -1384,10 +1384,8 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
 
   const dailyToolLimit = getDailyMeteredToolLimit(norm, policy.key);
   if (dailyToolLimit !== null && Number.isFinite(dailyToolLimit) && dailyToolLimit >= 0) {
-    const dailyUsed = policy.key === 'image_generation' || policy.key === 'visual_brainstorm'
-      ? await getChargedToolRequestsToday(admin, userId, policy.key)
-      : await getChargedToolUnitsToday(admin, userId, policy.key);
-    const dailyUnits = policy.key === 'image_generation' || policy.key === 'visual_brainstorm' ? 1 : units;
+    const dailyUsed = await getChargedToolUnitsToday(admin, userId, policy.key);
+    const dailyUnits = units;
 
     if (dailyUsed + dailyUnits > dailyToolLimit) {
       await safeLogUsageEvent({

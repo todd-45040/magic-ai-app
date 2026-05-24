@@ -242,7 +242,7 @@ export function getUsageQuotaConfigForMembership(membership?: string | null): Us
       },
       dailyToolLimits: {
         live_audio_minutes: 60,
-        image_generations: 3,
+        image_generations: 6,
         identify_trick: 6,
         video_uploads: 2,
       },

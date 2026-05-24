@@ -3172,7 +3172,7 @@ useEffect(() => {
       if (plan === 'trial') {
         return {
           live_audio_minutes: { limit: 300, remaining: 300, dailyLimit: 60, hidden: false },
-          image_gen: { limit: 30, remaining: 30, dailyLimit: 3, hidden: false },
+          image_gen: { limit: 30, remaining: 30, dailyLimit: 6, hidden: false },
           identify: { limit: 40, remaining: 40, dailyLimit: 6, hidden: false },
           video_uploads: { limit: 20, remaining: 20, dailyLimit: 2, hidden: false },
         };
