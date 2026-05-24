@@ -3220,6 +3220,12 @@ useEffect(() => {
       const imageQuota = serverQuota.image_gen ?? {};
       const identifyQuota = serverQuota.identify ?? {};
       const videoQuota = serverQuota.video_uploads ?? {};
+      const normalizeTrialLegacyMonthlyRemaining = (remainingValue: unknown, limitValue: unknown, defaultRemaining: number) => {
+        const remainingNumber = Number(remainingValue ?? defaultRemaining);
+        const limitNumber = Number(limitValue ?? defaultRemaining);
+        if (plan === 'trial' && limitNumber === 40 && remainingNumber === 10) return 40;
+        return remainingNumber;
+      };
       const liveAccess = getToolAccess(user, 'LiveRehearsal');
       const imageAccess = getToolAccess(user, 'VisualBrainstorm');
       const identifyAccess = getToolAccess(user, 'IdentifyTrick');
@@ -3245,8 +3251,8 @@ useEffect(() => {
             },
           },
           image_gen: {
-            remaining: Number(imageQuota.remaining ?? imageUsage.remaining),
-            limit: Number(imageQuota.limit ?? imageUsage.limit),
+            remaining: Number(imageQuota.remaining ?? defaults.image_gen.remaining),
+            limit: Number(imageQuota.limit ?? defaults.image_gen.limit),
             hidden: defaults.image_gen.hidden || imageAccess.state === 'locked',
             daily: {
               used: Number((imageQuota as any)?.daily?.used ?? imageUsage.used),
@@ -3255,8 +3261,8 @@ useEffect(() => {
             },
           },
           identify: {
-            remaining: Number(identifyQuota.remaining ?? identifyUsage.remaining),
-            limit: Number(identifyQuota.limit ?? identifyUsage.limit),
+            remaining: normalizeTrialLegacyMonthlyRemaining(identifyQuota.remaining, identifyQuota.limit, defaults.identify.remaining),
+            limit: Number(identifyQuota.limit ?? defaults.identify.limit),
             hidden: defaults.identify.hidden || identifyAccess.state === 'locked',
             daily: {
               used: Number((identifyQuota as any)?.daily?.used ?? identifyUsage.used),

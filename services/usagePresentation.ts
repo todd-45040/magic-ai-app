@@ -101,7 +101,7 @@ function buildImageRow(user?: User | null, serverStatus?: UsageStatus | null): T
   return buildRowFromUsage('image_gen', 'Image Generation', localUsage);
 }
 
-function buildIdentifyRow(user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
+function buildIdentifyRow(plan: string, user?: User | null, serverStatus?: UsageStatus | null): ToolUsageRow {
   const identify = serverStatus?.quota?.identify;
   const daily = identify?.daily;
   if (daily && typeof daily.limit === 'number' && !isLargePlaceholder(daily.limit)) {
@@ -113,16 +113,20 @@ function buildIdentifyRow(user?: User | null, serverStatus?: UsageStatus | null)
   }
 
   if (identify && typeof identify.limit === 'number' && typeof identify.remaining === 'number' && !isLargePlaceholder(identify.limit)) {
-    const used = Math.max(0, Number(identify.limit) - Number(identify.remaining));
+    const limit = Number(identify.limit);
+    const remaining = plan === 'trial' && limit === 40 && Number(identify.remaining) === 10
+      ? 40
+      : Number(identify.remaining);
+    const used = Math.max(0, limit - remaining);
     return {
       key: 'identify',
       label: 'Identify a Trick',
       period: 'monthly',
       used,
-      limit: Number(identify.limit),
-      remaining: Number(identify.remaining),
-      summary: `${used} / ${Number(identify.limit)}`,
-      detail: `Monthly: ${used} / ${Number(identify.limit)}`,
+      limit,
+      remaining,
+      summary: `${used} / ${limit}`,
+      detail: `Monthly: ${used} / ${limit}`,
     };
   }
 
@@ -172,7 +176,7 @@ export function buildNormalizedUsageSnapshot(user?: User | null, serverStatus?: 
   const toolRows: ToolUsageRow[] = [
     buildRowFromUsage('live_audio_minutes', 'Live Rehearsal (Audio)', liveHeader, 'min'),
     buildImageRow(user, serverStatus),
-    buildIdentifyRow(user, serverStatus),
+    buildIdentifyRow(plan, user, serverStatus),
     buildVideoRow(plan, user, serverStatus),
   ];
 

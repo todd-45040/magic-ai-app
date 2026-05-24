@@ -390,15 +390,51 @@ function needsMonthlyReset(resetDateISO?: string | null, now = new Date()): bool
 function shouldUpliftLegacyFreeQuotas(membership: string, profile: any): boolean {
   const target = defaultMonthlyQuotas(membership);
   const freeDefaults = defaultMonthlyQuotas('free');
-  if ((target?.quota_image_gen ?? 0) <= (freeDefaults?.quota_image_gen ?? 0)) return false;
 
+  // Uplift only known legacy/free default balances. Do not reset normally consumed
+  // balances that are below the plan cap after real usage.
   return (
-    clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
-    clampInt(profile?.quota_image_gen) === clampInt(freeDefaults.quota_image_gen) &&
-    clampInt(profile?.quota_identify) === clampInt(freeDefaults.quota_identify) &&
-    clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads)
+    (clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
+     clampInt(target?.quota_live_audio_minutes) > clampInt(freeDefaults.quota_live_audio_minutes)) ||
+
+    (clampInt(profile?.quota_image_gen) === clampInt(freeDefaults.quota_image_gen) &&
+     clampInt(target?.quota_image_gen) > clampInt(freeDefaults.quota_image_gen)) ||
+
+    (clampInt(profile?.quota_identify) === clampInt(freeDefaults.quota_identify) &&
+     clampInt(target?.quota_identify) > clampInt(freeDefaults.quota_identify)) ||
+
+    (clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads) &&
+     clampInt(target?.quota_video_uploads) > clampInt(freeDefaults.quota_video_uploads))
   );
 }
+
+function isLegacyFreeQuotaValue(column: keyof ReturnType<typeof defaultMonthlyQuotas>, value: unknown): boolean {
+  return clampInt(value) === clampInt(defaultMonthlyQuotas('free')[column]);
+}
+
+function safeMonthlyRemainingForResponse(
+  membership: string,
+  profile: any,
+  column: keyof ReturnType<typeof defaultMonthlyQuotas>,
+  fallback: number,
+): number | null {
+  const raw = profile?.[column];
+  if (raw === null || raw === undefined) return null;
+
+  const defaults = defaultMonthlyQuotas(membership);
+  const defaultCap = clampInt(defaults[column]);
+  const value = clampInt(raw);
+
+  // Fresh trial profiles created before the quota patch can still have the old
+  // free Identify balance (10). Display the intended trial balance as soon as
+  // the status endpoint is read, without resetting legitimate post-patch usage.
+  if (membership === 'trial' && isLegacyFreeQuotaValue(column, raw) && defaultCap > value) {
+    return defaultCap;
+  }
+
+  return Number.isFinite(value) ? value : fallback;
+}
+
 
 async function ensureMonthlyQuotas(admin: any, userId: string, membership: string, profile: any): Promise<any> {
   const now = new Date();
@@ -407,24 +443,36 @@ async function ensureMonthlyQuotas(admin: any, userId: string, membership: strin
 
   if (!needsMonthlyReset(resetDateISO, now)) {
     const activeTrialProfile = String(profile?.membership || '').trim() === 'trial' && isTrialActive(profile?.trial_end_date);
-    const legacyTrialLiveBalance = activeTrialProfile && clampInt(profile?.quota_live_audio_minutes) <= 20 && defaults.quota_live_audio_minutes > 20;
     const activeTrialQuotaOverCap = activeTrialProfile && String(membership || '').trim() === 'trial' && (
       clampInt(profile?.quota_live_audio_minutes) > defaults.quota_live_audio_minutes ||
       clampInt(profile?.quota_image_gen) > defaults.quota_image_gen ||
       clampInt(profile?.quota_identify) > defaults.quota_identify ||
       clampInt(profile?.quota_video_uploads) > defaults.quota_video_uploads
     );
-    const legacyFreeQuotaBalance = shouldUpliftLegacyFreeQuotas(membership, profile);
-    if (!legacyTrialLiveBalance && !activeTrialQuotaOverCap && !legacyFreeQuotaBalance) return profile;
 
-    const uplift = (activeTrialQuotaOverCap || legacyFreeQuotaBalance)
+    if (!activeTrialQuotaOverCap && !shouldUpliftLegacyFreeQuotas(membership, profile)) return profile;
+
+    const uplift: any = activeTrialQuotaOverCap
       ? {
           quota_live_audio_minutes: defaults.quota_live_audio_minutes,
           quota_image_gen: defaults.quota_image_gen,
           quota_identify: defaults.quota_identify,
           quota_video_uploads: defaults.quota_video_uploads,
         }
-      : { quota_live_audio_minutes: defaults.quota_live_audio_minutes };
+      : {};
+
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_live_audio_minutes) === clampInt(defaultMonthlyQuotas('free').quota_live_audio_minutes)) {
+      uplift.quota_live_audio_minutes = defaults.quota_live_audio_minutes;
+    }
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_image_gen) === clampInt(defaultMonthlyQuotas('free').quota_image_gen)) {
+      uplift.quota_image_gen = defaults.quota_image_gen;
+    }
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_identify) === clampInt(defaultMonthlyQuotas('free').quota_identify)) {
+      uplift.quota_identify = defaults.quota_identify;
+    }
+    if (!activeTrialQuotaOverCap && clampInt(profile?.quota_video_uploads) === clampInt(defaultMonthlyQuotas('free').quota_video_uploads)) {
+      uplift.quota_video_uploads = defaults.quota_video_uploads;
+    }
 
     const { data, error } = await admin
       .from('users')
@@ -944,22 +992,22 @@ if (profile) {
     liveRemaining: remaining,
     quota: {
       live_audio_minutes: {
-        remaining: profile?.quota_live_audio_minutes ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_live_audio_minutes', monthlyDefaults.quota_live_audio_minutes),
         limit: monthlyDefaults.quota_live_audio_minutes,
         daily: { used: dailyLiveUsed, limit: dailyLiveLimit, remaining: dailyLiveRemaining },
       },
       image_gen: {
-        remaining: profile?.quota_image_gen ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_image_gen', monthlyDefaults.quota_image_gen),
         limit: monthlyDefaults.quota_image_gen,
         daily: { used: dailyImageUsed, limit: dailyImageLimit, remaining: dailyImageRemaining },
       },
       identify: {
-        remaining: profile?.quota_identify ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_identify', monthlyDefaults.quota_identify),
         limit: monthlyDefaults.quota_identify,
         daily: { used: dailyIdentifyUsed, limit: dailyIdentifyLimit, remaining: dailyIdentifyRemaining },
       },
       video_uploads: {
-        remaining: profile?.quota_video_uploads ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_video_uploads', monthlyDefaults.quota_video_uploads),
         limit: monthlyDefaults.quota_video_uploads,
         daily: { used: dailyVideoUsed, limit: dailyVideoLimit, remaining: dailyVideoRemaining },
       },

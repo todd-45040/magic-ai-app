@@ -408,7 +408,8 @@ function shouldUpliftLegacyFreeQuotas(membership: string, profile: any): boolean
   const target = defaultMonthlyQuotas(membership);
   const freeDefaults = defaultMonthlyQuotas('free');
 
-  // uplift if ANY quota is still at free level but should be higher
+  // Uplift only known legacy/free default balances. Do not reset normally consumed
+  // balances that are below the plan cap after real usage.
   return (
     (clampInt(profile?.quota_live_audio_minutes) === clampInt(freeDefaults.quota_live_audio_minutes) &&
      clampInt(target?.quota_live_audio_minutes) > clampInt(freeDefaults.quota_live_audio_minutes)) ||
@@ -422,6 +423,33 @@ function shouldUpliftLegacyFreeQuotas(membership: string, profile: any): boolean
     (clampInt(profile?.quota_video_uploads) === clampInt(freeDefaults.quota_video_uploads) &&
      clampInt(target?.quota_video_uploads) > clampInt(freeDefaults.quota_video_uploads))
   );
+}
+
+function isLegacyFreeQuotaValue(column: keyof ReturnType<typeof defaultMonthlyQuotas>, value: unknown): boolean {
+  return clampInt(value) === clampInt(defaultMonthlyQuotas('free')[column]);
+}
+
+function safeMonthlyRemainingForResponse(
+  membership: string,
+  profile: any,
+  column: keyof ReturnType<typeof defaultMonthlyQuotas>,
+  fallback: number,
+): number | null {
+  const raw = profile?.[column];
+  if (raw === null || raw === undefined) return null;
+
+  const defaults = defaultMonthlyQuotas(membership);
+  const defaultCap = clampInt(defaults[column]);
+  const value = clampInt(raw);
+
+  // Fresh trial profiles created before the quota patch can still have the old
+  // free Identify balance (10). Display/enforce the intended trial balance as
+  // soon as the status endpoint is read, without resetting legitimate usage.
+  if (membership === 'trial' && isLegacyFreeQuotaValue(column, raw) && defaultCap > value) {
+    return defaultCap;
+  }
+
+  return Number.isFinite(value) ? value : fallback;
 }
 
 async function ensureMonthlyQuotas(admin: any, userId: string, membership: string, profile: any): Promise<any> {
@@ -1010,22 +1038,22 @@ if (profile) {
     liveRemaining: remaining,
     quota: {
       live_audio_minutes: {
-        remaining: profile?.quota_live_audio_minutes ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_live_audio_minutes', monthlyDefaults.quota_live_audio_minutes),
         limit: monthlyDefaults.quota_live_audio_minutes,
         daily: { used: dailyLiveUsed, limit: dailyLiveLimit, remaining: dailyLiveRemaining },
       },
       image_gen: {
-        remaining: profile?.quota_image_gen ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_image_gen', monthlyDefaults.quota_image_gen),
         limit: monthlyDefaults.quota_image_gen,
         daily: { used: dailyImageUsed, limit: dailyImageLimit, remaining: dailyImageRemaining },
       },
       identify: {
-        remaining: profile?.quota_identify ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_identify', monthlyDefaults.quota_identify),
         limit: monthlyDefaults.quota_identify,
         daily: { used: dailyIdentifyUsed, limit: dailyIdentifyLimit, remaining: dailyIdentifyRemaining },
       },
       video_uploads: {
-        remaining: profile?.quota_video_uploads ?? null,
+        remaining: safeMonthlyRemainingForResponse(membership, profile, 'quota_video_uploads', monthlyDefaults.quota_video_uploads),
         limit: monthlyDefaults.quota_video_uploads,
         daily: { used: dailyVideoUsed, limit: dailyVideoLimit, remaining: dailyVideoRemaining },
       },
