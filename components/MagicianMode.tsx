@@ -3004,21 +3004,18 @@ useEffect(() => {
     setActiveView('dashboard');
   };
 
-  const handleGuidedCreatorPathSelect = (path: GuidedCreatorPath) => {
+  const handleGuidedCreatorPathSelect = (_path: GuidedCreatorPath) => {
+    // Phase 3 keeps the user inside the Guided Creator webpage wizard.
+    // The component owns path-selected telemetry and advances one question at a time.
+  };
+
+  const handleGuidedCreatorComplete = (path: GuidedCreatorPath) => {
     markGuidedCreatorDismissed();
     void logEvent('guided_creator_completed', {
       path,
       source: 'guided_creator_session',
-      version: 'phase_2',
+      version: 'phase_3',
     });
-
-    const pathToView: Record<GuidedCreatorPath, MagicianView> = {
-      'new-effect': 'effect-generator',
-      'improve-patter': 'patter-engine',
-      'prepare-performance': 'show-planner',
-    };
-
-    setActiveView(pathToView[path] || 'dashboard');
   };
 
 
@@ -4605,6 +4602,7 @@ ${action.payload.content}`;
             <GuidedCreatorSession
               onPathSelect={handleGuidedCreatorPathSelect}
               onSkip={handleSkipGuidedCreator}
+              onComplete={handleGuidedCreatorComplete}
             />
           );
         case 'dashboard': {
