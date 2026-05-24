@@ -64,6 +64,25 @@ const CORE_TOOLS = [
   'assistant_studio',
 ];
 
+
+function payloadNumber(payload: any, keys: string[]): number | null {
+  if (!payload || typeof payload !== 'object') return null;
+  for (const key of keys) {
+    const v = Number(payload[key]);
+    if (Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+function eventName(row: any): string {
+  return String(row?.event_name || '').trim().toLowerCase();
+}
+
+function eventUser(row: any): string | null {
+  const id = String(row?.user_id || '').trim();
+  return id || null;
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const auth = await requireAdmin(req);
@@ -385,6 +404,116 @@ function classifyEvent(e: any): {
 
   return { isSuccess, isRateLimit, isQuota, isUnauthorized, isTimeout, isError };
 }
+
+    // Phase 7 — Guided Creator onboarding funnel KPIs (selected dashboard window)
+    // Client telemetry is stored in analytics_events via /api/analyticsEvent.
+    let guidedCreatorKpis: any = {
+      window_days: days,
+      views: 0,
+      path_selected: 0,
+      generation_completed: 0,
+      first_idea_saved: 0,
+      skips: 0,
+      checkout_started: 0,
+      skip_rate: null as number | null,
+      view_to_path_selected_rate: null as number | null,
+      path_to_generation_completed_rate: null as number | null,
+      generation_to_first_save_rate: null as number | null,
+      guided_session_to_checkout_started_rate: null as number | null,
+      time_to_first_save_median_ms: null as number | null,
+      time_to_first_save_median_minutes: null as number | null,
+      users: {
+        viewed: 0,
+        path_selected: 0,
+        generation_completed: 0,
+        first_idea_saved: 0,
+        checkout_started_after_guided_session: 0,
+      },
+      paths: {} as Record<string, number>,
+    };
+
+    try {
+      const { data: gcEvents, error: gcErr } = await admin
+        .from('analytics_events')
+        .select('user_id,event_name,event_payload,created_at')
+        .gte('created_at', sinceIso)
+        .in('event_name', [
+          'guided_creator_viewed',
+          'guided_creator_path_selected',
+          'guided_creator_generation_completed',
+          'guided_creator_first_idea_saved',
+          'time_to_first_save',
+          'guided_creator_skipped',
+          'upgrade_checkout_started',
+          'checkout_started',
+        ])
+        .order('created_at', { ascending: true })
+        .limit(100000);
+
+      if (!gcErr) {
+        const viewedUsers = new Set<string>();
+        const pathUsers = new Set<string>();
+        const generatedUsers = new Set<string>();
+        const savedUsers = new Set<string>();
+        const checkoutUsers = new Set<string>();
+        const guidedFirstSeenByUser = new Map<string, string>();
+        const saveTimesMs: number[] = [];
+
+        for (const row of (gcEvents || []) as any[]) {
+          const name = eventName(row);
+          const userId = eventUser(row);
+          const payload = row?.event_payload || {};
+          const createdAt = String(row?.created_at || '');
+
+          if (name === 'guided_creator_viewed') {
+            guidedCreatorKpis.views += 1;
+            if (userId) {
+              viewedUsers.add(userId);
+              if (!guidedFirstSeenByUser.has(userId)) guidedFirstSeenByUser.set(userId, createdAt);
+            }
+          } else if (name === 'guided_creator_path_selected') {
+            guidedCreatorKpis.path_selected += 1;
+            if (userId) pathUsers.add(userId);
+            const path = String(payload?.path || 'unknown').trim() || 'unknown';
+            guidedCreatorKpis.paths[path] = Number(guidedCreatorKpis.paths[path] || 0) + 1;
+          } else if (name === 'guided_creator_generation_completed') {
+            guidedCreatorKpis.generation_completed += 1;
+            if (userId) generatedUsers.add(userId);
+          } else if (name === 'guided_creator_first_idea_saved') {
+            guidedCreatorKpis.first_idea_saved += 1;
+            if (userId) savedUsers.add(userId);
+            const elapsed = payloadNumber(payload, ['time_to_first_save_ms', 'elapsed_ms']);
+            if (elapsed != null) saveTimesMs.push(elapsed);
+          } else if (name === 'time_to_first_save') {
+            const elapsed = payloadNumber(payload, ['elapsed_ms', 'time_to_first_save_ms']);
+            if (elapsed != null) saveTimesMs.push(elapsed);
+          } else if (name === 'guided_creator_skipped') {
+            guidedCreatorKpis.skips += 1;
+          } else if (name === 'upgrade_checkout_started' || name === 'checkout_started') {
+            if (userId && guidedFirstSeenByUser.has(userId)) checkoutUsers.add(userId);
+          }
+        }
+
+        guidedCreatorKpis.users = {
+          viewed: viewedUsers.size,
+          path_selected: pathUsers.size,
+          generation_completed: generatedUsers.size,
+          first_idea_saved: savedUsers.size,
+          checkout_started_after_guided_session: checkoutUsers.size,
+        };
+        guidedCreatorKpis.checkout_started = checkoutUsers.size;
+        guidedCreatorKpis.skip_rate = guidedCreatorKpis.views ? guidedCreatorKpis.skips / guidedCreatorKpis.views : null;
+        guidedCreatorKpis.view_to_path_selected_rate = guidedCreatorKpis.views ? guidedCreatorKpis.path_selected / guidedCreatorKpis.views : null;
+        guidedCreatorKpis.path_to_generation_completed_rate = guidedCreatorKpis.path_selected ? guidedCreatorKpis.generation_completed / guidedCreatorKpis.path_selected : null;
+        guidedCreatorKpis.generation_to_first_save_rate = guidedCreatorKpis.generation_completed ? guidedCreatorKpis.first_idea_saved / guidedCreatorKpis.generation_completed : null;
+        guidedCreatorKpis.guided_session_to_checkout_started_rate = viewedUsers.size ? checkoutUsers.size / viewedUsers.size : null;
+        guidedCreatorKpis.time_to_first_save_median_ms = median(saveTimesMs);
+        guidedCreatorKpis.time_to_first_save_median_minutes = guidedCreatorKpis.time_to_first_save_median_ms != null ? guidedCreatorKpis.time_to_first_save_median_ms / 60000 : null;
+      }
+    } catch {
+      // Do not fail dashboard
+    }
+
 
     // Phase AR — Angle & Risk KPIs (fixed 7d window) + 24h health
     // Support both legacy tool='angle-risk' and canonical tool='angle_risk'.
@@ -2087,6 +2216,7 @@ const provider_breakdown = Object.entries(providerReliability)
       visual_brainstorm_kpis: visualBrainstormKpis,
       director_mode_kpis: directorModeKpis,
       director_mode_health_24h: directorModeHealth24h,
+      guided_creator_kpis: guidedCreatorKpis,
       angle_risk_kpis: angleRiskKpis,
       angle_risk_health_24h: angleRiskHealth24h,
       client_management_kpis: clientManagementKpis,

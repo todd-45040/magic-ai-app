@@ -1129,6 +1129,88 @@ const kUsers = data?.users || {};
         </div>
       </div>
 
+      {/* Guided Creator — Onboarding Funnel KPIs */}
+      <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-amber-100">Guided Creator Funnel</div>
+            <div className="text-xs text-white/55 mt-0.5">First-session onboarding: view → generate → save → checkout</div>
+          </div>
+          <div className="text-[11px] text-white/50">{WINDOW_OPTIONS.find((w) => w.days === days)?.label || `${days}d`}</div>
+        </div>
+
+        {(() => {
+          const gc = (data as any)?.guided_creator_kpis;
+          if (!gc) return <div className="mt-2 text-sm text-white/60">—</div>;
+          const topPaths = Object.entries(gc.paths || {})
+            .sort((a: any, b: any) => Number(b[1] || 0) - Number(a[1] || 0))
+            .slice(0, 3);
+          return (
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Views</div>
+                  <div className="text-xl font-bold text-white">{Number(gc.views || 0)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Path selected</div>
+                  <div className="text-xl font-bold text-white">{Number(gc.path_selected || 0)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Generated</div>
+                  <div className="text-xl font-bold text-white">{Number(gc.generation_completed || 0)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">First idea saved</div>
+                  <div className="text-xl font-bold text-white">{Number(gc.first_idea_saved || 0)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Skip rate</div>
+                  <div className="text-xl font-bold text-white">{pct(gc.skip_rate, 0)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Time to save</div>
+                  <div className="text-xl font-bold text-white">{durationFromMinutes(gc.time_to_first_save_median_minutes)}</div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="text-xs text-white/60">Checkout conv.</div>
+                  <div className="text-xl font-bold text-white">{pct(gc.guided_session_to_checkout_started_rate, 0)}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="text-white/50">View → Path</div>
+                  <div className="font-semibold text-white">{pct(gc.view_to_path_selected_rate, 0)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="text-white/50">Path → Generate</div>
+                  <div className="font-semibold text-white">{pct(gc.path_to_generation_completed_rate, 0)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="text-white/50">Generate → Save</div>
+                  <div className="font-semibold text-white">{pct(gc.generation_to_first_save_rate, 0)}</div>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="text-white/50">Checkout users</div>
+                  <div className="font-semibold text-white">{Number(gc.checkout_started || 0)}</div>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-white/50 flex flex-wrap gap-x-4 gap-y-1">
+                <span>Unique viewed: <span className="text-white/70">{Number(gc.users?.viewed || 0)}</span></span>
+                <span>Unique generated: <span className="text-white/70">{Number(gc.users?.generation_completed || 0)}</span></span>
+                <span>Unique saved: <span className="text-white/70">{Number(gc.users?.first_idea_saved || 0)}</span></span>
+                {topPaths.length > 0 && (
+                  <span>Top paths: <span className="text-white/70">{topPaths.map(([name, count]) => `${String(name)} (${Number(count || 0)})`).join(' · ')}</span></span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+
       {/* Visual Brainstorm — Booth KPIs (fixed 7d) */}
       <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
