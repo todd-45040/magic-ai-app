@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from '../types';
 import { generateStructuredResponse, normalizeAiUserFacingError } from '../services/geminiService';
-import { saveIdea } from '../services/ideasService';
+import { CREATIVE_VAULT_TAG, GUIDED_CREATOR_VAULT_TAG, getSavedIdeaCount, saveIdea } from '../services/ideasService';
 import { logEvent } from '../services/analyticsService';
 import { CalendarIcon, CheckIcon, FileTextIcon, SaveIcon, StageCurtainsIcon, WandIcon } from './icons';
+import SaveActionBar from './shared/SaveActionBar';
 
 export type GuidedCreatorPath = 'new-effect' | 'improve-patter' | 'prepare-performance';
 
@@ -48,6 +49,7 @@ export type GuidedCreatorSessionProps = {
 type GuidedCreatorAnswers = Record<string, string>;
 
 type ActionStatus = 'idle' | 'saved' | 'queued';
+type SaveState = 'idle' | 'saving' | 'saved';
 
 const PATTER_ENGINE_PREFILL_KEY = 'maw_patter_engine_prefill_v1';
 const SHOW_PLANNER_ROUTINE_HANDOFF_KEY = 'maw_show_planner_routine_handoff_v1';
@@ -170,6 +172,8 @@ const resultToSaveText = (path: GuidedCreatorPathCard, result: GuidedCreatorResu
 
 export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onComplete, onGoDashboard, onOpenPatterEngine, onOpenShowPlanner }: GuidedCreatorSessionProps) {
   const hasLoggedViewRef = useRef(false);
+  const savePromptLoggedRef = useRef(false);
+  const sessionStartedAtRef = useRef<number>(Date.now());
   const [selectedPathId, setSelectedPathId] = useState<GuidedCreatorPath | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [answers, setAnswers] = useState<GuidedCreatorAnswers>({});
@@ -177,6 +181,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generatedResult, setGeneratedResult] = useState<GuidedCreatorResult | null>(null);
   const [actionStatus, setActionStatus] = useState<ActionStatus>('idle');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
 
   const selectedPath = useMemo(() => guidedCreatorPaths.find((path) => path.id === selectedPathId) || null, [selectedPathId]);
   const currentStep = selectedPath?.steps[currentStepIndex];
@@ -184,9 +189,21 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
   const displayedStepNumber = selectedPath ? Math.min(currentStepIndex + 1, totalSteps) : 0;
 
   useEffect(() => {
+    if (!selectedPath || !generatedResult || savePromptLoggedRef.current) return;
+    savePromptLoggedRef.current = true;
+    void logEvent('guided_creator_save_prompt_seen', {
+      path: selectedPath.id,
+      version: 'phase_5',
+      result_title: generatedResult.title,
+      elapsed_ms: Date.now() - sessionStartedAtRef.current,
+    });
+  }, [generatedResult, selectedPath]);
+
+  useEffect(() => {
     if (hasLoggedViewRef.current) return;
     hasLoggedViewRef.current = true;
-    void logEvent('guided_creator_viewed', { entry: 'guided_creator_session', version: 'phase_4' });
+    sessionStartedAtRef.current = Date.now();
+    void logEvent('guided_creator_viewed', { entry: 'guided_creator_session', version: 'phase_5' });
   }, []);
 
   const handlePathSelect = (path: GuidedCreatorPath) => {
@@ -198,7 +215,9 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setGenerationError(null);
     setGeneratedResult(null);
     setActionStatus('idle');
-    void logEvent('guided_creator_path_selected', { path, entry: 'guided_creator_session', version: 'phase_4' });
+    setSaveState('idle');
+    savePromptLoggedRef.current = false;
+    void logEvent('guided_creator_path_selected', { path, entry: 'guided_creator_session', version: 'phase_5' });
     onPathSelect?.(path);
   };
 
@@ -212,7 +231,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       return;
     }
     setGenerationError(null);
-    void logEvent('guided_creator_step_completed', { path: selectedPath.id, step_id: currentStep.id, step_number: currentStepIndex + 1, total_question_steps: selectedPath.steps.length, version: 'phase_4' });
+    void logEvent('guided_creator_step_completed', { path: selectedPath.id, step_id: currentStep.id, step_number: currentStepIndex + 1, total_question_steps: selectedPath.steps.length, version: 'phase_5' });
     setCurrentStepIndex((previous) => previous + 1);
   };
 
@@ -222,6 +241,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       setSelectedPathId(null);
       setGeneratedResult(null);
       setActionStatus('idle');
+      setSaveState('idle');
       return;
     }
     setCurrentStepIndex((previous) => previous - 1);
@@ -233,7 +253,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setGenerationError(null);
     setGeneratedResult(null);
     setActionStatus('idle');
-    void logEvent('guided_creator_generation_started', { path: selectedPath.id, version: 'phase_4', service: 'geminiService.generateStructuredResponse' });
+    void logEvent('guided_creator_generation_started', { path: selectedPath.id, version: 'phase_5', service: 'geminiService.generateStructuredResponse' });
 
     try {
       const structured = await generateStructuredResponse(
@@ -245,24 +265,65 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       );
       const result = normalizeResult(structured, selectedPath, answers);
       setGeneratedResult(result);
-      void logEvent('guided_creator_generation_completed', { path: selectedPath.id, version: 'phase_4', result_title: result.title });
+      void logEvent('guided_creator_generation_completed', { path: selectedPath.id, version: 'phase_5', result_title: result.title });
       onComplete?.(selectedPath.id);
     } catch (error) {
       const message = normalizeAiUserFacingError(error);
       setGenerationError(message);
-      void logEvent('guided_creator_generation_failed', { path: selectedPath.id, error: message, version: 'phase_4' });
+      void logEvent('guided_creator_generation_failed', { path: selectedPath.id, error: message, version: 'phase_5' });
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleSaveIdea = async () => {
-    if (!selectedPath || !generatedResult) return;
+    if (!selectedPath || !generatedResult || saveState === 'saving') return;
+    setSaveState('saving');
+    setGenerationError(null);
+
+    const elapsedMs = Date.now() - sessionStartedAtRef.current;
+    let existingIdeaCount: number | null = null;
     try {
-      await saveIdea('text', resultToSaveText(selectedPath, generatedResult));
+      existingIdeaCount = await getSavedIdeaCount({ excludeRehearsal: true });
+    } catch {
+      existingIdeaCount = null;
+    }
+
+    try {
+      const content = JSON.stringify({
+        format: 'maw.idea.guided_creator.v1',
+        source: 'guided_creator',
+        path: selectedPath.id,
+        title: generatedResult.title,
+        display: resultToSaveText(selectedPath, generatedResult),
+        structured: generatedResult,
+        answers,
+        createdAt: new Date().toISOString(),
+      });
+
+      await saveIdea({
+        type: 'text',
+        title: generatedResult.title,
+        content,
+        category: selectedPath.id === 'improve-patter' ? 'script' : 'effect',
+        tags: [GUIDED_CREATOR_VAULT_TAG, CREATIVE_VAULT_TAG, selectedPath.id],
+        source: 'guided_creator',
+        metadata: {
+          path: selectedPath.id,
+          time_to_first_save_ms: elapsedMs,
+          existing_idea_count: existingIdeaCount,
+        },
+      });
+
       setActionStatus('saved');
-      void logEvent('guided_creator_result_saved', { path: selectedPath.id, version: 'phase_4', title: generatedResult.title });
+      setSaveState('saved');
+      void logEvent('guided_creator_result_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, elapsed_ms: elapsedMs });
+      if (existingIdeaCount === 0) {
+        void logEvent('guided_creator_first_idea_saved', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title, time_to_first_save_ms: elapsedMs });
+        void logEvent('time_to_first_save', { source: 'guided_creator', path: selectedPath.id, elapsed_ms: elapsedMs, version: 'phase_5' });
+      }
     } catch (error) {
+      setSaveState('idle');
       setGenerationError(error instanceof Error ? error.message : 'Unable to save this idea.');
     }
   };
@@ -282,7 +343,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       localStorage.setItem(PATTER_ENGINE_PREFILL_KEY, JSON.stringify(payload));
       setActionStatus('queued');
     } catch {}
-    void logEvent('guided_creator_send_to_patter', { path: selectedPath.id, version: 'phase_4', title: generatedResult.title });
+    void logEvent('guided_creator_send_to_patter', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title });
     onOpenPatterEngine?.();
   };
 
@@ -304,7 +365,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
       localStorage.setItem(SHOW_PLANNER_ROUTINE_HANDOFF_KEY, JSON.stringify(payload));
       setActionStatus('queued');
     } catch {}
-    void logEvent('guided_creator_add_to_show_planner', { path: selectedPath.id, version: 'phase_4', title: generatedResult.title });
+    void logEvent('guided_creator_add_to_show_planner', { path: selectedPath.id, version: 'phase_5', title: generatedResult.title });
     onOpenShowPlanner?.();
   };
 
@@ -312,7 +373,7 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
     setGeneratedResult(null);
     setGenerationError(null);
     setActionStatus('idle');
-    void logEvent('guided_creator_refine_clicked', { path: selectedPath?.id || 'unknown', version: 'phase_4' });
+    void logEvent('guided_creator_refine_clicked', { path: selectedPath?.id || 'unknown', version: 'phase_5' });
   };
 
   const renderStepInput = () => {
@@ -363,14 +424,28 @@ export default function GuidedCreatorSession({ user, onPathSelect, onSkip, onCom
             <ul className="mt-2 space-y-2 text-sm text-yellow-50">{generatedResult.nextSteps.map((step) => <li key={step} className="flex gap-2"><CheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-yellow-200" />{step}</li>)}</ul>
           </div>
         </div>
-        {actionStatus !== 'idle' && <p className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{actionStatus === 'saved' ? 'Saved to your ideas.' : 'Queued for the next Magic AI Wizard tool.'}</p>}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <button type="button" onClick={handleSaveIdea} className="inline-flex items-center justify-center gap-2 rounded-full bg-yellow-300 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-yellow-200"><SaveIcon className="h-4 w-4" />Save this idea</button>
-          <button type="button" onClick={handleRefine} className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-white/25 hover:text-white"><WandIcon className="h-4 w-4" />Refine this</button>
-          <button type="button" onClick={handleSendToPatter} className="inline-flex items-center justify-center gap-2 rounded-full border border-purple-300/25 bg-purple-400/10 px-4 py-3 text-sm font-semibold text-purple-100 transition hover:bg-purple-400/20"><FileTextIcon className="h-4 w-4" />Generate patter</button>
-          <button type="button" onClick={handleAddToShowPlanner} className="inline-flex items-center justify-center gap-2 rounded-full border border-blue-300/25 bg-blue-400/10 px-4 py-3 text-sm font-semibold text-blue-100 transition hover:bg-blue-400/20"><CalendarIcon className="h-4 w-4" />Add to show planner</button>
-          <button type="button" onClick={onGoDashboard} className="inline-flex items-center justify-center rounded-full border border-white/10 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-white/25 hover:text-white">Go to dashboard</button>
-        </div>
+        {actionStatus !== 'idle' && <p className="mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{actionStatus === 'saved' ? 'Saved to your Creative Vault.' : 'Queued for the next Magic AI Wizard tool.'}</p>}
+        <SaveActionBar
+          className="mt-6 border-yellow-300/25 bg-slate-950/55"
+          title="This is your activation moment."
+          subtitle="Save this to your Creative Vault so Magic AI Wizard can help you keep building it."
+          primary={{
+            label: 'Save this to your Creative Vault',
+            onClick: handleSaveIdea,
+            loading: saveState === 'saving',
+            disabled: saveState === 'saved',
+            icon: <SaveIcon className="h-4 w-4" />,
+          }}
+          saved={saveState === 'saved'}
+          savingLabel="Saving to your Creative Vault..."
+          savedLabel="Saved to your Creative Vault"
+          secondaryLeft={{ label: 'Generate patter', onClick: handleSendToPatter, icon: <FileTextIcon className="h-4 w-4" />, tone: 'secondary' }}
+          secondaryRight={{ label: 'Add to show planner', onClick: handleAddToShowPlanner, icon: <CalendarIcon className="h-4 w-4" />, tone: 'secondary' }}
+          utilities={[
+            { label: 'Refine this', onClick: handleRefine, icon: <WandIcon className="h-4 w-4" /> },
+            { label: 'Go to dashboard', onClick: onGoDashboard || (() => {}), disabled: !onGoDashboard },
+          ]}
+        />
       </div>
     );
   };

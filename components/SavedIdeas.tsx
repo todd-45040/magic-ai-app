@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { getSavedIdeas, deleteIdea, updateIdea } from '../services/ideasService';
+import { getSavedIdeas, deleteIdea, updateIdea, isGuidedCreatorIdea } from '../services/ideasService';
 import { getShows, createShow, updateShow, addTaskToShow } from '../services/showsService';
 import type { SavedIdea, Transcription, IdeaCategory, Show, AiSparkAction } from '../types';
 import { BookmarkIcon, TrashIcon, ShareIcon, MicrophoneIcon, PrintIcon, FileTextIcon, ImageIcon, PencilIcon, WandIcon, CrossIcon } from './icons';
@@ -1526,6 +1526,11 @@ ${buildImageIdeaPromptContext(idea)}`
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0] || null;
     }, [ideas]);
 
+    const guidedCreatorIdeas = useMemo(() => ideas.filter((idea) => !ideaIsArchived(idea) && isGuidedCreatorIdea(idea)), [ideas]);
+    const latestGuidedCreatorIdea = guidedCreatorIdeas
+        .slice()
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0] || null;
+
     const resumeIdea = useMemo(() => {
         if (!ideas.length) return null;
         let lastId = '';
@@ -1715,9 +1720,10 @@ ${buildImageIdeaPromptContext(idea)}`
         <div key={idea.id} className={`group flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-950/70 ${viewMode === 'compact' ? 'p-4 min-h-[188px]' : 'p-5 min-h-[220px]'} transition hover:border-purple-400/30 hover:bg-slate-950/85`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <span className="text-base">{getIdeaCategoryMeta(idea).icon}</span>
                         <h3 className="text-sm font-semibold text-yellow-200 truncate">{getIdeaDisplay(idea).title || idea.title || 'Saved Idea'}</h3>
+                        {isGuidedCreatorIdea(idea) ? <span className="rounded-full border border-yellow-300/30 bg-yellow-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-yellow-100">Creative Vault</span> : null}
                     </div>
                     <div className="mt-1 text-xs text-slate-400">{getIdeaSourceTool(idea)} • {formatSavedOn(idea)}</div>
                 </div>
@@ -1750,6 +1756,25 @@ ${buildImageIdeaPromptContext(idea)}`
                 <BookmarkIcon className="w-8 h-8 text-purple-400" />
                 <h2 className="text-2xl font-bold text-yellow-400 font-cinzel">My Saved Ideas</h2>
             </div>
+
+            {latestGuidedCreatorIdea ? (
+                <div className="mb-5 rounded-2xl border border-yellow-300/25 bg-yellow-300/10 p-4 shadow-[0_18px_50px_rgba(250,204,21,0.08)]">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-yellow-200">Creative Vault</p>
+                            <h3 className="mt-1 text-lg font-bold text-white">Your Guided Creator idea has been saved.</h3>
+                            <p className="mt-1 text-sm text-slate-300">This is the first creative asset in the workflow. Open it anytime, refine it, or move it into a show.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => openIdeaView(latestGuidedCreatorIdea)}
+                            className="rounded-full bg-yellow-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-yellow-200"
+                        >
+                            Open saved idea
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             {FEATURE_FLAGS.activationFlowV1 && ideas.length > 0 ? (
                 <RoutineTracker ideas={ideas} shows={shows} />

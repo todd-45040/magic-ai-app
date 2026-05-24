@@ -16,6 +16,21 @@ type DbIdeaRow = {
   category?: IdeaCategory | null;
 };
 
+export const GUIDED_CREATOR_VAULT_TAG = 'guided-creator';
+export const CREATIVE_VAULT_TAG = 'creative-vault';
+
+export type SaveIdeaSource = 'guided_creator' | 'visual_brainstorm' | 'effect_engine' | 'patter_engine' | 'show_planner' | 'manual' | string;
+
+export type SaveIdeaInput = {
+  type: IdeaType;
+  content: string;
+  title?: string;
+  tags?: string[];
+  category?: IdeaCategory;
+  source?: SaveIdeaSource;
+  metadata?: Record<string, unknown>;
+};
+
 const IDEA_METADATA_KEYS = new Set([
   'format',
   'tool',
@@ -173,6 +188,29 @@ export async function getSavedIdeas(): Promise<SavedIdea[]> {
   return (data ?? []).map((r: unknown) => mapRowToIdea(r as DbIdeaRow));
 }
 
+export async function getSavedIdeaCount(options: { excludeRehearsal?: boolean } = {}): Promise<number> {
+  const uid = await requireUserId();
+  let query = supabase
+    .from('ideas')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid);
+
+  if (options.excludeRehearsal ?? true) {
+    query = query.neq('type', 'rehearsal');
+  }
+
+  const { count, error } = await query;
+  if (error) throw error;
+  return Number(count ?? 0);
+}
+
+export function isGuidedCreatorIdea(idea: Pick<SavedIdea, 'tags' | 'content'>): boolean {
+  const tags = Array.isArray(idea.tags) ? idea.tags.map((tag) => String(tag).toLowerCase()) : [];
+  if (tags.includes(GUIDED_CREATOR_VAULT_TAG)) return true;
+  const content = String(idea.content || '').toLowerCase();
+  return content.includes('"source":"guided_creator"') || content.includes('guided creator session:');
+}
+
 /**
  * Fetch only rehearsal sessions (stored as ideas with type='rehearsal').
  * Used by Live Rehearsal History UI.
@@ -201,9 +239,9 @@ export async function getRehearsalSessions(limit = 25): Promise<SavedIdea[]> {
  *   saveIdea('text', 'content', 'optional title')
  */
 export function saveIdea(type: IdeaType, content: string, title?: string, tags?: string[]): Promise<SavedIdea>;
-export function saveIdea(idea: { type: IdeaType; content: string; title?: string; tags?: string[]; category?: IdeaCategory }): Promise<SavedIdea>;
+export function saveIdea(idea: SaveIdeaInput): Promise<SavedIdea>;
 export async function saveIdea(
-  a: IdeaType | { type: IdeaType; content: string; title?: string; tags?: string[]; category?: IdeaCategory },
+  a: IdeaType | SaveIdeaInput,
   b?: string,
   c?: string,
   d?: string[]
@@ -277,7 +315,9 @@ export async function saveIdea(
       title: savedIdea.title ?? null,
       category: savedIdea.category ?? null,
       tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
-      source: 'idea_create',
+      source: payload.source ?? 'idea_create',
+      save_source: payload.source ?? null,
+      ...(payload.metadata || {}),
     },
   });
   return savedIdea;
