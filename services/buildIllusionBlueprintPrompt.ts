@@ -24,13 +24,33 @@ export type IllusionBlueprintVisualPlan = {
   };
 };
 
+export type IllusionBlueprintMatchedOutput = {
+  index: number;
+  label: 'A' | 'B';
+  directive: string;
+};
+
 export type IllusionBlueprintImagePromptParams = {
   plan: IllusionBlueprintVisualPlan;
   visualContinuityBrief: string;
   visualAnchor: string;
   venueScale: string;
   performerStyle: string;
+  matchedOutput: IllusionBlueprintMatchedOutput;
 };
+
+export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[] = [
+  {
+    index: 0,
+    label: 'A',
+    directive: 'MATCHED DESIGN A: compact touring version with clean rectangular geometry, visible wheeled base, practical access panels, modest scenic trim, and a restrained premium stage finish.',
+  },
+  {
+    index: 1,
+    label: 'B',
+    directive: 'MATCHED DESIGN B: slightly more theatrical scenic-shell version with the same footprint and mechanism direction, reinforced base, practical caster support, builder-visible panel logic, and a polished theatre finish.',
+  },
+];
 
 export const ILLUSION_BLUEPRINT_REALISM_SYSTEM_INSTRUCTION = `You are a professional illusion builder's planning assistant.
 
@@ -116,6 +136,7 @@ export function buildIllusionBlueprintDrawingPrompt({
   plan,
   visualContinuityBrief,
   visualAnchor,
+  matchedOutput,
 }: IllusionBlueprintImagePromptParams): string {
   return [
     BLUEPRINT_STYLE_GUIDE,
@@ -131,10 +152,12 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
-    `Blueprint continuity requirement: Every drawing must be a technical view of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, or impossible floating structures unless they are part of this practical plan.`,
+    `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
+    `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, or impossible floating structures unless they are part of this practical plan.`,
+    'Pairing requirement: This blueprint must be visually matchable to the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, and visible construction cues consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
     'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
-    'Create technical drawing style images suitable for illusion build planning.',
+    `Create one technical drawing style image suitable for illusion build planning. Do not create multiple alternate concepts inside the same image; only show Matched Design ${matchedOutput.label}.`,
   ].join('\n');
 }
 
@@ -144,6 +167,7 @@ export function buildIllusionConceptImagePrompt({
   visualAnchor,
   venueScale,
   performerStyle,
+  matchedOutput,
 }: IllusionBlueprintImagePromptParams): string {
   return [
     IMAGE_STYLE_GUIDE,
@@ -158,9 +182,11 @@ export function buildIllusionConceptImagePrompt({
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     `Venue / scale: ${venueScale}`,
     `Performer style: ${performerStyle}`,
-    `Concept continuity requirement: Produce three distinct visual variations of the same ${visualAnchor}. Vary finish, trim, framing, and staging only; do not change the illusion type or replace it with unrelated props.`,
+    `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
+    `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, and practical construction cues.`,
+    'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, or scenic unit.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     'Language requirement: English only. Any signage, labels, notes, or visible words inside the concept image must be clear English. Prefer no text if clean English text cannot be rendered reliably.',
-    'Produce three distinct but clearly related design directions that match the realistic builder plan above.',
+    `Produce one polished realistic concept image that matches Blueprint ${matchedOutput.label}.`,
   ].join('\n');
 }

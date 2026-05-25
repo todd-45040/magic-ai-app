@@ -3,6 +3,7 @@ import { Type } from '@google/genai';
 
 import { generateImages, generateStructuredResponse } from '../services/geminiService';
 import {
+  ILLUSION_BLUEPRINT_MATCHED_OUTPUTS,
   ILLUSION_BLUEPRINT_REALISM_SYSTEM_INSTRUCTION,
   buildIllusionBlueprintDrawingPrompt,
   buildIllusionBlueprintPlanPrompt,
@@ -811,40 +812,55 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput);
       const visualAnchor = deriveVisualAnchor(plan, effectInput);
 
-      setLoadingStage('Generating blueprint drawings…');
+      setLoadingStage('Generating matched blueprint drawings…');
       setIsGeneratingBlueprints(true);
-      const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
-        plan,
-        visualContinuityBrief,
-        visualAnchor,
-        venueScale,
-        performerStyle,
-      });
+      let matchedBlueprints: string[] = [];
 
       try {
-        const drawings = await generateImages(blueprintPrompt, '16:9', 2, user);
-        setBlueprintDrawings(drawings);
+        const drawingResults = await Promise.all(
+          ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
+            const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
+              plan,
+              visualContinuityBrief,
+              visualAnchor,
+              venueScale,
+              performerStyle,
+              matchedOutput,
+            });
+            const [drawing] = await generateImages(blueprintPrompt, '16:9', 1, user);
+            return drawing;
+          })
+        );
+        matchedBlueprints = drawingResults.filter(Boolean).slice(0, 2);
+        setBlueprintDrawings(matchedBlueprints);
       } catch {
+        matchedBlueprints = [];
         setBlueprintDrawings([]);
       } finally {
         setIsGeneratingBlueprints(false);
       }
 
-      setLoadingStage('Generating visual concepts…');
+      setLoadingStage('Generating matched concept images…');
       setIsGeneratingVisuals(true);
-      const imagePrompt = buildIllusionConceptImagePrompt({
-        plan,
-        visualContinuityBrief,
-        visualAnchor,
-        venueScale,
-        performerStyle,
-      });
 
       try {
-        const images = await generateImages(imagePrompt, '16:9', 3, user);
-        setImageOptions(images);
+        const conceptResults = await Promise.all(
+          ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
+            const imagePrompt = buildIllusionConceptImagePrompt({
+              plan,
+              visualContinuityBrief,
+              visualAnchor,
+              venueScale,
+              performerStyle,
+              matchedOutput,
+            });
+            const [image] = await generateImages(imagePrompt, '16:9', 1, user);
+            return image;
+          })
+        );
+        setImageOptions(conceptResults.filter(Boolean).slice(0, 2));
       } catch (imageErr: any) {
-        setWarning(imageErr?.message || 'Builder plan generated, but visual concepts could not be created this time.');
+        setWarning(imageErr?.message || 'Builder plan generated, but matched concept images could not be created this time.');
       } finally {
         setIsGeneratingVisuals(false);
       }
@@ -1000,7 +1016,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <ul className="mt-1 text-xs text-slate-400 list-disc pl-5 space-y-1">
               <li>Turns a rough illusion idea into a realistic builder-oriented plan.</li>
               <li>Focuses on construction, safety, transport, and practical stage use.</li>
-              <li>Automatically gives you multiple concept images to help choose a direction.</li>
+              <li>Automatically gives you two matched blueprint/concept pairs to compare.</li>
             </ul>
           </div>
 
@@ -1175,7 +1191,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <div className="px-4 py-3 border-b border-slate-800 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <div className="text-sm font-semibold text-slate-200">Builder Output</div>
-              <div className="text-xs text-slate-500">Realistic plan first. Multiple image concepts second.</div>
+              <div className="text-xs text-slate-500">Realistic plan first. Two matched blueprint/concept pairs second.</div>
             </div>
             <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
           </div>
@@ -1189,7 +1205,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   <div className="max-w-md text-center">
                     <div className="text-slate-200 font-semibold">Your builder plan will appear here.</div>
                     <div className="text-sm text-slate-400 mt-2">
-                      Describe the effect, add your constraints, and generate a practical construction plan with several visual directions.
+                      Describe the effect, add your constraints, and generate a practical construction plan with two matched visual directions.
                     </div>
                     <div className="mt-3 text-xs text-slate-500">Designed to stay fast, reliable, and demo-ready.</div>
                   </div>
@@ -1525,11 +1541,11 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       <SectionIntro
                         icon={<ImageIcon className="h-4 w-4" />}
                         title="Concept Gallery"
-                        subtitle="Compare build directions visually, then select the concept that best matches the practical plan above."
+                        subtitle="Compare the two matched concept images, each paired to its blueprint drawing."
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Visual continuity:</span> all concepts are prompted as variations of <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same audience effect, footprint, and material direction from the builder plan.
+                          <span className="font-semibold">Visual continuity:</span> both concepts are prompted as matched renditions of <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same A/B design directions as the two blueprint drawings.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (
@@ -1569,7 +1585,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div>
                                     <div className="text-sm font-semibold text-slate-100">{conceptLabel}</div>
                                     <div className="mt-1 text-xs text-slate-400">
-                                      {isSelected ? 'Selected matched variation' : `Variation of ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}`}
+                                      {isSelected ? 'Selected matched concept' : `Matches Blueprint ${String.fromCharCode(65 + idx)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}`}
                                     </div>
                                   </div>
                                   {isSelected ? (
