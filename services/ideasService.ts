@@ -3,6 +3,7 @@ import type { IdeaCategory, IdeaType, SavedIdea } from '../types';
 import { logUserActivity } from './userActivityService';
 import { getUserProfile } from './usersService';
 import { ConversionFrictionError, getSavedIdeaLimitForFriction, getSavedIdeaLimitMessage, recordConversionFriction } from './conversionFriction';
+import { attachCreativeProjectToPayload, mergeProjectTags, normalizeCreativeProjectLink } from './creativeProjectContinuity';
 
 // --- DB row shape (maps to SavedIdea used by the UI) ---
 type DbIdeaRow = {
@@ -29,6 +30,7 @@ export type SaveIdeaInput = {
   category?: IdeaCategory;
   source?: SaveIdeaSource;
   metadata?: Record<string, unknown>;
+  project?: import('../types').CreativeProjectLink | null;
 };
 
 const IDEA_METADATA_KEYS = new Set([
@@ -99,7 +101,7 @@ function sanitizeIdeaContent(content: string): string {
 
 function mapRowToIdea(row: DbIdeaRow): SavedIdea {
   const ts = row.created_at ? Date.parse(row.created_at) : Date.now();
-  return {
+  const idea: SavedIdea = {
     id: row.id,
     type: row.type,
     title: row.title ?? undefined,
@@ -110,6 +112,16 @@ function mapRowToIdea(row: DbIdeaRow): SavedIdea {
     timestamp: Number.isFinite(ts) ? ts : Date.now(),
     category: (row as any).category ?? undefined,
   };
+
+  try {
+    const parsed = JSON.parse(row.content || '');
+    const project = parsed?.project || parsed?.creativeProject || parsed?.meta?.project || parsed?.structured?.project;
+    if (project && typeof project === 'object') idea.project = project;
+  } catch {
+    // Older/plain-text ideas do not carry project metadata.
+  }
+
+  return idea;
 }
 
 /**
@@ -255,13 +267,35 @@ export async function saveIdea(
 
   await enforceSavedIdeaFriction(uid, payload.type);
 
+  const project = normalizeCreativeProjectLink(
+    payload.project || (payload.metadata || {}).project || (payload.metadata || {}).creativeProject,
+    {
+      originTool: String((payload.metadata || {}).originTool || payload.source || 'idea_create'),
+      projectTitle: String((payload.metadata || {}).projectTitle || payload.title || ''),
+      projectType: String((payload.metadata || {}).projectType || payload.category || ''),
+      projectStage: ((payload.metadata || {}).projectStage as any) || (payload.category === 'rehearsal' ? 'rehearsal' : 'concept'),
+    }
+  );
+
+  let contentForInsert = payload.content;
+  if (project) {
+    try {
+      const parsed = JSON.parse(String(payload.content || ''));
+      if (parsed && typeof parsed === 'object' && typeof parsed.format === 'string' && parsed.format.startsWith('maw.idea.')) {
+        contentForInsert = JSON.stringify(attachCreativeProjectToPayload(parsed, project));
+      }
+    } catch {
+      // Plain-text ideas remain plain text; continuity is still preserved through project tags/metadata.
+    }
+  }
+
   const baseInsert = {
     user_id: uid,
     type: payload.type,
-    content: sanitizeIdeaContent(payload.content),
+    content: sanitizeIdeaContent(contentForInsert),
     title: payload.title ?? null,
     // DB constraint: tags is NOT NULL. Always send an array.
-    tags: Array.isArray(payload.tags) ? payload.tags : [],
+    tags: mergeProjectTags(Array.isArray(payload.tags) ? payload.tags : [], project),
   };
 
   const insertWithCategory = async (includeCategory: boolean) => {
@@ -315,6 +349,9 @@ export async function saveIdea(
       title: savedIdea.title ?? null,
       category: savedIdea.category ?? null,
       tag_count: Array.isArray(savedIdea.tags) ? savedIdea.tags.length : 0,
+      project_id: project?.projectId ?? null,
+      project_title: project?.projectTitle ?? null,
+      project_stage: project?.projectStage ?? null,
       source: payload.source ?? 'idea_create',
       save_source: payload.source ?? null,
       ...(payload.metadata || {}),

@@ -13,9 +13,9 @@ import { canConsume, consume, getSoftLimitWarning } from '../services/usageTrack
 import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 import { startPipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
-import { buildVisualBrainstormImagePrompt, reinforceVisualBrainstormPrompt, validateVisualBrainstormPrompt } from '../services/buildVisualBrainstormPrompt';
+import { buildVisualBrainstormImagePrompt } from '../services/buildVisualBrainstormPrompt';
 
-const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are locked to believable, buildable magic visuals that obey real-world physics.';
+const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals.';
 
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
@@ -242,7 +242,7 @@ useEffect(() => {
       objectProp: 'rope and brass rings',
       sceneSetting: 'Victorian theater stage illusion',
       style: 'steampunk, mysterious',
-      context: 'dramatic lighting, subtle theatrical haze, practical stage atmosphere',
+      context: 'dramatic lighting, subtle fog, magical particles',
     },
     {
       title: 'The Floating Deck Spectacle',
@@ -511,15 +511,13 @@ useEffect(() => {
     ? editPrompt.trim()
     : (advancedPrompt && promptOverride.trim() ? promptOverride.trim() : buildPrompt());
 
-  const buildProviderPrompt = (prompt: string, hasUploadedImage = false) => {
-    const providerPrompt = buildVisualBrainstormImagePrompt({
+  const buildProviderPrompt = (prompt: string, hasUploadedImage = false) =>
+    buildVisualBrainstormImagePrompt({
       prompt,
       aspectRatio,
       styleMode: 'realistic_stage',
       hasUploadedImage,
     });
-    return reinforceVisualBrainstormPrompt(providerPrompt);
-  };
 
   const activeItem = useMemo(() => {
     if (!activeHistoryId) return null;
@@ -695,10 +693,6 @@ const addToHistory = (
     setIsLoading(true);
     setError(null);
     setUsageWarning(null);
-    const realismValidation = validateVisualBrainstormPrompt(action.prompt);
-    if (!realismValidation.ok) {
-      setUsageWarning('Realism guardrails strengthened this request to keep the image grounded in practical stage magic.');
-    }
     setGeneratedImage(null);
     setVariationImages([]);
     setVariationHistoryIds([]);
@@ -876,10 +870,6 @@ const addToHistory = (
 
     const displayPrompt = finalPrompt.trim();
     const promptToUse = buildProviderPrompt(displayPrompt, Boolean(inputImageFile && inputImagePreview));
-    const promptValidation = validateVisualBrainstormPrompt(promptToUse);
-    if (!promptValidation.ok) {
-      setUsageWarning('Realism guardrails strengthened this request to keep the image grounded in practical stage magic.');
-    }
     if (inputImageFile && inputImagePreview) {
       const base64Data = inputImagePreview.split(',')[1];
       const action: LastVisualAction = {
@@ -908,7 +898,7 @@ const addToHistory = (
     if (isLoading) return;
     if (isEditing) return;
     const displayPrompt = (promptUsed || finalPrompt || '').trim();
-    const p = reinforceVisualBrainstormPrompt(lastGeneratePrompt || (displayPrompt ? buildProviderPrompt(displayPrompt) : '')).trim();
+    const p = (lastGeneratePrompt || (displayPrompt ? buildProviderPrompt(displayPrompt) : '')).trim();
     if (!p || !displayPrompt) return;
     const action: LastVisualAction = {
       kind: 'generate',
@@ -926,8 +916,8 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     { label: 'More Comedy', instruction: 'make it more playful and comedic, whimsical visual details' },
     { label: 'More Stage Lighting', instruction: 'add strong stage lighting, spotlights, theatrical atmosphere' },
     { label: 'More Audience Interaction', instruction: 'show audience interaction, spectators reacting, participatory feel' },
-    { label: 'More Mysterious', instruction: 'make it more mysterious with practical low-key lighting, theatrical haze, and grounded stage intrigue' },
-    { label: 'Add Fog & Atmosphere', instruction: 'add practical stage haze, atmospheric depth, and realistic theatrical light beams' },
+    { label: 'More Mysterious', instruction: 'make it more mysterious, subtle fog, magical glow, intrigue' },
+    { label: 'Add Fog & Atmosphere', instruction: 'add fog, haze, and atmospheric depth with magical particles' },
     { label: 'Audience Perspective', instruction: 'shift to an audience perspective viewpoint, stage in the distance' },
   ];
 
@@ -940,7 +930,7 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     }
 
     const displayPrompt = `${base}, ${instruction}`;
-    const refinedPrompt = reinforceVisualBrainstormPrompt(buildProviderPrompt(displayPrompt));
+    const refinedPrompt = buildProviderPrompt(displayPrompt);
 
     // Telemetry (Phase 7)
     trackClientEvent({
@@ -1163,6 +1153,9 @@ ${visualPrompt}`,
         content: JSON.stringify(richPayload),
         title: conceptTitle?.trim() || buildConceptTitle(),
         tags: ['visual', 'concept'],
+        category: 'image',
+        source: 'visual_brainstorm',
+        metadata: { projectStage: 'concept', originTool: 'visual_brainstorm' },
       });
       setSavedIdeaId(saved.id);
       setSavedByHistory((prev) => ({ ...prev, [activeHistoryId]: saved.id }));
@@ -2023,7 +2016,7 @@ ${visualPrompt}`,
                       <textarea
                         value={customRefine}
                         onChange={(e) => setCustomRefine(e.target.value)}
-                        placeholder="e.g., add golden rim lighting, keep background dark, use realistic theatrical haze"
+                        placeholder="e.g., add golden rim lighting, keep background dark, include subtle magical particles"
                         className="w-full min-h-[90px] px-2.5 py-1.5 text-xs bg-slate-900 border border-white/10 rounded-md text-white"
                       />
                       <div className="mt-2 flex justify-end">

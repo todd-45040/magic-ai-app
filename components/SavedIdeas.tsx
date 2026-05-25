@@ -10,6 +10,7 @@ import RoutineTracker from './RoutineTracker';
 import ResumePanel from './ResumePanel';
 import { FEATURE_FLAGS } from '../featureFlags';
 import { trackClientEvent } from '../services/telemetryClient';
+import { getCreativeProjectFromIdea, getProjectDisplayLabel } from '../services/creativeProjectContinuity';
 
 type MawIdeaV2 = {
     format: string;
@@ -254,12 +255,32 @@ function getIdeaCategoryMeta(idea: SavedIdea): CategoryMeta {
     return IDEA_CATEGORY_META[inferIdeaCategory(idea)];
 }
 
+function getIdeaProject(idea: SavedIdea) {
+    return idea.project || getCreativeProjectFromIdea(idea);
+}
+
+function ProjectContinuityBadge({ idea, compact = false }: { idea: SavedIdea; compact?: boolean }) {
+    const project = getIdeaProject(idea);
+    if (!project) return null;
+    const label = getProjectDisplayLabel(project);
+    return (
+        <span
+            title={`Creative project: ${label}`}
+            className={`inline-flex max-w-full items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-100 ${compact ? 'text-[10px]' : 'text-[11px]'}`}
+        >
+            <span aria-hidden="true">🧩</span>
+            <span className="truncate">{label}</span>
+        </span>
+    );
+}
+
 function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
     const display = getIdeaDisplay(idea);
     const lines = [
         `Idea Vault source: ${display.title || idea.title || 'Saved Idea'}`,
         `Source tool: ${getIdeaSourceTool(idea)}`,
         `Category: ${getIdeaCategoryMeta(idea).label}`,
+        getProjectDisplayLabel(getIdeaProject(idea)) ? `Creative Project: ${getProjectDisplayLabel(getIdeaProject(idea))}` : '',
         slot ? `Preferred slot: ${slot}` : '',
         idea.tags?.length ? `Tags: ${idea.tags.join(', ')}` : '',
         '',
@@ -1438,6 +1459,7 @@ ${buildImageIdeaPromptContext(idea)}`
                 (display.title || '').toLowerCase().includes(q) ||
                 (display.body || '').toLowerCase().includes(q) ||
                 sourceTool.includes(q) ||
+                (getProjectDisplayLabel(getIdeaProject(idea)) || '').toLowerCase().includes(q) ||
                 (idea.tags || []).some((t) => t.toLowerCase().includes(q));
             return typeMatch && tabMatch && tagMatch && searchMatch;
         });
@@ -1518,6 +1540,22 @@ ${buildImageIdeaPromptContext(idea)}`
     }, [pinnedIds, filteredIdeas]);
 
     const favoriteIdeas = useMemo(() => filteredIdeas.filter((idea) => isStarred(idea.id)), [filteredIdeas, starredIds]);
+
+    const projectClusters = useMemo(() => {
+        const map = new Map<string, { label: string; items: SavedIdea[] }>();
+        filteredIdeas.forEach((idea) => {
+            const project = getIdeaProject(idea);
+            if (!project?.projectId) return;
+            const existing = map.get(project.projectId) || { label: project.projectTitle || 'Creative Project', items: [] };
+            existing.items.push(idea);
+            map.set(project.projectId, existing);
+        });
+        return Array.from(map.entries())
+            .map(([id, cluster]) => ({ id, ...cluster }))
+            .filter((cluster) => cluster.items.length >= 2)
+            .sort((a, b) => b.items.length - a.items.length)
+            .slice(0, 6);
+    }, [filteredIdeas]);
 
 
     const newestIdea = useMemo(() => {
@@ -1678,6 +1716,7 @@ ${buildImageIdeaPromptContext(idea)}`
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <div className="flex items-center gap-2 mt-1">
                                                     <p className="text-xs leading-5 text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
+                                                                        <div className="mt-1"><ProjectContinuityBadge idea={idea} /></div>
                                                     <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 bg-slate-900/40 text-slate-300 uppercase tracking-wide">
                                                         {idea.type}
                                                     </span>
@@ -1979,6 +2018,30 @@ ${buildImageIdeaPromptContext(idea)}`
             </div>
             </div>
 
+            {projectClusters.length ? (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="text-sm font-bold text-emerald-100">Creative Project Continuity</div>
+                            <div className="text-xs text-emerald-100/70">Saved Ideas is now detecting linked outputs that belong to the same creative project.</div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {projectClusters.map((cluster) => (
+                                <button
+                                    key={cluster.id}
+                                    type="button"
+                                    onClick={() => setSearchQuery(cluster.label)}
+                                    className="rounded-full border border-emerald-400/25 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-emerald-100 hover:border-emerald-300/50 hover:bg-emerald-500/15"
+                                    title="Filter to this creative project"
+                                >
+                                    {cluster.label} · {cluster.items.length}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             {/* Empty / No Results */}
             {ideas.length === 0 ? (
                 <div className="text-center py-16 text-slate-400">
@@ -2170,6 +2233,7 @@ ${buildImageIdeaPromptContext(idea)}`
                                                     return (
                                                         <div key={idea.id} ref={el => { ideaRefs.current.set(idea.id, el); }} onClick={() => openIdeaView(idea)} className="group relative bg-slate-900 border border-slate-700 rounded-xl flex flex-col justify-between overflow-hidden aspect-square transition-all hover:border-purple-500">
                                                             <div className="absolute left-3 top-11 z-20 rounded-full border border-slate-600 bg-slate-950/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200">{getIdeaCategoryMeta(idea).icon} {getIdeaCategoryMeta(idea).label}</div>
+                                                            <div className="absolute left-3 top-[4.35rem] right-3 z-20 flex"><ProjectContinuityBadge idea={idea} compact /></div>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => { e.stopPropagation(); toggleSelected(idea.id); }}
@@ -2250,6 +2314,7 @@ ${buildImageIdeaPromptContext(idea)}`
                                                                     <div className="min-w-0">
                                                                         <h3 className="font-bold text-yellow-300 pr-20 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{idea.title || splitLeadingHeading(idea.content).heading || 'Saved Note'}</h3>
                                                                         <p className="text-xs leading-5 text-slate-400">{getIdeaSourceTool(idea)} • Used in {getUsedInShowsCount(idea)} shows • Last opened {lastOpenedMap[idea.id] ? formatRelative(lastOpenedMap[idea.id]) : "—"} • Created {formatSavedOn(idea)}</p>
+                                                                        <div className="mt-1"><ProjectContinuityBadge idea={idea} /></div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2520,6 +2585,7 @@ ${buildImageIdeaPromptContext(idea)}`
                                     <div className="space-y-2 text-sm text-slate-300">
                                         <div><span className="text-slate-500">Title:</span> {getIdeaDisplay(openIdea).title || 'Saved Idea'}</div>
                                         <div><span className="text-slate-500">Source Tool:</span> {getIdeaSourceTool(openIdea)}</div>
+                                        <div><span className="text-slate-500">Creative Project:</span> {getProjectDisplayLabel(getIdeaProject(openIdea)) || '—'}</div>
                                         <div><span className="text-slate-500">Creation Date:</span> {formatSavedOn(openIdea)}</div>
                                         <div><span className="text-slate-500">Related Show:</span> {getRelatedShowNames(openIdea, shows).join(', ') || '—'}</div>
                                         <div><span className="text-slate-500">Related Routine:</span> {getRelatedRoutineNames(openIdea, shows).join(', ') || '—'}</div>

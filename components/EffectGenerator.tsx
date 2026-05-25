@@ -891,7 +891,7 @@ ${lastOutput}`
     ].join('\n');
 
     try {
-      await saveIdea({ type: 'text', content: fullContent, title, tags });
+      await saveIdea({ type: 'text', content: fullContent, title, tags, category: 'effect', source: 'effect_engine', metadata: { projectStage: 'concept', originTool: 'effect_engine' } });
       void trackClientEvent({ tool: 'effect_generator', action: 'effect_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { title, strongIdea: isStrongIdea, creativeIntent, difficulty } });
       onIdeaSaved();
       setSaveStatus('saved');

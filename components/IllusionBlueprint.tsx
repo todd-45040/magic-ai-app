@@ -815,6 +815,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         title: `Illusion Builder Plan — ${builderPlan.project_title}`,
         content: exportBuilderPlanText,
         tags: ['illusion-blueprint', 'builder-plan'],
+        category: 'blueprint',
+        source: 'illusion_blueprint',
+        metadata: { projectStage: 'development', originTool: 'illusion_blueprint' },
       });
       void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_save_success', outcome: 'SUCCESS_NOT_CHARGED', metadata: { project_title: builderPlan?.project_title || '' } });
       onIdeaSaved();

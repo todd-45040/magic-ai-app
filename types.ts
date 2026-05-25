@@ -28,6 +28,16 @@ export interface PredefinedPrompt {
 export type IdeaType = 'text' | 'image' | 'rehearsal';
 export type IdeaCategory = 'effect' | 'script' | 'image' | 'blueprint' | 'research' | 'rehearsal';
 
+export interface CreativeProjectLink {
+  projectId: string;
+  projectTitle: string;
+  projectType?: string;
+  projectStage?: 'concept' | 'development' | 'rehearsal' | 'performance';
+  originTool: string;
+  createdAt: number;
+  linkedAssetIds: string[];
+}
+
 export interface SavedIdea {
   id: string;
   type: IdeaType;
@@ -36,6 +46,8 @@ export interface SavedIdea {
   timestamp: number;
   tags?: string[];
   category?: IdeaCategory;
+  /** Optional lightweight continuity metadata. Stored inside rich content payloads/tags for DB compatibility. */
+  project?: CreativeProjectLink;
 }
 
 export interface ClientProposal {
