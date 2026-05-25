@@ -121,6 +121,22 @@ Visual requirements:
 - The image must clearly show a stage illusion apparatus or performance prop matching the builder plan; never show food, hamburgers, sandwiches, consumer products, animals, unrelated still-life objects, landscapes, or generic stock photography.
 - The final image should look like a real staged illusion concept or practical promotional photograph.`;
 
+
+const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<IllusionBlueprintImagePromptParams, 'matchedOutput' | 'visualAnchor'>): string => [
+  `BLUEPRINT-TO-RENDER LOCK FOR MATCHED DESIGN ${matchedOutput.label}:`,
+  `Render THIS EXACT illusion apparatus shown in Blueprint ${matchedOutput.label} for the same ${visualAnchor}.`,
+  'Maintain identical silhouette from the blueprint drawing.',
+  'Maintain the same staging footprint and floor relationship from the blueprint drawing.',
+  'Maintain the same mechanism placement and visible apparatus logic from the blueprint drawing.',
+  'Maintain the same materials, finish direction, construction cues, and scenic trim from the blueprint drawing.',
+  'Maintain the same audience orientation, camera/viewing angle, and theatrical context from the blueprint drawing.',
+  'Maintain the same proportions, base shape, major panels, supports, frames, casters, hinges, access panels, and platform geometry from the blueprint drawing.',
+  'Do not reinterpret the apparatus.',
+  'Do not redesign the illusion.',
+  'Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, animal, landscape, or unrelated object.',
+  'The rendered concept image should look like a realistic staged/photo version of the matching blueprint, not a new visual idea.',
+].join('\n');
+
 export function buildIllusionBlueprintPlanPrompt({ generationContext }: IllusionBlueprintPlanParams): string {
   return [
     'Create a realistic builder plan for the following illusion request.',
@@ -195,8 +211,9 @@ export function buildIllusionConceptImagePrompt({
     `Venue / scale: ${venueScale}`,
     `Performer style: ${performerStyle}`,
     `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
-    `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, and practical construction cues.`,
-    'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object.',
+    buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),
+    `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
+    'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object. Do not reinterpret or redesign the apparatus.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     'Language requirement: English only. Any signage, labels, notes, or visible words inside the concept image must be clear English. Prefer no text if clean English text cannot be rendered reliably.',
     `Produce one polished realistic concept image that matches Blueprint ${matchedOutput.label}. The image must contain the illusion apparatus as the central subject; if the prompt could be interpreted as food, product photography, or a generic object, ignore that interpretation and render the practical stage illusion instead.`,
