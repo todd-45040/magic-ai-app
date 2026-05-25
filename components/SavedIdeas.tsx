@@ -274,6 +274,51 @@ function ProjectContinuityBadge({ idea, compact = false }: { idea: SavedIdea; co
     );
 }
 
+
+function SourceToolBadge({ tool }: { tool: string }) {
+    const normalized = safeLower(tool);
+    const style = normalized.includes('visual')
+        ? 'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100'
+        : normalized.includes('blueprint')
+            ? 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
+            : normalized.includes('effect')
+                ? 'border-amber-400/25 bg-amber-500/10 text-amber-100'
+                : normalized.includes('patter') || normalized.includes('script')
+                    ? 'border-violet-400/25 bg-violet-500/10 text-violet-100'
+                    : 'border-slate-600 bg-slate-900/70 text-slate-300';
+    return (
+        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${style}`}>
+            {tool}
+        </span>
+    );
+}
+
+type SavedIdeaProjectGroup = {
+    id: string;
+    label: string;
+    items: SavedIdea[];
+    tools: string[];
+    categories: IdeaCategory[];
+    latestTimestamp: number;
+};
+
+function buildProjectGroupKey(idea: SavedIdea): string | null {
+    const project = getIdeaProject(idea);
+    if (project?.projectId) return `project:${project.projectId}`;
+    if (project?.projectTitle) return `title:${project.projectTitle.trim().toLowerCase()}`;
+    return null;
+}
+
+function getProjectGroupSummary(group: SavedIdeaProjectGroup): string {
+    const categoryLabels = group.categories.map((category) => IDEA_CATEGORY_META[category].label);
+    const parts = [
+        `${group.items.length} saved output${group.items.length === 1 ? '' : 's'}`,
+        categoryLabels.length ? categoryLabels.join(' + ') : '',
+        group.tools.length ? `from ${group.tools.slice(0, 3).join(', ')}` : '',
+    ].filter(Boolean);
+    return parts.join(' • ');
+}
+
 function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
     const display = getIdeaDisplay(idea);
     const lines = [
@@ -796,6 +841,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'favorites' | 'recentlyViewed'>('newest');
     const [viewMode, setViewMode] = useState<'grid' | 'compact'>('grid');
+    const [libraryMode, setLibraryMode] = useState<'projects' | 'flat'>('projects');
     const [dismissedResumeId, setDismissedResumeId] = useState<string | null>(() => {
         try { return localStorage.getItem('savedIdeas:dismissedResumeId'); } catch { return null; }
     });
@@ -816,6 +862,7 @@ const SavedIdeas: React.FC<SavedIdeasProps> = ({ initialIdeaId, onAiSpark }) => 
         setCategoryFilter('all');
         setSortBy('newest');
         setViewMode('grid');
+        setLibraryMode('projects');
         setSmartTab('all');
         setSelectedIds([]);
         setSectionOpen({
@@ -1218,6 +1265,34 @@ ${buildImageIdeaPromptContext(idea)}`
         }
     };
 
+    const continueProjectGroup = (group: SavedIdeaProjectGroup) => {
+        const latest = group.items.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+        const project = latest ? getIdeaProject(latest) : null;
+        const payload = {
+            version: 1,
+            source: 'saved_ideas_project_group',
+            projectId: project?.projectId || group.id,
+            projectTitle: group.label,
+            ideaIds: group.items.map((idea) => idea.id),
+            tools: group.tools,
+            categories: group.categories,
+            latestIdeaId: latest?.id || null,
+            created_at: new Date().toISOString(),
+        };
+
+        try {
+            localStorage.setItem('maw_project_continuity_handoff_v1', JSON.stringify(payload));
+            localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'saved_project_group', ts: Date.now(), title: group.label }));
+        } catch {}
+
+        setSearchQuery(group.label);
+        if (latest) {
+            markOpenedNow(latest.id);
+            setOpenIdea(latest);
+        }
+        setActionMessage(`Project "${group.label}" staged. Continue from the opened item or add it to a show.`);
+    };
+
     const sendToPlanner = (idea: SavedIdea) => {
         openPromoteModal(idea);
     };
@@ -1541,21 +1616,44 @@ ${buildImageIdeaPromptContext(idea)}`
 
     const favoriteIdeas = useMemo(() => filteredIdeas.filter((idea) => isStarred(idea.id)), [filteredIdeas, starredIds]);
 
-    const projectClusters = useMemo(() => {
-        const map = new Map<string, { label: string; items: SavedIdea[] }>();
+    const projectGroups = useMemo<SavedIdeaProjectGroup[]>(() => {
+        const map = new Map<string, SavedIdeaProjectGroup>();
         filteredIdeas.forEach((idea) => {
+            const key = buildProjectGroupKey(idea);
+            if (!key) return;
             const project = getIdeaProject(idea);
-            if (!project?.projectId) return;
-            const existing = map.get(project.projectId) || { label: project.projectTitle || 'Creative Project', items: [] };
+            const label = getProjectDisplayLabel(project) || project?.projectTitle || getIdeaDisplay(idea).title || idea.title || 'Creative Project';
+            const existing = map.get(key) || {
+                id: key,
+                label,
+                items: [] as SavedIdea[],
+                tools: [] as string[],
+                categories: [] as IdeaCategory[],
+                latestTimestamp: 0,
+            };
             existing.items.push(idea);
-            map.set(project.projectId, existing);
+            existing.latestTimestamp = Math.max(existing.latestTimestamp, idea.timestamp || 0);
+            const tool = getIdeaSourceTool(idea);
+            if (tool && !existing.tools.includes(tool)) existing.tools.push(tool);
+            const category = inferIdeaCategory(idea);
+            if (!existing.categories.includes(category)) existing.categories.push(category);
+            map.set(key, existing);
         });
-        return Array.from(map.entries())
-            .map(([id, cluster]) => ({ id, ...cluster }))
-            .filter((cluster) => cluster.items.length >= 2)
-            .sort((a, b) => b.items.length - a.items.length)
-            .slice(0, 6);
+
+        return Array.from(map.values())
+            .sort((a, b) => {
+                if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+                return b.latestTimestamp - a.latestTimestamp;
+            });
     }, [filteredIdeas]);
+
+    const ungroupedProjectIdeas = useMemo(() => {
+        return filteredIdeas.filter((idea) => !buildProjectGroupKey(idea));
+    }, [filteredIdeas]);
+
+    const hasProjectGrouping = projectGroups.length > 0;
+
+
 
 
     const newestIdea = useMemo(() => {
@@ -1891,6 +1989,26 @@ ${buildImageIdeaPromptContext(idea)}`
                             </button>
                         </div>
 
+                        <label className="text-xs font-semibold text-slate-400">Library:</label>
+                        <div className="flex overflow-hidden rounded-md border border-slate-700 bg-slate-900/60">
+                            <button
+                                type="button"
+                                onClick={() => setLibraryMode('projects')}
+                                className={`px-3 py-2 text-xs font-semibold transition ${libraryMode === 'projects' ? 'bg-emerald-600/25 text-emerald-100' : 'text-slate-300 hover:bg-slate-800/70'}`}
+                                title="Group saved items by creative project metadata"
+                            >
+                                Projects
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLibraryMode('flat')}
+                                className={`px-3 py-2 text-xs font-semibold transition ${libraryMode === 'flat' ? 'bg-purple-600/30 text-purple-100' : 'text-slate-300 hover:bg-slate-800/70'}`}
+                                title="Show the existing category-based Saved Ideas view"
+                            >
+                                Flat
+                            </button>
+                        </div>
+
                         <label className="text-xs font-semibold text-slate-400">Sort:</label>
                         <select
                             value={sortBy}
@@ -2000,6 +2118,7 @@ ${buildImageIdeaPromptContext(idea)}`
                     if (categoryFilter !== 'all') items.push(`Category=${IDEA_CATEGORY_META[categoryFilter].label}`);
                     if (tagFilter) items.push(`Tag=${tagFilter}`);
                     if (searchQuery.trim()) items.push('Search active');
+                    if (libraryMode === 'projects') items.push('Library=Projects');
                     if (!items.length) return null;
 
                     return (
@@ -2018,27 +2137,84 @@ ${buildImageIdeaPromptContext(idea)}`
             </div>
             </div>
 
-            {projectClusters.length ? (
-                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+            {libraryMode === 'projects' && hasProjectGrouping ? (
+                <section className="mb-8 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <div className="text-sm font-bold text-emerald-100">Creative Project Continuity</div>
-                            <div className="text-xs text-emerald-100/70">Saved Ideas is now detecting linked outputs that belong to the same creative project.</div>
+                            <div className="text-sm font-bold text-emerald-100">Creative Projects</div>
+                            <div className="text-xs text-emerald-100/70">Saved Ideas is grouping linked outputs by project title and project continuity metadata.</div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {projectClusters.map((cluster) => (
-                                <button
-                                    key={cluster.id}
-                                    type="button"
-                                    onClick={() => setSearchQuery(cluster.label)}
-                                    className="rounded-full border border-emerald-400/25 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-emerald-100 hover:border-emerald-300/50 hover:bg-emerald-500/15"
-                                    title="Filter to this creative project"
-                                >
-                                    {cluster.label} · {cluster.items.length}
-                                </button>
-                            ))}
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setLibraryMode('flat')}
+                            className="rounded-full border border-emerald-400/25 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-emerald-100 hover:border-emerald-300/50 hover:bg-emerald-500/15"
+                        >
+                            Show Flat View
+                        </button>
                     </div>
+
+                    <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        {projectGroups.map((group) => (
+                            <div key={group.id} className="rounded-2xl border border-emerald-400/15 bg-slate-950/55 p-4 shadow-lg shadow-black/10">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg" aria-hidden="true">🧩</span>
+                                            <h3 className="truncate text-base font-bold text-emerald-100">{group.label}</h3>
+                                        </div>
+                                        <p className="mt-1 text-xs leading-5 text-emerald-100/70">{getProjectGroupSummary(group)}</p>
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {group.tools.slice(0, 4).map((tool) => <SourceToolBadge key={tool} tool={tool} />)}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => continueProjectGroup(group)}
+                                        className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
+                                    >
+                                        Continue Project
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 space-y-2">
+                                    {group.items.slice(0, 4).map((idea) => (
+                                        <button
+                                            key={idea.id}
+                                            type="button"
+                                            onClick={() => openIdeaView(idea)}
+                                            className="w-full rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-left transition hover:border-emerald-300/30 hover:bg-slate-900/80"
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="text-sm">{getIdeaCategoryMeta(idea).icon}</span>
+                                                        <span className="truncate text-sm font-semibold text-yellow-200">{getIdeaDisplay(idea).title || idea.title || 'Saved Idea'}</span>
+                                                    </div>
+                                                    <div className="mt-1 text-xs text-slate-400">{getIdeaSourceTool(idea)} • {formatSavedOn(idea)}</div>
+                                                </div>
+                                                <span className="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                                                    {IDEA_CATEGORY_META[inferIdeaCategory(idea)].searchLabel}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {group.items.length > 4 ? (
+                                        <div className="px-1 pt-1 text-xs text-slate-400">+ {group.items.length - 4} more linked item{group.items.length - 4 === 1 ? '' : 's'}</div>
+                                    ) : null}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {ungroupedProjectIdeas.length ? (
+                        <div className="mt-4 rounded-xl border border-slate-700/70 bg-slate-950/35 p-3 text-xs text-slate-300">
+                            {ungroupedProjectIdeas.length} item{ungroupedProjectIdeas.length === 1 ? '' : 's'} do not have project metadata yet and remain available in the flat/category view.
+                        </div>
+                    ) : null}
+                </section>
+            ) : libraryMode === 'projects' ? (
+                <div className="mb-8 rounded-2xl border border-slate-700 bg-slate-950/50 p-4 text-sm text-slate-300">
+                    No linked project groups found yet. Saved Ideas will automatically group new outputs that include project continuity metadata. The existing flat view remains available below.
                 </div>
             ) : null}
 
@@ -2074,7 +2250,7 @@ ${buildImageIdeaPromptContext(idea)}`
             ) : (
                 
                 <div className="space-y-4">
-                    {favoriteIdeas.length ? (
+                    {(libraryMode === 'flat' || !hasProjectGrouping) && favoriteIdeas.length ? (
                         (() => {
                             const secKey = 'favorites';
                             return (
@@ -2106,7 +2282,7 @@ ${buildImageIdeaPromptContext(idea)}`
                         })()
                     ) : null}
 
-                    {pinnedIdeas.length ? (
+                    {(libraryMode === 'flat' || !hasProjectGrouping) && pinnedIdeas.length ? (
                         (() => {
                             const secKey = 'pinned';
                             const isOpen = sectionOpen[secKey] ?? true;
@@ -2193,7 +2369,7 @@ ${buildImageIdeaPromptContext(idea)}`
                         })()
                     ) : null}
 
-                    {IDEA_CATEGORY_ORDER.map((secKey) => {
+                    {(libraryMode === 'flat' || !hasProjectGrouping) && IDEA_CATEGORY_ORDER.map((secKey) => {
                         const sec = {
                             key: secKey,
                             label: IDEA_CATEGORY_META[secKey].label,
