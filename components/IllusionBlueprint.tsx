@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 
 import { generateImages, generateStructuredResponse, validateIllusionBlueprintGeneratedImage } from '../services/geminiService';
@@ -539,6 +539,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [safetyConcerns, setSafetyConcerns] = useState('');
   const [materialsPreference, setMaterialsPreference] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
+  const [visualHandoff, setVisualHandoff] = useState<VisualBlueprintHandoff | null>(null);
 
   const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
   const [blueprintDrawings, setBlueprintDrawings] = useState<string[]>([]);
@@ -619,6 +620,26 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const toggleSection = (key: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handoff = safeParseVisualBlueprintHandoff(localStorage.getItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY));
+    if (!handoff) return;
+
+    setVisualHandoff(handoff);
+    setEffectInput((prev) => (prev.trim() ? prev : buildEffectInputFromVisualHandoff(handoff)));
+    setSpecialNotes((prev) => {
+      if (prev.trim()) return prev;
+      const lines = [
+        'Imported from Visual Brainstorm. Preserve the visual concept as the starting point, but convert it into a realistic, stage-ready illusion apparatus.',
+        handoff.imageUrl ? `Reference image: ${handoff.imageUrl}` : '',
+        handoff.project?.projectTitle ? `Project: ${handoff.project.projectTitle}` : '',
+      ].filter(Boolean);
+      return lines.join('\n');
+    });
+
+    try { localStorage.removeItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY); } catch {}
+  }, []);
 
   const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
     setEffectInput(preset.effect);
@@ -1112,6 +1133,21 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               Reset
             </button>
           </div>
+
+          {visualHandoff ? (
+            <div className="mb-4 rounded-xl border border-violet-400/30 bg-violet-500/10 p-3 text-sm text-violet-100">
+              <div className="font-semibold">Imported from Visual Brainstorm</div>
+              <div className="mt-1 text-xs text-violet-100/80">
+                This blueprint request was prefilled from {visualHandoff.project?.projectTitle || visualHandoff.title || 'a visual concept'}.
+                The generated plan should preserve the concept while converting it into a realistic stage illusion apparatus.
+              </div>
+              {visualHandoff.imageUrl ? (
+                <div className="mt-3 overflow-hidden rounded-lg border border-violet-300/20 bg-slate-950/40">
+                  <img src={visualHandoff.imageUrl} alt="Visual Brainstorm reference" className="max-h-44 w-full object-cover" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/30 p-3">
             <div className="text-sm font-semibold text-slate-200">Why use this?</div>

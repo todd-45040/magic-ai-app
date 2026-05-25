@@ -14,6 +14,7 @@ import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 import { startPipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
 import { buildVisualBrainstormImagePrompt } from '../services/buildVisualBrainstormPrompt';
+import { buildCreativeProjectLink } from '../services/creativeProjectContinuity';
 
 const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals.';
 
@@ -1019,21 +1020,39 @@ const activeSession = useMemo(() => {
   };
 
 
-  const handleUseInEffect = () => {
-    if (!generatedImage) return;
-
+  const buildVisualWorkflowPayload = (targetTool: 'effect_engine' | 'illusion_blueprint') => {
     const title = conceptTitle?.trim() || activeItem?.title || buildConceptTitle() || 'Visual Brainstorm Concept';
     const prompt = String(promptUsed || finalPrompt || '').trim();
-    const imageUrl = generatedImage;
-    const payload = {
+    const imageUrl = generatedImage || '';
+    const project = buildCreativeProjectLink({
+      originTool: 'visual_brainstorm',
+      projectTitle: title,
+      prompt,
+      projectType: targetTool === 'illusion_blueprint' ? 'illusion_blueprint' : 'effect',
+      projectStage: targetTool === 'illusion_blueprint' ? 'development' : 'concept',
+      linkedAssetIds: [savedIdeaId, activeHistoryId, activeSessionId].filter(Boolean) as string[],
+    });
+
+    return {
       source: 'visual_image',
+      sourceTool: 'visual_brainstorm',
+      targetTool,
       imageUrl,
       prompt,
       title,
+      project,
       ideaId: savedIdeaId || undefined,
       historyId: activeHistoryId || undefined,
+      sessionId: activeSessionId || undefined,
       created_at: new Date().toISOString(),
     };
+  };
+
+  const handleUseInEffect = () => {
+    if (!generatedImage) return;
+
+    const payload = buildVisualWorkflowPayload('effect_engine');
+    const { imageUrl, prompt, title } = payload;
 
     // Debug checkpoint requested for verification.
     console.log('IMAGE IDEA:', payload);
@@ -1062,6 +1081,39 @@ const activeSession = useMemo(() => {
       window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'effect-generator', source: 'visual_brainstorm', historyId: activeHistoryId || null } }));
     } catch {
       window.location.href = '/effect-engine';
+    }
+  };
+
+  const handleUseInIllusionBlueprint = () => {
+    if (!generatedImage) return;
+
+    const payload = buildVisualWorkflowPayload('illusion_blueprint');
+    const { imageUrl, prompt, title } = payload;
+
+    try {
+      localStorage.setItem('maw_illusion_blueprint_visual_handoff', JSON.stringify(payload));
+    } catch {
+      // If storage is unavailable, still route the user and let them copy the prompt manually.
+    }
+
+    try {
+      const session = startPipelineSession({
+        sourceType: 'image',
+        lastStep: 'image',
+        imageUrl,
+        prompt,
+        title,
+      });
+      try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: session })); } catch {}
+      trackPipelineAdvance('image', 'routine', 'visual_brainstorm_to_illusion_blueprint', { historyId: activeHistoryId || null, ideaId: savedIdeaId || null, projectId: payload.project.projectId });
+    } catch {
+      // Pipeline state is helpful, but navigation should still work without it.
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'illusion-blueprint', source: 'visual_brainstorm', historyId: activeHistoryId || null, projectId: payload.project.projectId } }));
+    } catch {
+      window.location.hash = 'illusion-blueprint';
     }
   };
 
@@ -1834,7 +1886,7 @@ ${visualPrompt}`,
                   <div className="mt-5 pt-4 border-t border-slate-800/70">
                     <SaveActionBar
                       title="Next step:"
-                      subtitle="Move this visual into Effect Engine, or save it for later."
+                      subtitle="Move this visual into Effect Engine, Illusion Blueprint, or save it for later."
                       saved={!!savedIdeaId}
                       savingLabel="Saving…"
                       savedLabel="Saved"
@@ -1852,14 +1904,14 @@ ${visualPrompt}`,
                         tone: 'primary',
                       }}
                       secondaryLeft={{
-                        label: 'Add to Show',
-                        onClick: () => openShowModal('add'),
-                        disabled: !savedIdeaId,
+                        label: 'Use in Blueprint',
+                        onClick: handleUseInIllusionBlueprint,
+                        disabled: !generatedImage,
                         tone: 'secondary',
                       }}
                       secondaryRight={{
-                        label: 'Convert to Task',
-                        onClick: () => openShowModal('task'),
+                        label: 'Save / Add to Show',
+                        onClick: () => openShowModal('add'),
                         disabled: !savedIdeaId,
                         tone: 'secondary',
                       }}
