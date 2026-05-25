@@ -13,9 +13,9 @@ import { canConsume, consume, getSoftLimitWarning } from '../services/usageTrack
 import { normalizeTier } from '../services/membershipService';
 import { trackClientEvent } from "../services/telemetryClient";
 import { startPipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
+import { buildVisualBrainstormImagePrompt } from '../services/buildVisualBrainstormPrompt';
 
-const PRACTICAL_VISUAL_BRAINSTORM_HINT = 'practical magic prop or stage concept, real materials, believable construction, professional theatrical realism, buildable design, no fantasy physics';
-const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Practical mode: outputs are biased toward believable stage/build designs.';
+const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals.';
 
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
@@ -148,9 +148,9 @@ const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   // Phase 8 — Performance Improvements (Retry UX)
   type LastVisualAction =
-    | { kind: 'generate'; prompt: string; aspectRatio: typeof aspectRatio; units: number }
-    | { kind: 'edit'; prompt: string; base64: string; mimeType: string; units: number }
-    | { kind: 'refine'; prompt: string; aspectRatio: typeof aspectRatio; label: string; instruction: string; units: number };
+    | { kind: 'generate'; prompt: string; displayPrompt: string; aspectRatio: typeof aspectRatio; units: number }
+    | { kind: 'edit'; prompt: string; displayPrompt: string; base64: string; mimeType: string; units: number }
+    | { kind: 'refine'; prompt: string; displayPrompt: string; aspectRatio: typeof aspectRatio; label: string; instruction: string; units: number };
   const [lastFailedAction, setLastFailedAction] = useState<LastVisualAction | null>(null);
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
@@ -311,7 +311,13 @@ useEffect(() => {
       context: p.context,
     }).trim();
     if (!prompt) return;
-    await runAction({ kind: 'generate', prompt, aspectRatio, units: sessionVariationLimit } as any);
+    await runAction({
+      kind: 'generate',
+      prompt: buildProviderPrompt(prompt),
+      displayPrompt: prompt,
+      aspectRatio,
+      units: sessionVariationLimit,
+    });
   };
 
   const resetDemoSession = () => {
@@ -481,8 +487,7 @@ useEffect(() => {
     if (objectProp.trim()) parts.push(`magic concept using ${objectProp.trim()}`);
     if (context.trim()) parts.push(context.trim());
 
-    parts.push(PRACTICAL_VISUAL_BRAINSTORM_HINT);
-    parts.push('professional magic performance concept art');
+    parts.push('professional magic performance visualization');
 
     return parts.join(', ');
   };
@@ -497,8 +502,7 @@ useEffect(() => {
     if (sc) parts.push(sc);
     if (o) parts.push(`magic concept using ${o}`);
     if (c) parts.push(c);
-    parts.push(PRACTICAL_VISUAL_BRAINSTORM_HINT);
-    parts.push('professional magic performance concept art');
+    parts.push('professional magic performance visualization');
     return parts.join(', ');
   };
 
@@ -506,6 +510,14 @@ useEffect(() => {
   const finalPrompt = isEditing
     ? editPrompt.trim()
     : (advancedPrompt && promptOverride.trim() ? promptOverride.trim() : buildPrompt());
+
+  const buildProviderPrompt = (prompt: string, hasUploadedImage = false) =>
+    buildVisualBrainstormImagePrompt({
+      prompt,
+      aspectRatio,
+      styleMode: 'realistic_stage',
+      hasUploadedImage,
+    });
 
   const activeItem = useMemo(() => {
     if (!activeHistoryId) return null;
@@ -759,7 +771,7 @@ const addToHistory = (
 
       if (action.kind === 'edit') {
         // New session for each edit workflow
-        addToHistory({ imageUrl, promptUsed: action.prompt, title: resolvedTitle, kind: 'edit', refineLabel: undefined }, { createNewSession: true, coverImageUrl: imageUrl, batchImages: [imageUrl] });
+        addToHistory({ imageUrl, promptUsed: action.displayPrompt, title: resolvedTitle, kind: 'edit', refineLabel: undefined }, { createNewSession: true, coverImageUrl: imageUrl, batchImages: [imageUrl] });
       } else if (action.kind === 'generate') {
         const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, sessionVariationLimit);
 
@@ -772,7 +784,7 @@ const addToHistory = (
         for (let i = imgs.length - 1; i >= 0; i--) {
           const url = imgs[i];
           const id = addToHistory(
-            { imageUrl: url, promptUsed: action.prompt, title: resolvedTitle, kind: 'generate' },
+            { imageUrl: url, promptUsed: action.displayPrompt, title: resolvedTitle, kind: 'generate' },
             { setActive: false, sessionId: sid, coverImageUrl: imgs[0], batchImages: imgs }
           );
           ids.unshift(id);
@@ -783,7 +795,7 @@ const addToHistory = (
         addToHistory(
           {
             imageUrl,
-            promptUsed: action.prompt,
+            promptUsed: action.displayPrompt,
             title: resolvedTitle,
             kind: 'refine',
             refineLabel: action.label,
@@ -856,12 +868,14 @@ const addToHistory = (
       return;
     }
 
-    const promptToUse = finalPrompt.trim();
+    const displayPrompt = finalPrompt.trim();
+    const promptToUse = buildProviderPrompt(displayPrompt, Boolean(inputImageFile && inputImagePreview));
     if (inputImageFile && inputImagePreview) {
       const base64Data = inputImagePreview.split(',')[1];
       const action: LastVisualAction = {
         kind: 'edit',
         prompt: promptToUse,
+        displayPrompt,
         base64: base64Data,
         mimeType: inputImageFile.type,
         units: 1,
@@ -871,6 +885,7 @@ const addToHistory = (
       const action: LastVisualAction = {
         kind: 'generate',
         prompt: promptToUse,
+        displayPrompt,
         aspectRatio,
         units: sessionVariationLimit,
       };
@@ -882,11 +897,13 @@ const addToHistory = (
   const handleGenerateVariations = async () => {
     if (isLoading) return;
     if (isEditing) return;
-    const p = (lastGeneratePrompt || finalPrompt || '').trim();
-    if (!p) return;
+    const displayPrompt = (promptUsed || finalPrompt || '').trim();
+    const p = (lastGeneratePrompt || (displayPrompt ? buildProviderPrompt(displayPrompt) : '')).trim();
+    if (!p || !displayPrompt) return;
     const action: LastVisualAction = {
       kind: 'generate',
       prompt: p,
+      displayPrompt,
       aspectRatio: lastGenerateAspect || aspectRatio,
       units: sessionVariationLimit,
     };
@@ -912,7 +929,8 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
       return;
     }
 
-    const refinedPrompt = `${base}, ${instruction}`;
+    const displayPrompt = `${base}, ${instruction}`;
+    const refinedPrompt = buildProviderPrompt(displayPrompt);
 
     // Telemetry (Phase 7)
     trackClientEvent({
@@ -925,6 +943,7 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     const action: LastVisualAction = {
       kind: 'refine',
       prompt: refinedPrompt,
+      displayPrompt,
       aspectRatio,
       label: presetLabel,
       instruction,
