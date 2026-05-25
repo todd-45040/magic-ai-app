@@ -986,7 +986,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
     '',
     'Inspect the image and return JSON only.',
     'Pass only if the image clearly depicts a stage illusion apparatus, illusion prop, builder drawing, or staged magic performance concept matching the expected subject.',
-    'Fail if the image is food, a hamburger, sandwich, consumer product, animal, landscape, random stock photo, abstract art, fantasy portal, sci-fi machine, or an unrelated object.',
+    'Fail if the image is food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, a hamburger, sandwich, consumer product, landscape, random stock photo, fantasy portal, or an unrelated object.',
     'For a concept image, the central subject must be the stage illusion apparatus or performance prop, not a random object.',
     'For a blueprint image, the image must be a technical drawing or builder-style sheet for the same stage illusion concept.',
   ].join('\n');

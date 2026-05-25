@@ -409,7 +409,7 @@ const buildStrictMatchedOutputRetryPrompt = (
   `The previous ${kind} image for matched design ${matchedLabel} did not pass visual continuity QA${rejectionReason ? `: ${rejectionReason}` : '.'}`,
   `Regenerate ONLY a ${kind === 'blueprint' ? 'technical blueprint drawing' : 'realistic stage concept image'} for matched design ${matchedLabel} of this exact subject: ${visualAnchor}.`,
   'The central subject must be a clearly visible stage illusion apparatus or performance prop matching the builder plan.',
-  'Do not render food, hamburgers, sandwiches, consumer products, animals, landscapes, unrelated stock photography, or random objects.',
+  'Do not render food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, hamburgers, sandwiches, consumer products, landscapes, unrelated stock photography, or random objects.',
   'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
 ].join('\n');
 

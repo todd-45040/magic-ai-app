@@ -119,7 +119,7 @@ export const buildIllusionIdentity = (
       'same illusion type across builder plan, blueprint drawings, and rendered concept images',
       'same silhouette, base, major panels, staging footprint, material direction, and audience orientation',
       'real-world physics, stable load paths, human-scale proportions, and believable theatrical construction',
-      'no food, product photography, unrelated stock objects, animals, landscapes, fantasy machinery, magical energy, portals, or impossible floating structures',
+      'hard anti-drift rule: no food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, product photography, stock objects, landscapes, magical energy, portals, or impossible floating structures',
       'professional fabrication, rehearsal, load testing, and safety review required before real-world construction or performance',
     ],
   };

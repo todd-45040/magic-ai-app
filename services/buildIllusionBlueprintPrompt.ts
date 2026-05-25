@@ -81,6 +81,17 @@ Rules:
 - Build complexity must be a number from 1 to 5.
 - English language only. Return every title, label, section, note, and generated text field in clear English. Do not use non-English words unless they are part of a proper noun supplied by the user.`;
 
+
+const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
+- Do not generate food, hamburgers, sandwiches, cakes, drinks, or any edible object.
+- Do not generate furniture unless it is explicitly part of the illusion apparatus described in the builder plan.
+- Do not generate appliances, kitchen equipment, consumer electronics, vehicles, or unrelated household objects.
+- Do not generate unrelated commercial products, product photography, catalog shots, logos, packaging, or stock-image objects.
+- Do not generate fantasy weapons, sci-fi machinery, teleportation machines, portals, ray guns, robots, or futuristic devices.
+- Do not generate animals, creatures, monsters, mascots, landscapes, nature scenes, or unrelated characters.
+- Do not generate surreal abstract art, dreamlike AI-art compositions, magical energy beams, floating geometry, or non-physical fantasy scenes.
+- If the request could be interpreted as one of these excluded subjects, ignore that interpretation and render the practical theatrical illusion apparatus instead.`;
+
 const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 - Keep the concept grounded in real-world physics and stagecraft.
 - Use practical theatrical construction, conventional materials, believable load paths, and safe human-scale operation.
@@ -92,6 +103,8 @@ const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop.
 
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
+
+${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 Drawing requirements:
 - Show practical construction-oriented diagram views with clean white or light blue linework on a dark blueprint background.
@@ -108,6 +121,8 @@ Drawing requirements:
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery.
 
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
+
+${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 Visual requirements:
 - Show the prop or illusion unit clearly in a real stage, parlor, theatre, ballroom, or event environment.
@@ -134,6 +149,7 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   'Do not reinterpret the apparatus.',
   'Do not redesign the illusion.',
   'Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, animal, landscape, or unrelated object.',
+  HARD_ANTI_DRIFT_EXCLUSIONS,
   'The rendered concept image should look like a realistic staged/photo version of the matching blueprint, not a new visual idea.',
 ].join('\n');
 
@@ -147,6 +163,7 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext }: Illusion
     '',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
+    HARD_ANTI_DRIFT_EXCLUSIONS,
     'The mechanism section must stay non-exposure and principle-based only.',
     'Include only 1 primary and 1 alternate mechanism direction.',
     'Keep all sections concise and reliable.',
@@ -215,6 +232,7 @@ export function buildIllusionConceptImagePrompt({
     `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
     'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object. Do not reinterpret or redesign the apparatus.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
+    HARD_ANTI_DRIFT_EXCLUSIONS,
     'Language requirement: English only. Any signage, labels, notes, or visible words inside the concept image must be clear English. Prefer no text if clean English text cannot be rendered reliably.',
     `Produce one polished realistic concept image that matches Blueprint ${matchedOutput.label}. The image must contain the illusion apparatus as the central subject; if the prompt could be interpreted as food, product photography, or a generic object, ignore that interpretation and render the practical stage illusion instead.`,
   ].join('\n');
