@@ -409,6 +409,8 @@ const buildStrictMatchedOutputRetryPrompt = (
   `The previous ${kind} image for matched design ${matchedLabel} did not pass visual continuity QA${rejectionReason ? `: ${rejectionReason}` : '.'}`,
   `Regenerate ONLY a ${kind === 'blueprint' ? 'technical blueprint drawing' : 'realistic stage concept image'} for matched design ${matchedLabel} of this exact subject: ${visualAnchor}.`,
   'The central subject must be a clearly visible stage illusion apparatus or performance prop matching the builder plan.',
+  'Phase 4 apparatus validation requirement: the image must clearly include stage environment, apparatus, illusion structure, theatrical context, and magician staging language or magician-performance staging cues.',
+  'Show practical stage indicators such as performance floor, curtains, audience orientation, stage lighting, wings, platform, assistant/performer position, or theatre/parlor context where appropriate.',
   'Do not render food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, hamburgers, sandwiches, consumer products, landscapes, unrelated stock photography, or random objects.',
   'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
 ].join('\n');
@@ -427,20 +429,34 @@ const generateValidatedMatchedImage = async ({
   user: User;
 }): Promise<string | null> => {
   let prompt = basePrompt;
-  let lastImage: string | null = null;
   let lastReason = '';
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const [image] = await generateImages(prompt, '16:9', 1, user);
     if (!image) return null;
-    lastImage = image;
 
     const validation = await validateIllusionBlueprintGeneratedImage(image, kind, visualAnchor, label, user);
-    if (validation.passes && validation.containsIllusionApparatus && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage) {
+    const hasRequiredApparatusCues = kind === 'blueprint'
+      ? validation.containsIllusionApparatus && validation.containsIllusionStructure
+      : validation.containsIllusionApparatus
+        && validation.containsStageEnvironment
+        && validation.containsIllusionStructure
+        && validation.containsTheatricalContext
+        && validation.containsMagicianStagingLanguage;
+
+    if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage) {
       return image;
     }
 
-    lastReason = validation.reason || 'image did not match the stage illusion subject';
+    const missingPhase4Requirements = [
+      !validation.containsIllusionApparatus ? 'apparatus' : '',
+      kind === 'concept' && !validation.containsStageEnvironment ? 'stage environment' : '',
+      !validation.containsIllusionStructure ? 'illusion structure' : '',
+      kind === 'concept' && !validation.containsTheatricalContext ? 'theatrical context' : '',
+      kind === 'concept' && !validation.containsMagicianStagingLanguage ? 'magician staging language' : '',
+    ].filter(Boolean).join(', ');
+
+    lastReason = validation.reason || (missingPhase4Requirements ? `missing Phase 4 apparatus cues: ${missingPhase4Requirements}` : 'image did not match the stage illusion subject');
     prompt = buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
   }
 

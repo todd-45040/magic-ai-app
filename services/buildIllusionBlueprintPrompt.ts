@@ -118,11 +118,22 @@ Drawing requirements:
 - The drawing must clearly show a stage illusion apparatus with builder-visible structure; never show food, consumer products, unrelated stock objects, landscapes, animals, or random props outside the requested illusion.
 - Make it look like an illusion builder's practical technical concept sheet, not a fanciful invention.`;
 
+
+const APPARATUS_VALIDATION_REQUIREMENTS = `Phase 4 apparatus validation requirements:
+- The render must clearly include a stage, theatre, parlor, platform, performance floor, audience orientation, or comparable show environment.
+- The render must clearly include an illusion apparatus as the central subject.
+- The render must clearly include illusion structure such as a cabinet, trunk, platform, base, frame, panel, support, scenic shell, or builder-visible prop geometry.
+- The render must clearly communicate theatrical context rather than product photography, still life, landscape, food imagery, furniture imagery, or generic stock photography.
+- The render must include magician staging language or magician-performance cues such as performer position, assistant position, audience-facing orientation, stage lighting, curtains, wings, rehearsal space, show floor, or stage-ready composition.
+- If these cues are not present, the render should be considered invalid and regenerated.`;
+
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery.
 
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
+
+${APPARATUS_VALIDATION_REQUIREMENTS}
 
 Visual requirements:
 - Show the prop or illusion unit clearly in a real stage, parlor, theatre, ballroom, or event environment.
@@ -229,6 +240,7 @@ export function buildIllusionConceptImagePrompt({
     `Performer style: ${performerStyle}`,
     `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
     buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),
+    APPARATUS_VALIDATION_REQUIREMENTS,
     `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
     'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object. Do not reinterpret or redesign the apparatus.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',

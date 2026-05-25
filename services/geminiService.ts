@@ -950,6 +950,10 @@ export type IllusionBlueprintImageValidation = {
   passes: boolean;
   reason: string;
   containsIllusionApparatus: boolean;
+  containsStageEnvironment: boolean;
+  containsIllusionStructure: boolean;
+  containsTheatricalContext: boolean;
+  containsMagicianStagingLanguage: boolean;
   matchesExpectedSubject: boolean;
   isUnrelatedStockOrProductImage: boolean;
 };
@@ -973,6 +977,10 @@ export const validateIllusionBlueprintGeneratedImage = async (
       passes: false,
       reason: 'No readable image data was available for validation.',
       containsIllusionApparatus: false,
+      containsStageEnvironment: false,
+      containsIllusionStructure: false,
+      containsTheatricalContext: false,
+      containsMagicianStagingLanguage: false,
       matchesExpectedSubject: false,
       isUnrelatedStockOrProductImage: true,
     };
@@ -988,7 +996,12 @@ export const validateIllusionBlueprintGeneratedImage = async (
     'Pass only if the image clearly depicts a stage illusion apparatus, illusion prop, builder drawing, or staged magic performance concept matching the expected subject.',
     'Fail if the image is food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, a hamburger, sandwich, consumer product, landscape, random stock photo, fantasy portal, or an unrelated object.',
     'For a concept image, the central subject must be the stage illusion apparatus or performance prop, not a random object.',
-    'For a blueprint image, the image must be a technical drawing or builder-style sheet for the same stage illusion concept.',
+    'For a concept image, verify all Phase 4 apparatus requirements: stage environment, apparatus, illusion structure, theatrical context, and magician staging language or magician-performance staging cues.',
+    'For a blueprint image, the image must be a technical drawing or builder-style sheet for the same stage illusion concept with apparatus/structure cues.',
+    'Set containsStageEnvironment true only when the image or drawing clearly suggests a stage, theatre, parlor, platform, wings, curtains, audience sightline, performance floor, or show venue.',
+    'Set containsIllusionStructure true only when the subject has a clear apparatus structure such as cabinet, trunk, platform, base, frame, panel, support, scenic shell, lift housing, or builder-visible prop geometry.',
+    'Set containsTheatricalContext true only when it is recognizably for a magic performance, theatre, show, rehearsal, staged promotional rendering, or illusion builder context.',
+    'Set containsMagicianStagingLanguage true only when visible staging cues support magician use: performer position, assistant position, audience orientation, stage lighting, curtains, wings, show floor, rehearsal space, or illusion-performance composition.',
   ].join('\n');
 
   const responseSchema = {
@@ -997,10 +1010,24 @@ export const validateIllusionBlueprintGeneratedImage = async (
       passes: { type: Type.BOOLEAN },
       reason: { type: Type.STRING },
       containsIllusionApparatus: { type: Type.BOOLEAN },
+      containsStageEnvironment: { type: Type.BOOLEAN },
+      containsIllusionStructure: { type: Type.BOOLEAN },
+      containsTheatricalContext: { type: Type.BOOLEAN },
+      containsMagicianStagingLanguage: { type: Type.BOOLEAN },
       matchesExpectedSubject: { type: Type.BOOLEAN },
       isUnrelatedStockOrProductImage: { type: Type.BOOLEAN },
     },
-    required: ['passes', 'reason', 'containsIllusionApparatus', 'matchesExpectedSubject', 'isUnrelatedStockOrProductImage'],
+    required: [
+      'passes',
+      'reason',
+      'containsIllusionApparatus',
+      'containsStageEnvironment',
+      'containsIllusionStructure',
+      'containsTheatricalContext',
+      'containsMagicianStagingLanguage',
+      'matchesExpectedSubject',
+      'isUnrelatedStockOrProductImage',
+    ],
   };
 
   try {
@@ -1026,6 +1053,10 @@ export const validateIllusionBlueprintGeneratedImage = async (
       passes: Boolean(parsed.passes),
       reason: String(parsed.reason || ''),
       containsIllusionApparatus: Boolean(parsed.containsIllusionApparatus),
+      containsStageEnvironment: Boolean(parsed.containsStageEnvironment),
+      containsIllusionStructure: Boolean(parsed.containsIllusionStructure),
+      containsTheatricalContext: Boolean(parsed.containsTheatricalContext),
+      containsMagicianStagingLanguage: Boolean(parsed.containsMagicianStagingLanguage),
       matchesExpectedSubject: Boolean(parsed.matchesExpectedSubject),
       isUnrelatedStockOrProductImage: Boolean(parsed.isUnrelatedStockOrProductImage),
     };
@@ -1036,6 +1067,10 @@ export const validateIllusionBlueprintGeneratedImage = async (
       passes: true,
       reason: 'Validation unavailable; accepted image from guarded generation prompt.',
       containsIllusionApparatus: true,
+      containsStageEnvironment: true,
+      containsIllusionStructure: true,
+      containsTheatricalContext: true,
+      containsMagicianStagingLanguage: true,
       matchesExpectedSubject: true,
       isUnrelatedStockOrProductImage: false,
     };
