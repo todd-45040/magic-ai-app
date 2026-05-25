@@ -9,6 +9,7 @@ import {
   buildIllusionBlueprintPlanPrompt,
   buildIllusionConceptImagePrompt,
 } from '../services/buildIllusionBlueprintPrompt';
+import { buildIllusionIdentity } from '../services/buildIllusionIdentity';
 import { saveIdea } from '../services/ideasService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { CohesionActions } from './CohesionActions';
@@ -861,8 +862,19 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         visuals: false,
       });
 
+      const illusionIdentity = buildIllusionIdentity(plan, {
+        originalEffect: effectInput,
+        venueScale,
+        performerStyle,
+        budgetLevel,
+        crewSize,
+        resetRequirement,
+        transportLimitations,
+        stageLimitations,
+        materialsPreference,
+      });
       const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput);
-      const visualAnchor = deriveVisualAnchor(plan, effectInput);
+      const visualAnchor = illusionIdentity.illusionType;
 
       setLoadingStage('Generating matched blueprint drawings…');
       setIsGeneratingBlueprints(true);
@@ -875,6 +887,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               plan,
               visualContinuityBrief,
               visualAnchor,
+              illusionIdentity,
               venueScale,
               performerStyle,
               matchedOutput,
@@ -910,6 +923,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               plan,
               visualContinuityBrief,
               visualAnchor,
+              illusionIdentity,
               venueScale,
               performerStyle,
               matchedOutput,

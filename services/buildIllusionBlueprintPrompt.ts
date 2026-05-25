@@ -1,3 +1,6 @@
+import type { IllusionIdentity } from './buildIllusionIdentity';
+import { buildIllusionIdentityBrief } from './buildIllusionIdentity';
+
 export type IllusionBlueprintStyleMode =
   | 'realistic_builder_plan'
   | 'technical_blueprint'
@@ -34,6 +37,7 @@ export type IllusionBlueprintImagePromptParams = {
   plan: IllusionBlueprintVisualPlan;
   visualContinuityBrief: string;
   visualAnchor: string;
+  illusionIdentity?: IllusionIdentity;
   venueScale: string;
   performerStyle: string;
   matchedOutput: IllusionBlueprintMatchedOutput;
@@ -138,12 +142,15 @@ export function buildIllusionBlueprintDrawingPrompt({
   plan,
   visualContinuityBrief,
   visualAnchor,
+  illusionIdentity,
   matchedOutput,
 }: IllusionBlueprintImagePromptParams): string {
   return [
     BLUEPRINT_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
     '',
     `Project title: ${plan.project_title}`,
     `Audience effect: ${plan.audience_effect}`,
@@ -167,6 +174,7 @@ export function buildIllusionConceptImagePrompt({
   plan,
   visualContinuityBrief,
   visualAnchor,
+  illusionIdentity,
   venueScale,
   performerStyle,
   matchedOutput,
@@ -175,6 +183,8 @@ export function buildIllusionConceptImagePrompt({
     IMAGE_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
     '',
     `Project title: ${plan.project_title}`,
     `Audience effect: ${plan.audience_effect}`,
