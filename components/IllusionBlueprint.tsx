@@ -322,6 +322,23 @@ const SectionIntro: React.FC<{ icon: React.ReactNode; title: string; subtitle: s
   </div>
 );
 
+const getMatchedDesignLabel = (index: number): string =>
+  ILLUSION_BLUEPRINT_MATCHED_OUTPUTS[index]?.label ?? String.fromCharCode(65 + index);
+
+const countAvailableMatchedImages = (items: Array<string | null>): number => items.filter(Boolean).length;
+
+const ValidationBadge: React.FC<{ status: 'validated' | 'rejected'; label?: string }> = ({ status, label }) => (
+  <span
+    className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+      status === 'validated'
+        ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-200'
+        : 'border-amber-400/60 bg-amber-500/15 text-amber-200'
+    }`}
+  >
+    {status === 'validated' ? `${label ? `${label} · ` : ''}Validated` : `${label ? `${label} · ` : ''}Rejected`}
+  </span>
+);
+
 
 const inferOperationalDetail = (items: string[], keywords: string[]): string | null => {
   const match = items.find((item) => keywords.some((keyword) => item.toLowerCase().includes(keyword)));
@@ -541,8 +558,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [specialNotes, setSpecialNotes] = useState('');
 
   const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
-  const [blueprintDrawings, setBlueprintDrawings] = useState<string[]>([]);
-  const [imageOptions, setImageOptions] = useState<string[]>([]);
+  const [blueprintDrawings, setBlueprintDrawings] = useState<Array<string | null>>([]);
+  const [imageOptions, setImageOptions] = useState<Array<string | null>>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -739,11 +756,33 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     materialsPreference,
   ]);
 
+  const availableBlueprintCount = countAvailableMatchedImages(blueprintDrawings);
+  const availableConceptCount = countAvailableMatchedImages(imageOptions);
+  const activeBlueprintSrc = activeBlueprintIndex !== null ? blueprintDrawings[activeBlueprintIndex] : null;
+  const activeConceptSrc = activeConceptIndex !== null ? imageOptions[activeConceptIndex] : null;
+
+  const matchedPairSummary = useMemo(() => {
+    if (!builderPlan) return [];
+
+    return ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+      const blueprintReady = Boolean(blueprintDrawings[idx]);
+      const conceptReady = Boolean(imageOptions[idx]);
+      const pairStatus = blueprintReady && conceptReady
+        ? 'validated matched pair'
+        : blueprintReady
+          ? 'blueprint validated; concept rejected or unavailable'
+          : conceptReady
+            ? 'concept validated; blueprint rejected or unavailable'
+            : 'pair rejected or unavailable';
+      return `Pair ${matchedOutput.label}: Blueprint ${matchedOutput.label} → Concept ${matchedOutput.label} — ${pairStatus}`;
+    });
+  }, [builderPlan, blueprintDrawings, imageOptions]);
+
   const exportBuilderPlanText = useMemo(() => {
     if (!builderPlan) return '';
 
     const selectedConcept =
-      selectedConceptIndex !== null ? `Concept ${String.fromCharCode(65 + selectedConceptIndex)}` : 'None selected';
+      selectedConceptIndex !== null ? `Concept ${getMatchedDesignLabel(selectedConceptIndex)}` : 'None selected';
 
     const constructionSummary = [
       ...builderPlan.recommended_construction.main_structure,
@@ -780,6 +819,10 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       ...builderPlan.reset_transport_crew.map((item) => `- ${cleanText(item)}`),
       '',
       `Build Complexity: ${builderPlan.build_complexity.rating_1_to_5} / 5 — ${cleanText(builderPlan.build_complexity.rationale)}`,
+      '',
+      'Matched Blueprint / Concept Pairs:',
+      ...matchedPairSummary.map((item) => `- ${item}`),
+      '',
       `Stage Footprint: ${cleanText(builderPlan.dimensions_footprint)}`,
       `Budget Level: ${budgetLevel}`,
       `Materials Preference: ${buildSummary?.materials ?? (materialsPreference.trim() || 'Not specified')}`,
@@ -793,6 +836,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     budgetLevel,
     effectInput,
     materialsPreference,
+    matchedPairSummary,
     selectedConceptIndex,
   ]);
 
@@ -894,7 +938,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
       setLoadingStage('Generating matched blueprint drawings…');
       setIsGeneratingBlueprints(true);
-      let matchedBlueprints: string[] = [];
+      let matchedBlueprints: Array<string | null> = [];
 
       try {
         const drawingResults = await Promise.all(
@@ -917,10 +961,10 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        matchedBlueprints = drawingResults.filter(Boolean).slice(0, 2) as string[];
+        matchedBlueprints = drawingResults.slice(0, 2);
         setBlueprintDrawings(matchedBlueprints);
-        if (matchedBlueprints.length < 2) {
-          setWarning('One or more blueprint drawings failed the visual continuity check. Regenerate if you need a complete matched pair.');
+        if (countAvailableMatchedImages(matchedBlueprints) < 2) {
+          setWarning('One or more blueprint drawings were rejected because they did not match the illusion apparatus. Please regenerate for a complete Blueprint A → Concept A / Blueprint B → Concept B set.');
         }
       } catch {
         matchedBlueprints = [];
@@ -953,10 +997,10 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        const matchedConcepts = conceptResults.filter(Boolean).slice(0, 2) as string[];
+        const matchedConcepts = conceptResults.slice(0, 2);
         setImageOptions(matchedConcepts);
-        if (matchedConcepts.length < 2) {
-          setWarning('One or more concept images failed the visual continuity check, so unrelated output was hidden. Regenerate for a complete matched pair.');
+        if (countAvailableMatchedImages(matchedConcepts) < 2) {
+          setWarning('One or more concept images were rejected because they did not match the illusion apparatus. Unrelated output was hidden; please regenerate for a complete Blueprint A → Concept A / Blueprint B → Concept B set.');
         }
       } catch (imageErr: any) {
         setWarning(imageErr?.message || 'Builder plan generated, but matched concept images could not be created this time.');
@@ -974,7 +1018,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   return (
     <>
-      {activeBlueprintIndex !== null && blueprintDrawings[activeBlueprintIndex] ? (
+      {activeBlueprintIndex !== null && activeBlueprintSrc ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
           role="dialog"
@@ -989,7 +1033,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blueprint Preview</div>
-                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'Matched Technical View'}`}</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${getMatchedDesignLabel(activeBlueprintIndex)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'Matched Technical View'}`}</div>
               </div>
               <button
                 type="button"
@@ -1003,8 +1047,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="bg-slate-950/60 p-4">
               <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
                 <img
-                  src={blueprintDrawings[activeBlueprintIndex]}
-                  alt={`Blueprint drawing Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)}`}
+                  src={activeBlueprintSrc}
+                  alt={`Blueprint drawing Blueprint ${getMatchedDesignLabel(activeBlueprintIndex)}`}
                   className="h-auto max-h-[78vh] w-full object-contain"
                 />
               </div>
@@ -1013,7 +1057,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         </div>
       ) : null}
 
-      {activeConceptIndex !== null && imageOptions[activeConceptIndex] ? (
+      {activeConceptIndex !== null && activeConceptSrc ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
           role="dialog"
@@ -1028,7 +1072,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Concept Preview</div>
-                <div className="mt-1 text-lg font-bold text-white">{`Concept ${String.fromCharCode(65 + activeConceptIndex)}`}</div>
+                <div className="mt-1 text-lg font-bold text-white">{`Concept ${getMatchedDesignLabel(activeConceptIndex)} — matches Blueprint ${getMatchedDesignLabel(activeConceptIndex)}`}</div>
               </div>
               <button
                 type="button"
@@ -1042,8 +1086,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="bg-slate-950/60 p-4">
               <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/50">
                 <img
-                  src={imageOptions[activeConceptIndex]}
-                  alt={`Illusion concept Concept ${String.fromCharCode(65 + activeConceptIndex)}`}
+                  src={activeConceptSrc}
+                  alt={`Illusion concept Concept ${getMatchedDesignLabel(activeConceptIndex)}`}
                   className="h-auto max-h-[72vh] w-full object-contain"
                 />
               </div>
@@ -1547,7 +1591,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       isGeneratingBlueprints ? (
                         <div className="text-[11px] text-violet-300">Generating…</div>
                       ) : blueprintDrawings.length ? (
-                        <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                        <div className="text-[11px] text-slate-500">{availableBlueprintCount} / 2 validated</div>
                       ) : null
                     }
                   >
@@ -1566,12 +1610,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <ImageGenerationCard label="Generating blueprint drawings" />
                       ) : blueprintDrawings.length ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {blueprintDrawings.map((src, idx) => {
-                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+                          {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+                            const src = blueprintDrawings[idx];
+                            const drawingLabel = `Blueprint ${matchedOutput.label}`;
+                            const pairedConceptReady = Boolean(imageOptions[idx]);
                             const continuityLabel = builderPlan ? `${drawingLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : drawingLabel;
-                            return (
+                            return src ? (
                               <div
-                                key={`${src.slice(0, 30)}-${idx}`}
+                                key={`blueprint-${matchedOutput.label}-${src.slice(0, 30)}`}
                                 className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left transition-all duration-200 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5"
                               >
                                 <button
@@ -1593,13 +1639,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                     <div>
                                       <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
                                       <div className="mt-1 text-xs text-slate-400">
-                                        Matched technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
+                                        Matched technical view for Concept {matchedOutput.label} — {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
                                       </div>
                                     </div>
+                                    <ValidationBadge status="validated" label={`Pair ${matchedOutput.label}`} />
                                   </div>
 
                                   <div className="mt-3 flex items-center justify-between gap-3">
-                                    <span className="text-[11px] text-slate-500">Technical blueprint drawing</span>
+                                    <span className="text-[11px] text-slate-500">{pairedConceptReady ? `Blueprint ${matchedOutput.label} → Concept ${matchedOutput.label}` : `Concept ${matchedOutput.label} pending or rejected`}</span>
                                     <button
                                       type="button"
                                       onClick={() => setActiveBlueprintIndex(idx)}
@@ -1608,6 +1655,21 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                       View Larger
                                     </button>
                                   </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                key={`blueprint-${matchedOutput.label}-rejected`}
+                                className="rounded-xl border border-dashed border-amber-400/30 bg-amber-500/5 p-4"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-sm font-semibold text-amber-100">{drawingLabel}</div>
+                                    <div className="mt-2 text-xs leading-relaxed text-amber-100/80">
+                                      This blueprint slot was rejected or unavailable because it did not pass the illusion-apparatus continuity check. Regenerate to restore the full matched pair.
+                                    </div>
+                                  </div>
+                                  <ValidationBadge status="rejected" label={`Pair ${matchedOutput.label}`} />
                                 </div>
                               </div>
                             );
@@ -1632,7 +1694,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       isGeneratingVisuals ? (
                         <div className="text-[11px] text-violet-300">Generating…</div>
                       ) : imageOptions.length ? (
-                        <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
+                        <div className="text-[11px] text-slate-500">{availableConceptCount} / 2 validated</div>
                       ) : null
                     }
                   >
@@ -1651,14 +1713,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       <ImageGenerationCard label="Generating visual concepts" />
                     ) : imageOptions.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                        {imageOptions.map((src, idx) => {
-                          const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
+                        {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+                          const src = imageOptions[idx];
+                          const conceptLabel = `Concept ${matchedOutput.label}`;
                           const continuityLabel = builderPlan ? `${conceptLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : conceptLabel;
                           const isSelected = selectedConceptIndex === idx;
+                          const pairedBlueprintReady = Boolean(blueprintDrawings[idx]);
 
-                          return (
+                          return src ? (
                             <div
-                              key={`${src.slice(0, 30)}-${idx}`}
+                              key={`concept-${matchedOutput.label}-${src.slice(0, 30)}`}
                               className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 ${
                                 isSelected
                                   ? 'border-violet-400 ring-2 ring-violet-400 shadow-lg shadow-violet-500/20'
@@ -1684,18 +1748,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div>
                                     <div className="text-sm font-semibold text-slate-100">{conceptLabel}</div>
                                     <div className="mt-1 text-xs text-slate-400">
-                                      {isSelected ? 'Selected matched concept' : `Matches Blueprint ${String.fromCharCode(65 + idx)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}`}
+                                      {isSelected ? 'Selected matched concept' : `Matches Blueprint ${matchedOutput.label} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}`}
                                     </div>
                                   </div>
                                   {isSelected ? (
                                     <span className="shrink-0 rounded-full border border-violet-400/70 bg-violet-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-200">
                                       Selected for Build
                                     </span>
-                                  ) : null}
+                                  ) : (
+                                    <ValidationBadge status="validated" label={`Pair ${matchedOutput.label}`} />
+                                  )}
                                 </div>
 
                                 <div className="mt-3 flex items-center justify-between gap-3">
-                                  <span className="text-[11px] text-slate-500">Builder concept image</span>
+                                  <span className="text-[11px] text-slate-500">{pairedBlueprintReady ? `Blueprint ${matchedOutput.label} → Concept ${matchedOutput.label}` : `Blueprint ${matchedOutput.label} pending or rejected`}</span>
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
@@ -1718,6 +1784,21 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                     </button>
                                   </div>
                                 </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              key={`concept-${matchedOutput.label}-rejected`}
+                              className="rounded-xl border border-dashed border-amber-400/30 bg-amber-500/5 p-4"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-semibold text-amber-100">{conceptLabel}</div>
+                                  <div className="mt-2 text-xs leading-relaxed text-amber-100/80">
+                                    This concept image was rejected because it did not match the illusion apparatus, stage context, or Blueprint {matchedOutput.label}. Regenerate to restore the full matched pair.
+                                  </div>
+                                </div>
+                                <ValidationBadge status="rejected" label={`Pair ${matchedOutput.label}`} />
                               </div>
                             </div>
                           );
