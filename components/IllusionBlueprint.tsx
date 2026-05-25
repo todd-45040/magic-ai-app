@@ -25,6 +25,7 @@ interface IllusionBlueprintProps {
 
 type SaveStatus = 'idle' | 'saved';
 type CopyStatus = 'idle' | 'copied';
+type MatchedImageSlots = Array<string | null>;
 
 type EffectSuggestion =
   | 'Appearance'
@@ -588,8 +589,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [visualHandoff, setVisualHandoff] = useState<VisualBlueprintHandoff | null>(null);
 
   const [builderPlan, setBuilderPlan] = useState<BuilderPlan | null>(null);
-  const [blueprintDrawings, setBlueprintDrawings] = useState<string[]>([]);
-  const [imageOptions, setImageOptions] = useState<string[]>([]);
+  const [blueprintDrawings, setBlueprintDrawings] = useState<MatchedImageSlots>([]);
+  const [imageOptions, setImageOptions] = useState<MatchedImageSlots>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -601,6 +602,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
   const [activeBlueprintIndex, setActiveBlueprintIndex] = useState<number | null>(null);
   const [isGeneratingBlueprints, setIsGeneratingBlueprints] = useState(false);
   const [isGeneratingVisuals, setIsGeneratingVisuals] = useState(false);
+  const [regeneratingPairIndex, setRegeneratingPairIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState({
     plan: true,
     construction: false,
@@ -727,6 +729,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setActiveBlueprintIndex(null);
     setIsGeneratingBlueprints(false);
     setIsGeneratingVisuals(false);
+    setRegeneratingPairIndex(null);
     setLoadingStage('');
     setOpenSections({
       plan: true,
@@ -895,6 +898,96 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     }
   };
 
+
+  const handleRegeneratePair = async (pairIndex: number) => {
+    if (!builderPlan) {
+      setWarning('Generate a builder plan before regenerating a matched pair.');
+      return;
+    }
+
+    const matchedOutput = ILLUSION_BLUEPRINT_MATCHED_OUTPUTS[pairIndex];
+    if (!matchedOutput) return;
+
+    setError(null);
+    setWarning(null);
+    setRegeneratingPairIndex(pairIndex);
+
+    try {
+      const illusionIdentity = buildIllusionIdentity(builderPlan, {
+        originalEffect: effectInput,
+        venueScale,
+        performerStyle,
+        budgetLevel,
+        crewSize,
+        resetRequirement,
+        transportLimitations,
+        stageLimitations,
+        materialsPreference,
+      });
+      const visualContinuityBrief = buildVisualContinuityBrief(builderPlan, effectInput);
+      const visualAnchor = illusionIdentity.illusionType;
+
+      const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
+        plan: builderPlan,
+        visualContinuityBrief,
+        visualAnchor,
+        illusionIdentity,
+        venueScale,
+        performerStyle,
+        matchedOutput,
+      });
+
+      const conceptPrompt = buildIllusionConceptImagePrompt({
+        plan: builderPlan,
+        visualContinuityBrief,
+        visualAnchor,
+        illusionIdentity,
+        venueScale,
+        performerStyle,
+        matchedOutput,
+      });
+
+      const [newBlueprint, newConcept] = await Promise.all([
+        generateValidatedMatchedImage({
+          basePrompt: blueprintPrompt,
+          kind: 'blueprint',
+          visualAnchor,
+          label: matchedOutput.label,
+          user,
+        }),
+        generateValidatedMatchedImage({
+          basePrompt: conceptPrompt,
+          kind: 'concept',
+          visualAnchor,
+          label: matchedOutput.label,
+          user,
+        }),
+      ]);
+
+      setBlueprintDrawings((prev) => {
+        const next: MatchedImageSlots = [...prev];
+        while (next.length < ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length) next.push(null);
+        if (newBlueprint) next[pairIndex] = newBlueprint;
+        return next.slice(0, ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length);
+      });
+
+      setImageOptions((prev) => {
+        const next: MatchedImageSlots = [...prev];
+        while (next.length < ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length) next.push(null);
+        if (newConcept) next[pairIndex] = newConcept;
+        return next.slice(0, ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length);
+      });
+
+      if (!newBlueprint || !newConcept) {
+        setWarning(`Pair ${String.fromCharCode(65 + pairIndex)} was regenerated, but one output failed validation. The previous valid image was preserved when available.`);
+      }
+    } catch (err: any) {
+      setWarning(err?.message || `Pair ${String.fromCharCode(65 + pairIndex)} could not be regenerated this time.`);
+    } finally {
+      setRegeneratingPairIndex(null);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!effectInput.trim()) {
       setError('Please describe the illusion or effect you want to build.');
@@ -914,6 +1007,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     setActiveBlueprintIndex(null);
     setIsGeneratingBlueprints(false);
     setIsGeneratingVisuals(false);
+    setRegeneratingPairIndex(null);
 
     void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_start', metadata: { venueScale, performerStyle, budgetLevel, crewSize, resetRequirement } });
 
@@ -964,7 +1058,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
       setLoadingStage('Generating matched blueprint drawings…');
       setIsGeneratingBlueprints(true);
-      let matchedBlueprints: string[] = [];
+      let matchedBlueprints: MatchedImageSlots = [];
 
       try {
         const drawingResults = await Promise.all(
@@ -987,9 +1081,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        matchedBlueprints = drawingResults.filter(Boolean).slice(0, 2) as string[];
+        matchedBlueprints = drawingResults.slice(0, 2);
         setBlueprintDrawings(matchedBlueprints);
-        if (matchedBlueprints.length < 2) {
+        if (matchedBlueprints.filter(Boolean).length < 2) {
           setWarning('One or more blueprint drawings failed the visual continuity check. Regenerate if you need a complete matched pair.');
         }
       } catch {
@@ -1023,9 +1117,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        const matchedConcepts = conceptResults.filter(Boolean).slice(0, 2) as string[];
+        const matchedConcepts = conceptResults.slice(0, 2);
         setImageOptions(matchedConcepts);
-        if (matchedConcepts.length < 2) {
+        if (matchedConcepts.filter(Boolean).length < 2) {
           setWarning('One or more concept images failed the visual continuity check, so unrelated output was hidden. Regenerate for a complete matched pair.');
         }
       } catch (imageErr: any) {
@@ -1632,7 +1726,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       isGeneratingBlueprints ? (
                         <div className="text-[11px] text-violet-300">Generating…</div>
                       ) : blueprintDrawings.length ? (
-                        <div className="text-[11px] text-slate-500">{blueprintDrawings.length} drawings</div>
+                        <div className="text-[11px] text-slate-500">{blueprintDrawings.filter(Boolean).length} / {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length} drawings</div>
                       ) : null
                     }
                   >
@@ -1651,25 +1745,33 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <ImageGenerationCard label="Generating blueprint drawings" />
                       ) : blueprintDrawings.length ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {blueprintDrawings.map((src, idx) => {
+                          {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+                            const src = blueprintDrawings[idx];
                             const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
                             const continuityLabel = builderPlan ? `${drawingLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : drawingLabel;
                             return (
                               <div
-                                key={`${src.slice(0, 30)}-${idx}`}
+                                key={`blueprint-${matchedOutput.label}-${idx}`}
                                 className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left transition-all duration-200 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5"
                               >
                                 <button
                                   type="button"
-                                  onClick={() => setActiveBlueprintIndex(idx)}
-                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70"
+                                  onClick={() => src && setActiveBlueprintIndex(idx)}
+                                  disabled={!src || regeneratingPairIndex === idx}
+                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70 disabled:cursor-not-allowed"
                                 >
                                   <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
-                                    <img
-                                      src={src}
-                                      alt={`Blueprint drawing ${continuityLabel}`}
-                                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                    />
+                                    {src ? (
+                                      <img
+                                        src={src}
+                                        alt={`Blueprint drawing ${continuityLabel}`}
+                                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center p-6 text-center text-xs text-slate-400">
+                                        Blueprint {String.fromCharCode(65 + idx)} was rejected by validation. Regenerate this pair to create a replacement.
+                                      </div>
+                                    )}
                                   </div>
                                 </button>
 
@@ -1685,13 +1787,24 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
                                   <div className="mt-3 flex items-center justify-between gap-3">
                                     <span className="text-[11px] text-slate-500">Technical blueprint drawing</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setActiveBlueprintIndex(idx)}
-                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-200"
-                                    >
-                                      View Larger
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRegeneratePair(idx)}
+                                        disabled={regeneratingPairIndex !== null}
+                                        className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:border-amber-300/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {regeneratingPairIndex === idx ? 'Regenerating…' : `Regenerate Pair ${String.fromCharCode(65 + idx)}`}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => src && setActiveBlueprintIndex(idx)}
+                                        disabled={!src}
+                                        className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        View Larger
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -1717,7 +1830,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       isGeneratingVisuals ? (
                         <div className="text-[11px] text-violet-300">Generating…</div>
                       ) : imageOptions.length ? (
-                        <div className="text-[11px] text-slate-500">{imageOptions.length} options</div>
+                        <div className="text-[11px] text-slate-500">{imageOptions.filter(Boolean).length} / {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length} options</div>
                       ) : null
                     }
                   >
@@ -1736,14 +1849,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       <ImageGenerationCard label="Generating visual concepts" />
                     ) : imageOptions.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
-                        {imageOptions.map((src, idx) => {
+                        {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+                          const src = imageOptions[idx];
                           const conceptLabel = `Concept ${String.fromCharCode(65 + idx)}`;
                           const continuityLabel = builderPlan ? `${conceptLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : conceptLabel;
                           const isSelected = selectedConceptIndex === idx;
 
                           return (
                             <div
-                              key={`${src.slice(0, 30)}-${idx}`}
+                              key={`concept-${matchedOutput.label}-${idx}`}
                               className={`group relative overflow-hidden rounded-xl border bg-white/5 text-left transition-all duration-200 ${
                                 isSelected
                                   ? 'border-violet-400 ring-2 ring-violet-400 shadow-lg shadow-violet-500/20'
@@ -1752,15 +1866,22 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                             >
                               <button
                                 type="button"
-                                onClick={() => setActiveConceptIndex(idx)}
-                                className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-400/70"
+                                onClick={() => src && setActiveConceptIndex(idx)}
+                                disabled={!src || regeneratingPairIndex === idx}
+                                className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-400/70 disabled:cursor-not-allowed"
                               >
                                 <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
-                                  <img
-                                    src={src}
-                                    alt={`Illusion concept ${continuityLabel}`}
-                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                  />
+                                  {src ? (
+                                    <img
+                                      src={src}
+                                      alt={`Illusion concept ${continuityLabel}`}
+                                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                    />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center p-6 text-center text-xs text-slate-400">
+                                      Concept {String.fromCharCode(65 + idx)} was rejected by validation. Regenerate this pair to create a replacement.
+                                    </div>
+                                  )}
                                 </div>
                               </button>
 
@@ -1784,16 +1905,26 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setActiveConceptIndex(idx)}
-                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-violet-300/50 hover:text-violet-200"
+                                      onClick={() => void handleRegeneratePair(idx)}
+                                      disabled={regeneratingPairIndex !== null}
+                                      className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:border-amber-300/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {regeneratingPairIndex === idx ? 'Regenerating…' : `Regenerate Pair ${String.fromCharCode(65 + idx)}`}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => src && setActiveConceptIndex(idx)}
+                                      disabled={!src}
+                                      className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-violet-300/50 hover:text-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                       View Larger
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => setSelectedConceptIndex(idx)}
+                                      onClick={() => src && setSelectedConceptIndex(idx)}
+                                      disabled={!src}
                                       aria-pressed={isSelected}
-                                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                                         isSelected
                                           ? 'bg-violet-500/20 text-violet-200 border border-violet-400/60'
                                           : 'border border-slate-700 bg-slate-900/50 text-slate-300 hover:border-violet-300/50 hover:text-violet-200'
