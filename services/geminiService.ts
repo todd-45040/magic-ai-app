@@ -945,6 +945,103 @@ export const generateImages = async (
   return out;
 };
 
+
+export type IllusionBlueprintImageValidation = {
+  passes: boolean;
+  reason: string;
+  containsIllusionApparatus: boolean;
+  matchesExpectedSubject: boolean;
+  isUnrelatedStockOrProductImage: boolean;
+};
+
+function parseDataUrlForInlineImage(dataUrl: string): { mimeType: string; data: string } | null {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  return { mimeType: match[1] || 'image/jpeg', data: match[2] || '' };
+}
+
+export const validateIllusionBlueprintGeneratedImage = async (
+  imageDataUrl: string,
+  expectedKind: 'blueprint' | 'concept',
+  expectedSubject: string,
+  expectedLabel: string,
+  currentUser?: User
+): Promise<IllusionBlueprintImageValidation> => {
+  const inline = parseDataUrlForInlineImage(imageDataUrl);
+  if (!inline?.data) {
+    return {
+      passes: false,
+      reason: 'No readable image data was available for validation.',
+      containsIllusionApparatus: false,
+      matchesExpectedSubject: false,
+      isUnrelatedStockOrProductImage: true,
+    };
+  }
+
+  const prompt = [
+    'You are a strict visual QA checker for a magician illusion blueprint generator.',
+    `Expected output kind: ${expectedKind}.`,
+    `Expected matched design: ${expectedLabel}.`,
+    `Expected subject: ${expectedSubject}.`,
+    '',
+    'Inspect the image and return JSON only.',
+    'Pass only if the image clearly depicts a stage illusion apparatus, illusion prop, builder drawing, or staged magic performance concept matching the expected subject.',
+    'Fail if the image is food, a hamburger, sandwich, consumer product, animal, landscape, random stock photo, abstract art, fantasy portal, sci-fi machine, or an unrelated object.',
+    'For a concept image, the central subject must be the stage illusion apparatus or performance prop, not a random object.',
+    'For a blueprint image, the image must be a technical drawing or builder-style sheet for the same stage illusion concept.',
+  ].join('\n');
+
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      passes: { type: Type.BOOLEAN },
+      reason: { type: Type.STRING },
+      containsIllusionApparatus: { type: Type.BOOLEAN },
+      matchesExpectedSubject: { type: Type.BOOLEAN },
+      isUnrelatedStockOrProductImage: { type: Type.BOOLEAN },
+    },
+    required: ['passes', 'reason', 'containsIllusionApparatus', 'matchesExpectedSubject', 'isUnrelatedStockOrProductImage'],
+  };
+
+  try {
+    const body: GeminiGenerateBody = {
+      model: 'gemini-2.5-flash',
+      contents: {
+        parts: [
+          { text: prompt },
+          { inlineData: inline },
+        ],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema,
+        maxOutputTokens: 512,
+      },
+    };
+
+    const result = await postJson<any>('/api/generate', body, currentUser, undefined, { timeoutMs: 60000, retries: 0 });
+    const text = extractText(result);
+    const parsed = safeJsonParse(text || '{}') as Partial<IllusionBlueprintImageValidation>;
+    return {
+      passes: Boolean(parsed.passes),
+      reason: String(parsed.reason || ''),
+      containsIllusionApparatus: Boolean(parsed.containsIllusionApparatus),
+      matchesExpectedSubject: Boolean(parsed.matchesExpectedSubject),
+      isUnrelatedStockOrProductImage: Boolean(parsed.isUnrelatedStockOrProductImage),
+    };
+  } catch {
+    // If QA is temporarily unavailable, do not block generation entirely.
+    // The prompt-level hard guards still apply, and the user can regenerate if needed.
+    return {
+      passes: true,
+      reason: 'Validation unavailable; accepted image from guarded generation prompt.',
+      containsIllusionApparatus: true,
+      matchesExpectedSubject: true,
+      isUnrelatedStockOrProductImage: false,
+    };
+  }
+};
+
 /**
  * Image editing is not wired through a serverless route yet.
  * Keep the API surface so the app compiles, but fail gracefully.

@@ -98,6 +98,7 @@ Drawing requirements:
 - Any visible labels must be short, clear English words such as FRONT, SIDE, BASE, PANEL, FRAME, WHEEL, HINGE, TRIM, ACCESS, SUPPORT, PLATFORM, TOP, LEFT, RIGHT.
 - Do not use non-English writing, pseudo-foreign characters, random glyphs, or unreadable invented labels.
 - No text paragraphs. No poster art. No glossy rendering. No fantasy concept art.
+- The drawing must clearly show a stage illusion apparatus with builder-visible structure; never show food, consumer products, unrelated stock objects, landscapes, animals, or random props outside the requested illusion.
 - Make it look like an illusion builder's practical technical concept sheet, not a fanciful invention.`;
 
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery.
@@ -113,6 +114,7 @@ Visual requirements:
 - Do not include non-English words, pseudo-foreign writing, random glyphs, or unreadable invented text.
 - If any visible labels or signs appear, they must be simple English words only; otherwise use no text overlays.
 - No exploded diagrams. No impossible sci-fi visuals, floating structures, fantasy physics, magical energy effects, portals, glowing force fields, or abstract AI-art compositions.
+- The image must clearly show a stage illusion apparatus or performance prop matching the builder plan; never show food, hamburgers, sandwiches, consumer products, animals, unrelated still-life objects, landscapes, or generic stock photography.
 - The final image should look like a real staged illusion concept or practical promotional photograph.`;
 
 export function buildIllusionBlueprintPlanPrompt({ generationContext }: IllusionBlueprintPlanParams): string {
@@ -153,7 +155,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
-    `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, or impossible floating structures unless they are part of this practical plan.`,
+    `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
     'Pairing requirement: This blueprint must be visually matchable to the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, and visible construction cues consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
     'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
@@ -184,9 +186,9 @@ export function buildIllusionConceptImagePrompt({
     `Performer style: ${performerStyle}`,
     `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
     `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, and practical construction cues.`,
-    'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, or scenic unit.',
+    'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     'Language requirement: English only. Any signage, labels, notes, or visible words inside the concept image must be clear English. Prefer no text if clean English text cannot be rendered reliably.',
-    `Produce one polished realistic concept image that matches Blueprint ${matchedOutput.label}.`,
+    `Produce one polished realistic concept image that matches Blueprint ${matchedOutput.label}. The image must contain the illusion apparatus as the central subject; if the prompt could be interpreted as food, product photography, or a generic object, ignore that interpretation and render the practical stage illusion instead.`,
   ].join('\n');
 }

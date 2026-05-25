@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 
-import { generateImages, generateStructuredResponse } from '../services/geminiService';
+import { generateImages, generateStructuredResponse, validateIllusionBlueprintGeneratedImage } from '../services/geminiService';
 import {
   ILLUSION_BLUEPRINT_MATCHED_OUTPUTS,
   ILLUSION_BLUEPRINT_REALISM_SYSTEM_INSTRUCTION,
@@ -395,6 +395,58 @@ const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string): 
   ].join('\n');
 };
 
+const buildStrictMatchedOutputRetryPrompt = (
+  basePrompt: string,
+  kind: 'blueprint' | 'concept',
+  visualAnchor: string,
+  matchedLabel: string,
+  rejectionReason = ''
+): string => [
+  basePrompt,
+  '',
+  'CRITICAL REPAIR INSTRUCTION:',
+  `The previous ${kind} image for matched design ${matchedLabel} did not pass visual continuity QA${rejectionReason ? `: ${rejectionReason}` : '.'}`,
+  `Regenerate ONLY a ${kind === 'blueprint' ? 'technical blueprint drawing' : 'realistic stage concept image'} for matched design ${matchedLabel} of this exact subject: ${visualAnchor}.`,
+  'The central subject must be a clearly visible stage illusion apparatus or performance prop matching the builder plan.',
+  'Do not render food, hamburgers, sandwiches, consumer products, animals, landscapes, unrelated stock photography, or random objects.',
+  'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
+].join('\n');
+
+const generateValidatedMatchedImage = async ({
+  basePrompt,
+  kind,
+  visualAnchor,
+  label,
+  user,
+}: {
+  basePrompt: string;
+  kind: 'blueprint' | 'concept';
+  visualAnchor: string;
+  label: string;
+  user: User;
+}): Promise<string | null> => {
+  let prompt = basePrompt;
+  let lastImage: string | null = null;
+  let lastReason = '';
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const [image] = await generateImages(prompt, '16:9', 1, user);
+    if (!image) return null;
+    lastImage = image;
+
+    const validation = await validateIllusionBlueprintGeneratedImage(image, kind, visualAnchor, label, user);
+    if (validation.passes && validation.containsIllusionApparatus && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage) {
+      return image;
+    }
+
+    lastReason = validation.reason || 'image did not match the stage illusion subject';
+    prompt = buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
+  }
+
+  // Avoid displaying obvious off-subject failures such as product/food images.
+  // A missing image is preferable to showing a non-illusion artifact in the matched set.
+  return null;
+};
 
 const asString = (value: unknown, fallback = ''): string =>
   typeof value === 'string' && value.trim() ? value.trim() : fallback;
@@ -827,12 +879,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               performerStyle,
               matchedOutput,
             });
-            const [drawing] = await generateImages(blueprintPrompt, '16:9', 1, user);
-            return drawing;
+            return generateValidatedMatchedImage({
+              basePrompt: blueprintPrompt,
+              kind: 'blueprint',
+              visualAnchor,
+              label: matchedOutput.label,
+              user,
+            });
           })
         );
-        matchedBlueprints = drawingResults.filter(Boolean).slice(0, 2);
+        matchedBlueprints = drawingResults.filter(Boolean).slice(0, 2) as string[];
         setBlueprintDrawings(matchedBlueprints);
+        if (matchedBlueprints.length < 2) {
+          setWarning('One or more blueprint drawings failed the visual continuity check. Regenerate if you need a complete matched pair.');
+        }
       } catch {
         matchedBlueprints = [];
         setBlueprintDrawings([]);
@@ -854,11 +914,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               performerStyle,
               matchedOutput,
             });
-            const [image] = await generateImages(imagePrompt, '16:9', 1, user);
-            return image;
+            return generateValidatedMatchedImage({
+              basePrompt: imagePrompt,
+              kind: 'concept',
+              visualAnchor,
+              label: matchedOutput.label,
+              user,
+            });
           })
         );
-        setImageOptions(conceptResults.filter(Boolean).slice(0, 2));
+        const matchedConcepts = conceptResults.filter(Boolean).slice(0, 2) as string[];
+        setImageOptions(matchedConcepts);
+        if (matchedConcepts.length < 2) {
+          setWarning('One or more concept images failed the visual continuity check, so unrelated output was hidden. Regenerate for a complete matched pair.');
+        }
       } catch (imageErr: any) {
         setWarning(imageErr?.message || 'Builder plan generated, but matched concept images could not be created this time.');
       } finally {
