@@ -126,29 +126,7 @@ function getDailyMeteredToolLimit(tier: string, tool?: ToolKey | null): number |
 }
 
 
-async function getChargedToolRequestsToday(admin: any, userId: string, tool: ToolKey): Promise<number> {
-  try {
-    const dayStart = new Date();
-    dayStart.setUTCHours(0, 0, 0, 0);
-    const { count, error } = await admin
-      .from('ai_usage_events')
-      .select('request_id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('tool', tool)
-      .eq('outcome', 'SUCCESS_CHARGED')
-      .gte('occurred_at', dayStart.toISOString());
-
-    if (error) {
-      console.error('Daily tool request lookup error:', error);
-      return 0;
-    }
-
-    return clampInt(count);
-  } catch (err) {
-    console.error('Daily tool request lookup failed:', err);
-    return 0;
-  }
-}
+// Removed unused getChargedToolRequestsToday helper to satisfy noUnusedLocals TypeScript checks.
 
 async function getChargedToolUnitsToday(admin: any, userId: string, tool: ToolKey): Promise<number> {
   try {

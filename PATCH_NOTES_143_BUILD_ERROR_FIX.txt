@@ -1,0 +1,24 @@
+Magic AI Wizard — Build Error Fix Patch
+
+Patch name: magic-ai-app-main-143-build-error-fix.zip
+
+Purpose:
+Fix Vercel TypeScript noUnusedLocals errors reported after the Phase 1 Illusion Identity patch.
+
+Build log errors addressed:
+- server/usage.ts: getChargedToolRequestsToday is declared but its value is never read.
+- api/ai/_lib/usage.ts: getChargedToolRequestsToday is declared but its value is never read.
+
+Changes made:
+- Removed the unused getChargedToolRequestsToday helper from server/usage.ts.
+- Removed the unused getChargedToolRequestsToday helper from api/ai/_lib/usage.ts.
+
+What was not changed:
+- No billing logic changed.
+- No quota enforcement logic changed.
+- No auth logic changed.
+- No Illusion Blueprint logic changed.
+- No Visual Brainstorm logic changed.
+
+Validation note:
+The Vercel log showed the app bundle itself built successfully, but TypeScript reported unused declaration errors afterward. This patch targets only those reported TypeScript errors.
