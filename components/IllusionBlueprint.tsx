@@ -81,6 +81,52 @@ const BUDGET_LEVELS: BudgetLevel[] = ['Lean', 'Moderate', 'Premium'];
 const CREW_SIZES: CrewSize[] = ['Solo', '1 Assistant', '2-3 Crew', '4+ Crew'];
 const RESET_REQUIREMENTS: ResetRequirement[] = ['Instant', 'Under 1 minute', 'Under 3 minutes', 'Flexible'];
 
+const VISUAL_TO_BLUEPRINT_HANDOFF_KEY = 'maw_illusion_blueprint_visual_handoff';
+
+type VisualBlueprintHandoff = {
+  source?: string;
+  imageUrl?: string;
+  prompt?: string;
+  title?: string;
+  project?: {
+    projectId?: string;
+    projectTitle?: string;
+    projectType?: string;
+    projectStage?: string;
+    originTool?: string;
+    createdAt?: number;
+    linkedAssetIds?: string[];
+  };
+  projectId?: string;
+  projectTitle?: string;
+  ideaId?: string;
+  ideaIds?: string[];
+  created_at?: string;
+};
+
+function safeParseVisualBlueprintHandoff(raw: string | null): VisualBlueprintHandoff | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as VisualBlueprintHandoff;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const hasUsefulContext = Boolean(parsed.prompt || parsed.title || parsed.imageUrl || parsed.project?.projectTitle || parsed.projectTitle);
+    return hasUsefulContext ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildEffectInputFromVisualHandoff(handoff: VisualBlueprintHandoff): string {
+  const lines = [
+    handoff.title ? `Project concept: ${handoff.title}` : '',
+    handoff.project?.projectTitle || handoff.projectTitle ? `Creative project: ${handoff.project?.projectTitle || handoff.projectTitle}` : '',
+    handoff.prompt ? `Source direction: ${handoff.prompt}` : '',
+    handoff.imageUrl ? `Reference image URL: ${handoff.imageUrl}` : '',
+    'Convert this into a realistic stage illusion blueprint with a physically plausible apparatus, practical materials, believable sightlines, and real-world theatrical staging.',
+  ].filter(Boolean);
+  return lines.join('\n\n');
+}
+
 const DEMO_PRESETS = [
   {
     label: 'Modern Assistant Levitation',

@@ -319,6 +319,52 @@ function getProjectGroupSummary(group: SavedIdeaProjectGroup): string {
     return parts.join(' • ');
 }
 
+type ProjectContinuationTarget = 'effect-generator' | 'patter-engine' | 'illusion-blueprint' | 'show-planner' | 'saved-ideas';
+
+function chooseProjectContinuationTarget(group: SavedIdeaProjectGroup): ProjectContinuationTarget {
+    const tools = group.tools.map((tool) => safeLower(tool)).join(' ');
+    const categories = new Set(group.categories);
+
+    // Prefer the next natural downstream tool, not simply the tool that created
+    // the latest saved item. This makes project groups feel like a workflow.
+    if ((tools.includes('visual brainstorm') || categories.has('image')) && !tools.includes('blueprint')) return 'illusion-blueprint';
+    if ((tools.includes('effect generator') || categories.has('effect')) && !tools.includes('patter engine') && !categories.has('script')) return 'patter-engine';
+    if (tools.includes('blueprint') || categories.has('blueprint') || tools.includes('patter engine') || categories.has('script')) return 'show-planner';
+    if (categories.has('image')) return 'effect-generator';
+    return 'saved-ideas';
+}
+
+function getContinuationButtonLabel(group: SavedIdeaProjectGroup): string {
+    const target = chooseProjectContinuationTarget(group);
+    if (target === 'illusion-blueprint') return 'Continue in Blueprint';
+    if (target === 'patter-engine') return 'Continue in Patter';
+    if (target === 'show-planner') return 'Continue in Show Planner';
+    if (target === 'effect-generator') return 'Continue in Effect';
+    return 'Continue Project';
+}
+
+function buildProjectContinuationContext(group: SavedIdeaProjectGroup): string {
+    const lines = [
+        `Creative Project: ${group.label}`,
+        `Source tools: ${group.tools.join(', ') || 'Saved Ideas'}`,
+        '',
+        'Saved project assets:',
+        ...group.items.slice(0, 6).map((idea, index) => {
+            const display = getIdeaDisplay(idea);
+            const body = (display.body || idea.content || '').replace(/\s+/g, ' ').trim().slice(0, 260);
+            return `${index + 1}. ${display.title || idea.title || 'Saved Idea'} — ${getIdeaSourceTool(idea)}${body ? `: ${body}` : ''}`;
+        }),
+    ];
+    return lines.filter(Boolean).join('\n');
+}
+
+function findBestProjectImageIdea(group: SavedIdeaProjectGroup): SavedIdea | null {
+    return group.items
+        .slice()
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .find((idea) => inferIdeaCategory(idea) === 'image' || !!getImageUrlForIdea(idea)) || null;
+}
+
 function buildIdeaPlannerNotes(idea: SavedIdea, extraNotes?: string, slot?: string): string {
     const display = getIdeaDisplay(idea);
     const lines = [
@@ -1268,29 +1314,107 @@ ${buildImageIdeaPromptContext(idea)}`
     const continueProjectGroup = (group: SavedIdeaProjectGroup) => {
         const latest = group.items.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
         const project = latest ? getIdeaProject(latest) : null;
+        const targetView = chooseProjectContinuationTarget(group);
+        const imageIdea = findBestProjectImageIdea(group);
+        const imageDisplay = imageIdea ? getIdeaDisplay(imageIdea) : null;
+        const imageUrl = imageIdea ? getImageUrlForIdea(imageIdea) : '';
+        const context = buildProjectContinuationContext(group);
+        const projectPayload = {
+            projectId: project?.projectId || group.id.replace(/^project:/, ''),
+            projectTitle: project?.projectTitle || group.label,
+            projectType: project?.projectType || 'creative_project',
+            projectStage: project?.projectStage || 'development',
+            originTool: 'Saved Ideas',
+            createdAt: project?.createdAt || Date.now(),
+            linkedAssetIds: group.items.map((idea) => idea.id),
+        };
         const payload = {
             version: 1,
             source: 'saved_ideas_project_group',
-            projectId: project?.projectId || group.id,
-            projectTitle: group.label,
+            targetView,
+            projectId: projectPayload.projectId,
+            projectTitle: projectPayload.projectTitle,
+            project: projectPayload,
             ideaIds: group.items.map((idea) => idea.id),
             tools: group.tools,
             categories: group.categories,
             latestIdeaId: latest?.id || null,
+            imageIdeaId: imageIdea?.id || null,
+            imageUrl,
+            prompt: context,
+            title: group.label,
             created_at: new Date().toISOString(),
         };
 
         try {
             localStorage.setItem('maw_project_continuity_handoff_v1', JSON.stringify(payload));
-            localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'saved_project_group', ts: Date.now(), title: group.label }));
+            localStorage.setItem('maw_creative_pipeline_last_stage', JSON.stringify({ stage: 'saved_project_continue', targetView, ts: Date.now(), title: group.label }));
+
+            if (targetView === 'illusion-blueprint') {
+                localStorage.setItem('maw_illusion_blueprint_visual_handoff', JSON.stringify({
+                    ...payload,
+                    source: 'saved_ideas_continue_project',
+                    title: imageDisplay?.title || group.label,
+                    prompt: [
+                        'Continue this Saved Ideas project in Illusion Blueprint. Convert the existing visual/project direction into a realistic, physically plausible stage illusion apparatus.',
+                        context,
+                    ].join('\n\n'),
+                    imageUrl,
+                }));
+            } else if (targetView === 'effect-generator') {
+                localStorage.setItem('maw_effect_engine_visual_handoff', JSON.stringify({
+                    ...payload,
+                    source: 'visual_image',
+                    title: imageDisplay?.title || group.label,
+                    prompt: context,
+                    imageUrl,
+                }));
+            } else if (targetView === 'patter-engine') {
+                localStorage.setItem('maw_patter_engine_prefill_v1', JSON.stringify({
+                    version: 1,
+                    source: 'saved_ideas_continue_project',
+                    pipelineStage: 'project_to_script',
+                    effectTitle: group.label,
+                    effectDescription: [
+                        'Continue this Saved Ideas project as performance-ready script material.',
+                        context,
+                        '',
+                        'Write a polished script, a 3-beat routine outline, audience interaction lines, and a strong closing line.',
+                    ].join('\n'),
+                    selectedTones: ['Storytelling', 'Professional'],
+                    project: projectPayload,
+                    ideaIds: group.items.map((idea) => idea.id),
+                    created_at: new Date().toISOString(),
+                }));
+            } else if (targetView === 'show-planner') {
+                localStorage.setItem('maw_show_planner_routine_handoff_v1', JSON.stringify({
+                    version: 1,
+                    source: 'saved_ideas_continue_project',
+                    pipelineStage: 'project_to_show_planner',
+                    title: group.label,
+                    notes: context,
+                    effectDescription: context,
+                    upstream: payload,
+                    created_at: new Date().toISOString(),
+                }));
+            }
         } catch {}
 
         setSearchQuery(group.label);
+        setOpenIdea(null);
+        setActionMessage(`Project "${group.label}" routed to ${targetView === 'illusion-blueprint' ? 'Illusion Blueprint' : targetView === 'patter-engine' ? 'Patter Engine' : targetView === 'effect-generator' ? 'Effect Generator' : targetView === 'show-planner' ? 'Show Planner' : 'Saved Ideas'}.`);
+
+        if (targetView !== 'saved-ideas') {
+            try {
+                window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: targetView, source: 'saved_ideas_project_group', projectId: projectPayload.projectId, projectTitle: projectPayload.projectTitle } }));
+                return;
+            } catch {}
+        }
+
         if (latest) {
             markOpenedNow(latest.id);
             setOpenIdea(latest);
         }
-        setActionMessage(`Project "${group.label}" staged. Continue from the opened item or add it to a show.`);
     };
 
     const sendToPlanner = (idea: SavedIdea) => {
@@ -2172,7 +2296,7 @@ ${buildImageIdeaPromptContext(idea)}`
                                         onClick={() => continueProjectGroup(group)}
                                         className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
                                     >
-                                        Continue Project
+                                        {getContinuationButtonLabel(group)}
                                     </button>
                                 </div>
 
