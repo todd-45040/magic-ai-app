@@ -15,6 +15,7 @@ import { trackClientEvent } from "../services/telemetryClient";
 import { startPipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
 import { buildVisualBrainstormImagePrompt } from '../services/buildVisualBrainstormPrompt';
 import { buildCreativeProjectLink } from '../services/creativeProjectContinuity';
+import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals.';
 
@@ -1298,6 +1299,7 @@ ${visualPrompt}`,
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="lg:col-span-2"><WorkspaceBreadcrumbs currentToolLabel="Visual Brainstorm" /></div>
         {/* Control Panel */}
         <div className="flex flex-col">
             <h2 className="text-xl font-bold text-slate-300 mb-2">Describe Your Vision</h2>

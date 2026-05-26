@@ -8,6 +8,7 @@ import { BookIcon, WandIcon, CheckIcon, CopyIcon } from "./icons";
 import type { User } from "../types";
 import PipelineProgress from './PipelineProgress';
 import { updatePipelineSession, trackPipelineAdvance } from '../services/pipelineSessionService';
+import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 interface PatterEngineProps {
   user: User;
@@ -408,6 +409,7 @@ Return plain text.`;
   return (
     <div className="space-y-6">
       <PipelineProgress currentStep="script" />
+      <WorkspaceBreadcrumbs currentToolLabel="Patter Engine" className="mx-4 md:mx-6" />
       <main className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
       {/* Control Panel */}
       <div className="flex flex-col">

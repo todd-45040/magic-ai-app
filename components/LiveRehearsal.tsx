@@ -15,6 +15,7 @@ import { normalizeBlockedUx, type BlockedUx } from '../services/blockedUx';
 import { logEvent } from '../services/analyticsService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { logUserActivity } from '../services/userActivityService';
+import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 // ---- Debug instrumentation (enabled via ?debugRehearsal=1 or localStorage MAW_DEBUG_REHEARSAL=1) ----
 type DebugEvent = { ts: number; event: string; data?: any };
@@ -3024,6 +3025,7 @@ const ReviewView: React.FC<{
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
             <div className="p-4 md:p-6 flex-1 overflow-y-auto space-y-5">
+                <WorkspaceBreadcrumbs currentToolLabel="Live Rehearsal" />
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <h3 className="text-xl font-bold text-slate-200 font-cinzel">Session Review</h3>

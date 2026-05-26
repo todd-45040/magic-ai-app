@@ -165,6 +165,52 @@ function nextViewForGroup(group: WorkspaceGroup): MagicianView {
   return 'show-planner';
 }
 
+
+function viewLabel(view: MagicianView): string {
+  const labels: Partial<Record<MagicianView, string>> = {
+    'visual-brainstorm': 'Visual Brainstorm',
+    'illusion-blueprint': 'Illusion Blueprint',
+    'patter-engine': 'Patter Engine',
+    'live-rehearsal': 'Live Rehearsal',
+    'show-planner': 'Show Planner',
+    'effect-generator': 'Effect Engine',
+    'saved-ideas': 'Saved Ideas',
+    'project-workspace': 'Project Workspace',
+  };
+  return labels[view] || String(view).replace(/-/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function currentStageForGroup(group: WorkspaceGroup): string {
+  const state = stageLabels.find((stage) => stageState(group, stage.key) === 'current');
+  if (state) return state.label;
+  const lastDone = [...stageLabels].reverse().find((stage) => stageState(group, stage.key) === 'done');
+  return lastDone?.label || 'Collect';
+}
+
+function nextStepCopy(group: WorkspaceGroup): { view: MagicianView; title: string; body: string } {
+  const view = nextViewForGroup(group);
+  if (view === 'illusion-blueprint') {
+    return { view, title: 'Build a realistic illusion blueprint', body: 'Turn the strongest visual seed into a practical, physically plausible apparatus plan with matched render continuity.' };
+  }
+  if (view === 'patter-engine') {
+    return { view, title: 'Develop performance patter', body: 'Convert the concept into a usable script, presentation beats, and performance-ready language.' };
+  }
+  if (view === 'live-rehearsal') {
+    return { view, title: 'Rehearse and refine delivery', body: 'Take the script into rehearsal so timing, clarity, confidence, and pacing can improve before show planning.' };
+  }
+  return { view, title: 'Move into show planning', body: 'Add the developed routine to a show plan with props, tasks, staging notes, and production details.' };
+}
+
+function sourceViewForAsset(asset: WorkspaceAsset): MagicianView {
+  const raw = `${asset.tool} ${asset.idea.category || ''}`.toLowerCase();
+  if (raw.includes('visual') || asset.idea.type === 'image') return 'visual-brainstorm';
+  if (raw.includes('blueprint') || asset.idea.category === 'blueprint') return 'illusion-blueprint';
+  if (raw.includes('patter') || asset.idea.category === 'script') return 'patter-engine';
+  if (raw.includes('rehears') || asset.idea.category === 'rehearsal') return 'live-rehearsal';
+  if (raw.includes('effect') || asset.idea.category === 'effect') return 'effect-generator';
+  return 'saved-ideas';
+}
+
 function formatDate(timestamp: number): string {
   if (!timestamp) return 'Recently';
   try {
@@ -194,6 +240,7 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
 
   const selected = groups.find((group) => group.id === selectedId) || groups[0] || null;
   const nextView = selected ? nextViewForGroup(selected) : 'saved-ideas';
+  const nextStep = selected ? nextStepCopy(selected) : null;
 
   const selectGroup = (group: WorkspaceGroup) => {
     setSelectedId(group.id);
@@ -208,7 +255,7 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
       projectId: group.project?.projectId || group.id,
       projectTitle: group.project?.projectTitle || group.label,
       projectType: group.project?.projectType || 'creative_project',
-      projectStage: group.project?.projectStage || 'development',
+      projectStage: group.project?.projectStage || (targetView === 'live-rehearsal' ? 'rehearsal' : targetView === 'show-planner' ? 'performance' : 'development'),
       originTool: 'Project Workspace',
       createdAt: group.project?.createdAt || group.lastUpdatedAt || Date.now(),
       lastUpdatedAt: Date.now(),
@@ -284,6 +331,45 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
       }
     } catch {}
 
+    try { window.dispatchEvent(new CustomEvent('maw:workspace-context-updated')); } catch {}
+    onNavigate(targetView);
+  };
+
+
+  const openAssetSource = (group: WorkspaceGroup, asset: WorkspaceAsset) => {
+    const targetView = sourceViewForAsset(asset);
+    const projectPayload = {
+      projectId: group.project?.projectId || group.id,
+      projectTitle: group.project?.projectTitle || group.label,
+      projectType: group.project?.projectType || 'creative_project',
+      projectStage: group.project?.projectStage || asset.stage || 'development',
+      originTool: asset.tool,
+      createdAt: group.project?.createdAt || group.lastUpdatedAt || Date.now(),
+      lastUpdatedAt: Date.now(),
+      workspaceStage: targetView,
+      linkedAssetIds: group.items.map((idea) => idea.id),
+      parentProjectId: group.project?.parentProjectId,
+    };
+
+    try {
+      localStorage.setItem(WORKSPACE_SELECTION_KEY, JSON.stringify({ projectId: group.id, projectTitle: group.label, updatedAt: Date.now() }));
+      localStorage.setItem('maw_project_continuity_handoff_v1', JSON.stringify({
+        version: 2,
+        source: 'project_workspace_asset',
+        targetView,
+        projectId: projectPayload.projectId,
+        projectTitle: projectPayload.projectTitle,
+        project: projectPayload,
+        ideaIds: group.items.map((idea) => idea.id),
+        focusedIdeaId: asset.idea.id,
+        imageUrl: asset.imageUrl || group.assets.find((item) => item.imageUrl)?.imageUrl || '',
+        prompt: `${asset.tool}: ${asset.title}\n\n${asset.summary}`,
+        title: group.label,
+        created_at: new Date().toISOString(),
+      }));
+      window.dispatchEvent(new CustomEvent('maw:workspace-context-updated'));
+    } catch {}
+
     onNavigate(targetView);
   };
 
@@ -322,7 +408,9 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => continueProject(selected)} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 hover:bg-emerald-500">Continue This Project</button>
+              <button onClick={() => continueProject(selected)} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 hover:bg-emerald-500">Continue in {viewLabel(nextView)}</button>
+              <button onClick={() => continueProject(selected, 'illusion-blueprint')} className="rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-sm font-bold text-blue-100 hover:bg-blue-500/20">Continue in Blueprint</button>
+              <button onClick={() => continueProject(selected, 'patter-engine')} className="rounded-xl border border-purple-400/30 bg-purple-500/10 px-4 py-2 text-sm font-bold text-purple-100 hover:bg-purple-500/20">Continue in Patter</button>
               <button onClick={() => onNavigate('saved-ideas')} className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-bold text-slate-200 hover:border-purple-400/40">Saved Ideas</button>
             </div>
           </div>
@@ -363,7 +451,34 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
               </div>
             </section>
 
+
+            {nextStep ? (
+              <section className="rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/10 via-slate-900/60 to-slate-950/60 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-amber-200/80">Current Stage / Recommended Next Step</div>
+                    <h2 className="mt-2 text-lg font-black text-white">{currentStageForGroup(selected)} → {viewLabel(nextStep.view)}</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300"><span className="font-semibold text-amber-100">{nextStep.title}.</span> {nextStep.body}</p>
+                    {selected.assets.length === 1 ? (
+                      <p className="mt-2 text-xs text-slate-400">This project currently has one linked asset. Continue it into the next tool to build a stronger workspace timeline.</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => continueProject(selected, nextStep.view)} className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-black text-slate-950 hover:bg-amber-400">Continue in {viewLabel(nextStep.view)}</button>
+                    <button onClick={() => continueProject(selected, 'live-rehearsal')} className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-100 hover:bg-emerald-500/20">Continue in Rehearsal</button>
+                    <button onClick={() => continueProject(selected, 'show-planner')} className="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-bold text-sky-100 hover:bg-sky-500/20">Continue in Show Planner</button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {selected.assets.length === 1 ? (
+                <div className="xl:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/45 p-4 text-sm text-slate-300">
+                  <div className="font-bold text-white">Project just started</div>
+                  <p className="mt-1 text-slate-400">Only one asset is linked so far. Use the Continue buttons to create the next connected asset and fill out this workspace.</p>
+                </div>
+              ) : null}
               {selected.assets.map((asset) => (
                 <article key={asset.idea.id} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/55 shadow-lg shadow-black/10">
                   {asset.imageUrl && <img src={asset.imageUrl} alt={asset.title} className="h-52 w-full object-cover" />}
@@ -375,6 +490,7 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
                     <h3 className="mt-3 text-base font-bold text-yellow-100">{asset.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-slate-400">{asset.summary}</p>
                     <div className="mt-4 flex flex-wrap gap-2">
+                      <button onClick={() => openAssetSource(selected, asset)} className="rounded-lg border border-slate-600 bg-slate-950/60 px-3 py-1.5 text-xs font-bold text-slate-100 hover:border-slate-400">Open in {viewLabel(sourceViewForAsset(asset))}</button>
                       <button onClick={() => continueProject(selected, 'illusion-blueprint')} className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-100 hover:bg-blue-500/20">Blueprint</button>
                       <button onClick={() => continueProject(selected, 'patter-engine')} className="rounded-lg border border-purple-400/30 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-100 hover:bg-purple-500/20">Script</button>
                       <button onClick={() => continueProject(selected, 'show-planner')} className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-100 hover:bg-emerald-500/20">Plan Show</button>

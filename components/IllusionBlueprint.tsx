@@ -17,6 +17,7 @@ import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
 import { APP_VERSION } from '../constants';
 import { BlueprintIcon, WandIcon, FileTextIcon, ChecklistIcon, ShieldIcon, ImageIcon } from './icons';
+import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 interface IllusionBlueprintProps {
   user: User;
@@ -1262,6 +1263,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       ) : null}
 
     <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-6 animate-fade-in">
+      <WorkspaceBreadcrumbs currentToolLabel="Illusion Blueprint" />
       <header className="mb-6">
         <div className="flex items-center gap-3">
           <BlueprintIcon className="w-8 h-8 text-purple-400" />

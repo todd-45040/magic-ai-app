@@ -12,6 +12,7 @@ import { buildShowFeedbackUrl, rotateShowFeedbackToken } from '../services/showF
 import { getFeedback } from '../services/feedbackService';
 import { AI_TASK_SUGGESTER_SYSTEM_INSTRUCTION, IN_TASK_PATTER_SYSTEM_INSTRUCTION } from '../constants';
 import { AnalyticsIcon, BackIcon, CalendarIcon, CheckIcon, ChecklistIcon, CopyIcon, DollarSignIcon, FileTextIcon, MusicNoteIcon, PencilIcon, QrCodeIcon, StageCurtainsIcon, TrashIcon, UsersIcon, ViewGridIcon, ViewListIcon, WandIcon } from './icons';
+import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 type ViewMode = 'list' | 'board' | 'timeline';
 type SortBy = 'dueDate' | 'priority' | 'createdAt';
@@ -2259,6 +2260,7 @@ const ShowModal: React.FC<{
 };
 return (
         <>
+            <div className="mx-4 md:mx-6"><WorkspaceBreadcrumbs currentToolLabel="Show Planner" /></div>
             {isTaskModalOpen && <TaskModal onClose={() => { setIsTaskModalOpen(false); setTaskToEdit(null); }} onSave={taskToEdit ? handleUpdateTask : handleAddTask} taskToEdit={taskToEdit} user={user} />}
             {isScriptModalOpen && <ScriptGuideModal script={generatedScript} onClose={() => setIsScriptModalOpen(false)} />}
             {isShowModalOpen && <ShowModal onClose={() => setIsShowModalOpen(false)} onSave={handleAddShow} />}
