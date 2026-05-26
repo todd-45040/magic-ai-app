@@ -9,6 +9,7 @@ const TIER_LIMITS: Record<string, number> = {
   trial: 10,
   amateur: 200,
   professional: 10000, // effectively unlimited (fair use)
+  admin: 999999,
   expired: 0,
   // legacy
   performer: 200,
@@ -29,6 +30,9 @@ function getTodayKeyUTC(d = new Date()): string {
 export const checkUsage = async (
   user: User
 ): Promise<{ canProceed: boolean; remaining: number; limit: number }> => {
+  if (Boolean(user.isAdmin) || normalizeTier(user.membership) === 'admin') {
+    return { canProceed: true, remaining: 999999, limit: 999999 };
+  }
   const tier = normalizeTier(user.membership);
   const limit = TIER_LIMITS[tier] ?? TIER_LIMITS.trial;
 

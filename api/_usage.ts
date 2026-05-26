@@ -17,8 +17,10 @@ function effectiveMembership(profile: any): Membership {
   return raw || 'free';
 }
 
-function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'expired' {
+function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'professional' | 'admin' | 'expired' {
   switch (m) {
+    case 'admin':
+      return 'admin';
     case 'professional':
       return 'professional';
     case 'amateur':
@@ -36,6 +38,7 @@ function normalizeTier(m?: string | null): 'free' | 'trial' | 'amateur' | 'profe
 }
 
 const TIER_LIMITS: Record<string, number> = {
+  admin: Number.MAX_SAFE_INTEGER,
   free: 3,
   trial: 10,
   amateur: 200,
@@ -48,6 +51,7 @@ const TIER_LIMITS: Record<string, number> = {
 
 // Per-minute burst limits (requests per minute), even if daily remaining is high.
 const BURST_LIMITS: Record<string, number> = {
+  admin: Number.MAX_SAFE_INTEGER,
   free: 3,
   trial: 10,
   amateur: 60,
@@ -57,6 +61,25 @@ const BURST_LIMITS: Record<string, number> = {
   performer: 60,
   'semi-pro': 60,
 };
+
+
+function isAdminUsageBypass(profile: any): boolean {
+  if (!profile) return false;
+  return Boolean(profile?.is_admin) || String(profile?.membership || '').trim().toLowerCase() === 'admin';
+}
+
+function logAdminBypass(input: { route?: string | null; userId?: string | null; membership?: any; isAdmin?: any }) {
+  try {
+    console.log('[ADMIN_BYPASS]', {
+      route: input.route ?? null,
+      userId: input.userId ?? null,
+      membership: input.membership == null ? null : String(input.membership),
+      isAdmin: Boolean(input.isAdmin),
+    });
+  } catch {
+    // logging must never affect quota enforcement
+  }
+}
 
 function getTodayKeyUTC(d = new Date()): string {
   // YYYY-MM-DD in UTC
@@ -136,7 +159,7 @@ export async function getAiUsageStatus(req: any): Promise<{
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
+    .select('id, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -147,6 +170,11 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
+    if (isAdminUsageBypass(profile)) {
+      logAdminBypass({ route: req?.url ?? 'legacy:getAiUsageStatus', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+      const unlimited = Number.MAX_SAFE_INTEGER;
+      return { ok: true, membership: 'admin', used: 0, limit: unlimited, remaining: unlimited, burstLimit: unlimited, burstRemaining: unlimited };
+    }
     membership = effectiveMembership(profile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
@@ -233,7 +261,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
+    .select('id, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -247,6 +275,11 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   if (profile) {
+    if (isAdminUsageBypass(profile)) {
+      logAdminBypass({ route: req?.url ?? 'legacy:enforceAiUsage', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+      const unlimited = Number.MAX_SAFE_INTEGER;
+      return { ok: true, membership: 'admin', remaining: unlimited, limit: unlimited, burstRemaining: unlimited, burstLimit: unlimited };
+    }
     membership = effectiveMembership(profile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;

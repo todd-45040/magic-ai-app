@@ -281,9 +281,27 @@ function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
   return nowMs < t;
 }
 
-function isUnlimitedAdmin(profile: any): boolean {
+export function isAdminUsageBypass(profile: any): boolean {
   if (!profile) return false;
-  return Boolean(profile?.is_admin) || String(profile?.membership || '').trim() === 'admin';
+  const membership = String(profile?.membership || '').trim().toLowerCase();
+  return Boolean(profile?.is_admin) || membership === 'admin';
+}
+
+function isUnlimitedAdmin(profile: any): boolean {
+  return isAdminUsageBypass(profile);
+}
+
+function logAdminBypass(input: { route?: string | null; userId?: string | null; membership?: any; isAdmin?: any }) {
+  try {
+    console.log('[ADMIN_BYPASS]', {
+      route: input.route ?? null,
+      userId: input.userId ?? null,
+      membership: input.membership == null ? null : String(input.membership),
+      isAdmin: Boolean(input.isAdmin),
+    });
+  } catch {
+    // logging must never affect quota enforcement
+  }
 }
 
 function hasActivePaidStripe(profile: any): boolean {
@@ -1690,6 +1708,7 @@ export async function enforceLiveMinutes(
   }
 
   if (isUnlimitedAdmin(profileData)) {
+    logAdminBypass({ route: req?.url ?? _opts?.route ?? 'enforceLiveMinutes', userId, membership: profileData?.membership, isAdmin: profileData?.is_admin });
     await safeLogUsageEvent({ request_id: requestId, actor_type: 'user', user_id: userId, identity_key: userId, ip_hash, tool: 'live_rehearsal_audio', endpoint: req?.url ?? null, outcome: 'SUCCESS_NOT_CHARGED', http_status: 200, error_code: null, retryable: false, units, charged_units: 0, membership: 'admin', user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null, estimated_cost_usd: estimateUsageEventCost('live_rehearsal_audio', units) });
     const unlimited = Number.MAX_SAFE_INTEGER;
     return { ok: true, membership: 'admin', liveUsed: 0, liveLimit: unlimited, liveRemaining: unlimited, usedDailyMinutes: 0, remainingDailyMinutes: unlimited, remainingMonthlyMinutes: unlimited, burstRemaining: unlimited, burstLimit: unlimited };
@@ -1800,6 +1819,7 @@ export async function enforceVideoUploads(
   }
 
   if (isUnlimitedAdmin(profileData)) {
+    logAdminBypass({ route: req?.url ?? _opts?.route ?? 'enforceVideoUploads', userId, membership: profileData?.membership, isAdmin: profileData?.is_admin });
     await safeLogUsageEvent({ request_id: requestId, actor_type: 'user', user_id: userId, identity_key: userId, ip_hash, tool: 'video_rehearsal', endpoint: req?.url ?? null, outcome: 'SUCCESS_NOT_CHARGED', http_status: 200, error_code: null, retryable: false, units, charged_units: 0, membership: 'admin', user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null, estimated_cost_usd: estimateUsageEventCost('video_rehearsal', units) });
     const unlimited = Number.MAX_SAFE_INTEGER;
     return { ok: true, membership: 'admin', usedDailyUploads: 0, remainingDailyUploads: unlimited, remainingMonthlyUploads: unlimited, burstRemaining: unlimited, burstLimit: unlimited };
