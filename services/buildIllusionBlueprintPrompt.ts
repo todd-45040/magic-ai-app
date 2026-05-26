@@ -57,6 +57,11 @@ export type IllusionBlueprintDesignSpec = {
   silhouetteLock: string;
   proportionLock: string;
   componentInheritance: string;
+  componentMap: string;
+  facadeInheritance: string;
+  pedestalInheritance: string;
+  rooflineInheritance: string;
+  partPersistence: string;
 };
 
 export type IllusionBlueprintImagePromptParams = {
@@ -160,6 +165,14 @@ const GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS = `Geometric identity lock requiremen
 - The apparatus should be recognizable as the same object in blueprint and render even if all text and labels are removed.`;
 
 
+
+const APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS = `Apparatus component inheritance requirements:
+- Treat the selected seed apparatus as a persistent prop made of inherited components, not as a loose theme for new concept art.
+- Blueprint and render prompts must inherit the same component map before applying operational state, lighting, staging, finish, or reveal condition.
+- Preserve the same facade layout, front opening position, side-panel geometry, door count, hinge orientation, window/vent placement, trim locations, roof architecture, base/pedestal architecture, support-frame layout, caster/wheel placement, and apparatus proportions.
+- Operational state may change only allowed movable conditions: door open/closed, roof/panel open/closed, interior shown empty, reveal visible, performer gesture, fog/lighting level, and audience-facing angle.
+- Do not regenerate, beautify, simplify, replace, or improvise inherited parts. No undercarriage redesign, pedestal reinterpretation, facade replacement, trim regeneration, support-frame drift, alternate wheel layout, or new roof family.
+- Variant A and Variant B may show different operational states or finish polish, but each variant must remain a revision of the same inherited prop family, not a new apparatus design.`;
 
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
@@ -297,6 +310,64 @@ const inferComponentInheritance = (seedIdentity?: IllusionSeedIdentity | null): 
   return 'COMPONENT INHERITANCE: every paired output inherits the same primary apparatus components from the seed/spec before applying state or style changes.';
 };
 
+const inferComponentMap = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ')} ${seedIdentity?.primaryObjects?.join(' ')}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return [
+      'COMPONENT MAP: inherited dog-house shell',
+      'one rectangular raised body',
+      'one single gable roof assembly',
+      'one audience-facing front opening',
+      'one hinged/display door system tied to the front opening',
+      'vertical side plank panels',
+      'rectangular platform or pedestal directly under the house footprint',
+      'visible caster/wheel strategy at the base',
+      'fixed window/vent/trim locations inherited from the seed when visible',
+    ].join('; ');
+  }
+  if (/box|cabinet|case|trunk/.test(raw)) {
+    return [
+      'COMPONENT MAP: inherited rectangular apparatus shell',
+      'one dominant front face',
+      'same lid/topline',
+      'same primary door or panel system',
+      'same base/pedestal footprint',
+      'same visible support and caster strategy',
+    ].join('; ');
+  }
+  return 'COMPONENT MAP: inherit the exact visible components from the selected seed image: primary body, front face, opening, movable panels, supports, base/platform, visible hardware, trim, and performer-facing orientation.';
+};
+
+const inferFacadeInheritance = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ')} ${seedIdentity?.primaryObjects?.join(' ')}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return 'FACADE INHERITANCE: keep the same dog-house front face, front opening position, door/panel count, window or vent placement, plank direction, trim bands, sign/ornament area, and audience-facing orientation; do not replace the facade with a different cottage, cabinet, trunk, or crate face.';
+  }
+  return 'FACADE INHERITANCE: preserve the exact audience-facing facade layout, openings, panels, trim locations, hardware placement, and visible orientation from the seed/spec.';
+};
+
+const inferPedestalInheritance = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ')} ${seedIdentity?.dominantGeometry?.join(' ')}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return 'PEDESTAL / BASE INHERITANCE: keep the dog-house body sitting on the same rectangular raised platform/pedestal footprint; preserve base height relationship, undercarriage/support style, caster/wheel placement, and floor-contact points. Do not swap to a tripod, suspension rig, table stand, unrelated rolling trunk, or alternate base architecture.';
+  }
+  return 'PEDESTAL / BASE INHERITANCE: preserve the base/platform footprint, support geometry, caster/wheel positions, height relationship, and floor-contact layout from the seed/spec.';
+};
+
+const inferRooflineInheritance = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ')}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return 'ROOFLINE INHERITANCE: keep the same single pitched gable roof, ridge direction, roof pitch, roof overhang, front gable shape, roof thickness, and hinge/open condition only when operationally required. Do not create a flat roof, double roof, tower, canopy, dormer-heavy cottage, or unrelated roof family.';
+  }
+  return 'ROOFLINE / TOPLINE INHERITANCE: preserve the exact top outline, lid/roof shape, hinge side, overhang, and height relationship from the seed/spec.';
+};
+
+const inferPartPersistence = (matchedOutput: IllusionBlueprintMatchedOutput): string => [
+  `APPARATUS-PART PERSISTENCE FOR DESIGN ${matchedOutput.label}: all inherited parts must survive into both Blueprint ${matchedOutput.label} and Concept ${matchedOutput.label}.`,
+  'Allowed changes are limited to operational condition, lighting, fog, performer gesture, door/panel open state, reveal visibility, and camera angle.',
+  'Not allowed: new roof, new facade, new base, new wheel layout, new support frame, new trim pattern, new panel geometry, new opening location, or changed proportions.',
+].join(' ');
+
 export function buildIllusionDesignSpec({
   plan,
   matchedOutput,
@@ -334,6 +405,11 @@ export function buildIllusionDesignSpec({
     silhouetteLock: inferSilhouetteLock(seedIdentity),
     proportionLock: `PROPORTION LOCK: ${proportionCue}; keep the same width-to-height ratio, roof-to-body ratio, opening-to-body ratio, base-to-body ratio, platform footprint, caster scale, and performer-to-prop scale in Blueprint ${matchedOutput.label} and Concept ${matchedOutput.label}.`,
     componentInheritance: inferComponentInheritance(seedIdentity),
+    componentMap: inferComponentMap(seedIdentity),
+    facadeInheritance: inferFacadeInheritance(seedIdentity),
+    pedestalInheritance: inferPedestalInheritance(seedIdentity),
+    rooflineInheritance: inferRooflineInheritance(seedIdentity),
+    partPersistence: inferPartPersistence(matchedOutput),
   };
 }
 
@@ -357,7 +433,12 @@ const buildDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): string 
     designSpec.silhouetteLock,
     designSpec.proportionLock,
     designSpec.componentInheritance,
-    `Pair rule: Blueprint ${designSpec.label} and Concept ${designSpec.label} must be generated from this exact same design spec. Do not independently reinterpret, simplify, replace, or redesign the apparatus.`
+    designSpec.componentMap,
+    designSpec.facadeInheritance,
+    designSpec.pedestalInheritance,
+    designSpec.rooflineInheritance,
+    designSpec.partPersistence,
+    `Pair rule: Blueprint ${designSpec.label} and Concept ${designSpec.label} must be generated from this exact same inherited component map. Do not independently reinterpret, simplify, replace, beautify, or redesign the apparatus.`
   ].join('\n');
 };
 
@@ -377,7 +458,12 @@ const buildRenderDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): s
     designSpec.silhouetteLock,
     designSpec.proportionLock,
     designSpec.componentInheritance,
-    'Do not introduce a new apparatus family, new roofline, new platform type, different door layout, different support frame, different opening location, or different scenic shell.'
+    designSpec.componentMap,
+    designSpec.facadeInheritance,
+    designSpec.pedestalInheritance,
+    designSpec.rooflineInheritance,
+    designSpec.partPersistence,
+    'Do not introduce a new apparatus family, new roofline, new platform type, different door layout, different support frame, different opening location, different trim map, different wheel/caster layout, different facade, or different scenic shell.'
   ].join('\n');
 };
 
@@ -414,6 +500,8 @@ ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
 
 ${GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS}
+
+${APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS}
 
 ${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
 
@@ -473,7 +561,9 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   'Do not render measurement labels, text notes, dimension arrows, cutaway diagrams, exploded-view panels, annotation blocks, or white technical-document fragments.',
   'Translate the blueprint design into a realistic staged apparatus: theatrical lighting, practical fog, performer stance, curtains or performance floor, believable shadows, and real material textures are allowed.',
   'Keep mechanism intelligence invisible or expressed only as normal visible construction cues such as seams, hinges, handles, stable base spread, bracing, casters, and service-friendly panel placement.',
-  'Do not reinterpret the apparatus. Do not redesign the illusion. Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, animal, landscape, or unrelated object.',
+  'Do not reinterpret the apparatus. Do not redesign the illusion. Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, landscape, or unrelated object.',
+  'Component inheritance is mandatory: same facade, same roof/topline, same front opening, same base/pedestal, same support/caster layout, same trim map, same panel geometry, and same proportions as the paired design spec.',
+  APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
   HARD_ANTI_DRIFT_EXCLUSIONS,
   'The rendered concept image should look like a professional staged/photo version of the matching apparatus, not a new visual idea and not a technical drawing.',
 ].join('\n');
@@ -509,6 +599,7 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
   ].filter(Boolean).join('\n');
 }
@@ -576,6 +667,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     DIMENSIONED_BLUEPRINT_REQUIREMENTS,
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
@@ -627,6 +719,7 @@ export function buildIllusionConceptImagePrompt({
     '',
     'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
