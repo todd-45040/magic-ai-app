@@ -1311,6 +1311,26 @@ ${buildImageIdeaPromptContext(idea)}`
         }
     };
 
+    const openProjectWorkspace = (group: SavedIdeaProjectGroup) => {
+        const latest = group.items.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+        const project = latest ? getIdeaProject(latest) : null;
+        const projectId = project?.projectId || group.id.replace(/^project:/, '');
+        try {
+            localStorage.setItem('maw_project_workspace_selected_v1', JSON.stringify({
+                projectId,
+                projectTitle: project?.projectTitle || group.label,
+                source: 'saved_ideas_project_group',
+                linkedAssetIds: group.items.map((idea) => idea.id),
+                updatedAt: Date.now(),
+            }));
+            window.dispatchEvent(new CustomEvent('maw:navigate', {
+                detail: { view: 'project-workspace', source: 'saved_ideas_project_group', projectId, projectTitle: project?.projectTitle || group.label }
+            }));
+        } catch {
+            setActionMessage(`Project Workspace is ready for "${group.label}".`);
+        }
+    };
+
     const continueProjectGroup = (group: SavedIdeaProjectGroup) => {
         const latest = group.items.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
         const project = latest ? getIdeaProject(latest) : null;
@@ -2291,13 +2311,22 @@ ${buildImageIdeaPromptContext(idea)}`
                                             {group.tools.slice(0, 4).map((tool) => <SourceToolBadge key={tool} tool={tool} />)}
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => continueProjectGroup(group)}
-                                        className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
-                                    >
-                                        {getContinuationButtonLabel(group)}
-                                    </button>
+                                    <div className="flex shrink-0 flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openProjectWorkspace(group)}
+                                            className="rounded-full border border-purple-300/30 bg-purple-500/15 px-3 py-1.5 text-xs font-semibold text-purple-50 hover:bg-purple-500/25"
+                                        >
+                                            Open Workspace
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => continueProjectGroup(group)}
+                                            className="rounded-full border border-emerald-300/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-50 hover:bg-emerald-500/25"
+                                        >
+                                            {getContinuationButtonLabel(group)}
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="mt-4 space-y-2">

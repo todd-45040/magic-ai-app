@@ -16,6 +16,7 @@ import { useToast } from './ToastProvider';
 import LiveRehearsal from './LiveRehearsal';
 import VisualBrainstorm from './VisualBrainstorm';
 import SavedIdeas from './SavedIdeas';
+import ProjectWorkspace from './ProjectWorkspace';
 import PropChecklists from './PropChecklists';
 import PropGenerator from './PropGenerator';
 import EffectGenerator from './EffectGenerator';
@@ -2728,6 +2729,7 @@ const VIEW_TO_TAB_MAP: Record<MagicianView, MagicianTab> = {
     'angle-risk': 'chat',
     'visual-brainstorm': 'chat',
     'saved-ideas': 'chat',
+    'project-workspace': 'chat',
     'prop-checklists': 'chat',
     'magic-archives': 'chat',
     'gospel-magic-assistant': 'chat',
@@ -4768,6 +4770,7 @@ ${action.payload.content}`;
         case 'angle-risk': return <AngleRiskAnalysis user={user} onIdeaSaved={() => handleIdeaSaved('Angle/Risk analysis saved!')} />;
         case 'visual-brainstorm': return <VisualBrainstorm onIdeaSaved={() => handleIdeaSaved('Image idea saved!')} user={user} onRequestUpgrade={() => { logLockedFeatureClick('visual_brainstorm', { source: 'component_upgrade_request' }); setIsUpgradeModalOpen(true); }} />;
         case 'saved-ideas': return <SavedIdeas onAiSpark={handleAiSpark} initialIdeaId={initialIdeaId || undefined} />;
+        case 'project-workspace': return <ProjectWorkspace ideas={ideas} onNavigate={handleNavigate} />;
         case 'prop-checklists': return <PropGenerator user={user} onIdeaSaved={() => handleIdeaSaved('Prop concept saved!')} onNavigateShowPlanner={() => setActiveView('show-planner')} onNavigateDirectorMode={() => setActiveView('director-mode')} />;
         case 'show-planner': return <ShowPlanner user={user} clients={clients} onNavigateToAnalytics={handleNavigateToAnalytics} initialShowId={initialShowId} initialTaskId={initialTaskId} />;
         case 'performance-analytics': return <PerformanceAnalytics performanceId={viewingPerformanceId!} onBack={() => { setViewingPerformanceId(null); setActiveView('show-planner'); }} />;
@@ -5089,6 +5092,7 @@ const renderIntentSubnav = () => {
       <div className="relative z-[110] flex flex-wrap items-center gap-2 px-2 md:px-4 py-2 border-b border-slate-800/70 bg-slate-950/60">
         {subBtn('Show Planner', () => handleNavigate('show-planner'), activeTab === 'show-planner', isAccessLocked('show-planner'))}
         {subBtn('Saved Ideas', () => handleNavigate('saved-ideas'), activeView === 'saved-ideas', isAccessLocked('saved-ideas'))}
+        {subBtn('Project Workspace', () => handleNavigate('project-workspace'), activeView === 'project-workspace')}
         {subBtn('Show Feedback', () => handleNavigate('show-feedback'), activeView === 'show-feedback', isAccessLocked('show-feedback'))}
         {subBtn('Clients', () => handleNavigate('client-management'), activeView === 'client-management', isAccessLocked('client-management'))}
         {subBtn('Contracts', () => handleNavigate('contract-generator'), activeView === 'contract-generator', isAccessLocked('contract-generator'))}

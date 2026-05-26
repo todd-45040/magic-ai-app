@@ -7,6 +7,9 @@ export interface CreativeProjectLink {
   projectTitle: string;
   projectType?: string;
   projectStage?: CreativeProjectStage;
+  workspaceStage?: string;
+  parentProjectId?: string;
+  lastUpdatedAt?: number;
   originTool: string;
   createdAt: number;
   linkedAssetIds: string[];
@@ -69,6 +72,9 @@ export function buildCreativeProjectLink(input: {
   projectStage?: CreativeProjectStage;
   originTool: string;
   linkedAssetIds?: string[];
+  workspaceStage?: string;
+  parentProjectId?: string;
+  lastUpdatedAt?: number;
   createdAt?: number;
 }): CreativeProjectLink {
   const projectTitle = inferProjectTitle({ ...input, tool: input.originTool });
@@ -78,6 +84,9 @@ export function buildCreativeProjectLink(input: {
     projectTitle,
     projectType: cleanText(input.projectType) || undefined,
     projectStage: input.projectStage || 'concept',
+    workspaceStage: cleanText(input.workspaceStage) || undefined,
+    parentProjectId: cleanText(input.parentProjectId) || undefined,
+    lastUpdatedAt: Number(input.lastUpdatedAt || createdAt),
     originTool: cleanText(input.originTool) || 'unknown',
     createdAt,
     linkedAssetIds: Array.isArray(input.linkedAssetIds) ? input.linkedAssetIds.filter(Boolean).map(String) : [],
@@ -93,6 +102,9 @@ export function normalizeCreativeProjectLink(value: unknown, fallback?: Partial<
         projectType: fallback.projectType,
         projectStage: fallback.projectStage,
         linkedAssetIds: fallback.linkedAssetIds,
+        workspaceStage: fallback.workspaceStage,
+        parentProjectId: fallback.parentProjectId,
+        lastUpdatedAt: fallback.lastUpdatedAt,
         createdAt: fallback.createdAt,
       })
     : null;
@@ -104,6 +116,9 @@ export function normalizeCreativeProjectLink(value: unknown, fallback?: Partial<
     projectTitle: cleanText(raw.projectTitle) || fallback?.projectTitle,
     projectType: cleanText(raw.projectType) || fallback?.projectType,
     projectStage: (raw.projectStage as CreativeProjectStage) || fallback?.projectStage,
+    workspaceStage: cleanText(raw.workspaceStage) || fallback?.workspaceStage,
+    parentProjectId: cleanText(raw.parentProjectId) || fallback?.parentProjectId,
+    lastUpdatedAt: Number(raw.lastUpdatedAt || fallback?.lastUpdatedAt || raw.createdAt || fallback?.createdAt || Date.now()),
     linkedAssetIds: Array.isArray(raw.linkedAssetIds) ? raw.linkedAssetIds.map(String) : fallback?.linkedAssetIds,
     createdAt: Number(raw.createdAt || fallback?.createdAt || Date.now()),
   });

@@ -33,6 +33,12 @@ export interface CreativeProjectLink {
   projectTitle: string;
   projectType?: string;
   projectStage?: 'concept' | 'development' | 'rehearsal' | 'performance';
+  /** Optional workspace-focused stage label for lightweight project continuity. */
+  workspaceStage?: string;
+  /** Optional parent project reference for future continuity without schema changes. */
+  parentProjectId?: string;
+  /** Last project activity timestamp, used by the Project Workspace view. */
+  lastUpdatedAt?: number;
   originTool: string;
   createdAt: number;
   linkedAssetIds: string[];
@@ -474,6 +480,7 @@ export type MagicianView =
   | 'angle-risk'
   | 'client-management'
   | 'dashboard'
+  | 'project-workspace'
   | 'global-search'
   | 'performance-analytics'
   | 'illusion-blueprint'
