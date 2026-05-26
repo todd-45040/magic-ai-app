@@ -21,6 +21,42 @@ const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased towa
 
 const VISUAL_TO_BLUEPRINT_HANDOFF_KEY = 'maw_illusion_blueprint_visual_handoff';
 const VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY = 'maw_illusion_blueprint_visual_handoff_session';
+const VISUAL_CONTEXT_ISOLATION_STORAGE_KEYS = [
+  VISUAL_TO_BLUEPRINT_HANDOFF_KEY,
+  VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY,
+  'maw_effect_engine_visual_handoff',
+  'maw_illusion_blueprint_seed',
+  'maw_visual_blueprint_seed',
+  'pipelineSession',
+];
+
+function clearVisualContinuationStorage() {
+  for (const key of VISUAL_CONTEXT_ISOLATION_STORAGE_KEYS) {
+    try { localStorage.removeItem(key); } catch {}
+    try { sessionStorage.removeItem(key); } catch {}
+  }
+  try { window.__mawIllusionBlueprintVisualHandoff = undefined; } catch {}
+}
+
+function extractVisualNegativeTerms(text: string): string[] {
+  const normalized = String(text || '').toLowerCase();
+  const candidates = [
+    'rope',
+    'ropes',
+    'ring',
+    'rings',
+    'brass rings',
+    'steampunk',
+    'steam punk',
+    'victorian',
+    'floating arm',
+    'disembodied arm',
+    'unrequested assistant',
+    'cabinet',
+    'box',
+  ];
+  return candidates.filter((term) => normalized.includes(term));
+}
 
 declare global {
   interface Window {
@@ -330,6 +366,7 @@ useEffect(() => {
     setInputImageFile(null);
     setInputImagePreview(null);
     setEditPrompt('');
+    clearVisualContinuationStorage();
   };
 
   const runPreset = async (p: (typeof demoPresets)[number]) => {
@@ -343,7 +380,7 @@ useEffect(() => {
     if (!prompt) return;
     await runAction({
       kind: 'generate',
-      prompt: buildProviderPrompt(prompt),
+      prompt: buildProviderPrompt(prompt, false, { freshContext: true, staleNegativeTerms: extractVisualNegativeTerms(`${promptUsed}\n${lastGeneratePrompt}`) }),
       displayPrompt: prompt,
       aspectRatio,
       units: sessionVariationLimit,
@@ -357,6 +394,7 @@ useEffect(() => {
     } catch {
       // ignore
     }
+    clearVisualContinuationStorage();
     setSessions([]);
     setActiveSessionId(null);
     setHistory([]);
@@ -541,13 +579,46 @@ useEffect(() => {
     ? editPrompt.trim()
     : (advancedPrompt && promptOverride.trim() ? promptOverride.trim() : buildPrompt());
 
-  const buildProviderPrompt = (prompt: string, hasUploadedImage = false) =>
+  const buildProviderPrompt = (
+    prompt: string,
+    hasUploadedImage = false,
+    opts?: { freshContext?: boolean; staleNegativeTerms?: string[] }
+  ) =>
     buildVisualBrainstormImagePrompt({
       prompt,
       aspectRatio,
       styleMode: 'realistic_stage',
       hasUploadedImage,
+      freshContext: Boolean(opts?.freshContext),
+      staleNegativeTerms: opts?.staleNegativeTerms || [],
     });
+
+
+  const prepareFreshVisualGeneration = (displayPrompt: string) => {
+    const staleTerms = extractVisualNegativeTerms(`${promptUsed}
+${lastGeneratePrompt}`);
+
+    // Main Generate Image is intentionally a clean-slate request. Continuity is
+    // reserved for explicit Generate Variations, Refine, Edit, or Use in Blueprint.
+    clearVisualContinuationStorage();
+    setActiveHistoryId(null);
+    setDetailHistoryId(null);
+    setDetailOpen(false);
+    setGeneratedImage(null);
+    setVariationImages([]);
+    setVariationHistoryIds([]);
+    setPromptUsed('');
+    setLastGeneratePrompt('');
+    setSaveImageStatus('idle');
+    setSavedIdeaId(null);
+    setIsStrong(false);
+    setHistory([]);
+
+    return buildProviderPrompt(displayPrompt, false, {
+      freshContext: true,
+      staleNegativeTerms: staleTerms,
+    });
+  };
 
   const activeItem = useMemo(() => {
     if (!activeHistoryId) return null;
@@ -740,7 +811,7 @@ const addToHistory = (
         await new Promise((r) => setTimeout(r, 350));
         const baseTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
         const count = action.kind === 'generate' ? sessionVariationLimit : 1;
-        const imgs = generateDemoImages(baseTitle, action.prompt, count);
+        const imgs = generateDemoImages(baseTitle, action.displayPrompt, count);
         batchImages = imgs;
         if (action.kind === 'generate') {
           setVariationImages(imgs);
@@ -794,7 +865,7 @@ const addToHistory = (
       }
 
       setGeneratedImage(imageUrl);
-      setPromptUsed(action.prompt);
+      setPromptUsed(action.displayPrompt);
 
       const resolvedTitle = (conceptTitle?.trim() ? conceptTitle.trim() : buildConceptTitle());
       setConceptTitle(resolvedTitle);
@@ -806,7 +877,7 @@ const addToHistory = (
         const imgs = (batchImages?.length ? batchImages : [imageUrl]).slice(0, sessionVariationLimit);
 
         // Phase 10: start a new session for each fresh generation request (groups variations)
-        const sid = ensureSession(action.prompt, imgs[0], imgs);
+        const sid = ensureSession(action.displayPrompt, imgs[0], imgs);
         setHistory([]); // reset current session view
         const ids: string[] = [];
 
@@ -899,7 +970,10 @@ const addToHistory = (
     }
 
     const displayPrompt = finalPrompt.trim();
-    const promptToUse = buildProviderPrompt(displayPrompt, Boolean(inputImageFile && inputImagePreview));
+    const hasEditReference = Boolean(inputImageFile && inputImagePreview);
+    const promptToUse = hasEditReference
+      ? buildProviderPrompt(displayPrompt, true)
+      : prepareFreshVisualGeneration(displayPrompt);
     if (inputImageFile && inputImagePreview) {
       const base64Data = inputImagePreview.split(',')[1];
       const action: LastVisualAction = {
@@ -1474,7 +1548,20 @@ ${visualPrompt}`,
                         {(isEditing ? editPrompt : (objectProp || sceneSetting || style || context || promptOverride)) && (
                              <button
                                 type="button"
-                                onClick={() => (isEditing ? setEditPrompt('') : (setObjectProp(''), setSceneSetting(''), setStyle(''), setContext(''), setPromptOverride(''), setAdvancedPrompt(false)))}
+                                onClick={() => {
+                                  if (isEditing) {
+                                    setEditPrompt('');
+                                  } else {
+                                    setObjectProp('');
+                                    setSceneSetting('');
+                                    setStyle('');
+                                    setContext('');
+                                    setPromptOverride('');
+                                    setAdvancedPrompt(false);
+                                    clearVisualContinuationStorage();
+                                    setActiveHistoryId(null);
+                                  }
+                                }}
                                 className="px-2 py-0.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
                             >
                                 Clear
@@ -1498,7 +1585,7 @@ ${visualPrompt}`,
                           <label className="block text-xs font-semibold text-slate-400 mb-1">Object / Prop</label>
                           <input
                             value={objectProp}
-                            onChange={(e) => { setObjectProp(e.target.value); setError(null); }}
+                            onChange={(e) => { setObjectProp(e.target.value); setError(null); clearVisualContinuationStorage(); setActiveHistoryId(null); }}
                             placeholder="coin, rope, deck of cards..."
                             className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
@@ -1509,7 +1596,7 @@ ${visualPrompt}`,
                           <label className="block text-xs font-semibold text-slate-400 mb-1">Scene / Setting</label>
                           <input
                             value={sceneSetting}
-                            onChange={(e) => { setSceneSetting(e.target.value); setError(null); }}
+                            onChange={(e) => { setSceneSetting(e.target.value); setError(null); clearVisualContinuationStorage(); setActiveHistoryId(null); }}
                             placeholder="close-up table, stage illusion, street magic..."
                             className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
@@ -1520,7 +1607,7 @@ ${visualPrompt}`,
                           <label className="block text-xs font-semibold text-slate-400 mb-1">Style</label>
                           <input
                             value={style}
-                            onChange={(e) => { setStyle(e.target.value); setError(null); }}
+                            onChange={(e) => { setStyle(e.target.value); setError(null); clearVisualContinuationStorage(); setActiveHistoryId(null); }}
                             placeholder="mysterious, theatrical, elegant, comedy..."
                             className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
@@ -1532,7 +1619,7 @@ ${visualPrompt}`,
                           <textarea
                             rows={3}
                             value={context}
-                            onChange={(e) => { setContext(e.target.value); setError(null); }}
+                            onChange={(e) => { setContext(e.target.value); setError(null); clearVisualContinuationStorage(); setActiveHistoryId(null); }}
                             placeholder="Audience size, lighting conditions, show theme..."
                             className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                           />
@@ -1560,7 +1647,7 @@ ${visualPrompt}`,
                             <textarea
                               rows={4}
                               value={promptOverride}
-                              onChange={(e) => { setPromptOverride(e.target.value); setError(null); }}
+                              onChange={(e) => { setPromptOverride(e.target.value); setError(null); clearVisualContinuationStorage(); setActiveHistoryId(null); }}
                               placeholder="Optional: override the full prompt (advanced)"
                               className="w-full px-2.5 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded-md text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
                             />

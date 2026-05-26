@@ -11,6 +11,12 @@ export interface BuildVisualBrainstormPromptParams {
   aspectRatio?: string;
   styleMode?: VisualBrainstormStyleMode;
   hasUploadedImage?: boolean;
+  /**
+   * Fresh generation intentionally severs previous session/image context.
+   * Continuity is reserved for explicit edit, variation, or refine actions.
+   */
+  freshContext?: boolean;
+  staleNegativeTerms?: string[];
 }
 
 const VISUAL_BRAINSTORM_REALISM_GUIDANCE = `
@@ -53,6 +59,38 @@ The final image should look like a real magician could actually perform this rou
 const VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT =
   'Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, disembodied limbs, floating arms, extra hands, partial people, or unrealistic physics unless explicitly requested by the user.';
 
+const VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION = `
+Fresh generation context isolation:
+- This is a clean-slate, prompt-only image generation request.
+- Do not reference, preserve, continue, or echo any prior image, prior prop, prior costume, prior apparatus, prior color palette, prior stage design, prior motif, or prior session artifact.
+- Only depict objects, performers, materials, staging, and atmosphere explicitly requested in the current user concept.
+- Treat unrelated elements from earlier generations as prohibited visual contamination.
+`.trim();
+
+const buildStaleNegativeGuidance = (terms: string[] = []) => {
+  const cleaned = Array.from(new Set(
+    terms
+      .map((t) => String(t || '').trim())
+      .filter(Boolean)
+      .filter((t) => t.length >= 3)
+  )).slice(0, 18);
+
+  const base = [
+    'rope',
+    'ropes',
+    'ring',
+    'rings',
+    'brass rings',
+    'steampunk apparatus',
+    'unrequested assistants holding ropes',
+    'unrelated prior-session props',
+  ];
+
+  const all = Array.from(new Set([...cleaned, ...base]));
+  return `Do not include stale or unrelated prior-session artifacts unless explicitly requested in the current prompt: ${all.join(', ')}.`;
+};
+
+
 const STYLE_MODE_GUIDANCE: Record<VisualBrainstormStyleMode, string> = {
   realistic_stage:
     'Style mode: realistic stage concept. Use grounded theatrical photography, practical staging, and believable real-world props.',
@@ -78,11 +116,14 @@ export function buildVisualBrainstormImagePrompt({
   prompt,
   styleMode = 'realistic_stage',
   hasUploadedImage = false,
+  freshContext = false,
+  staleNegativeTerms = [],
 }: BuildVisualBrainstormPromptParams): string {
   const userPrompt = prompt.trim();
   const realismEnabled = styleMode !== 'fantasy_surreal' && !userExplicitlyRequestedFantasy(userPrompt);
   const sections = [
     realismEnabled ? VISUAL_BRAINSTORM_REALISM_GUIDANCE : '',
+    freshContext && !hasUploadedImage ? VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION : '',
     STYLE_MODE_GUIDANCE[styleMode],
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
@@ -90,6 +131,7 @@ export function buildVisualBrainstormImagePrompt({
     `User concept:\n${userPrompt}`,
     'Generate a polished, commercially usable magic visualization.',
     realismEnabled ? VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT : '',
+    freshContext && !hasUploadedImage ? buildStaleNegativeGuidance(staleNegativeTerms) : '',
   ];
 
   return sections.filter((section) => section.trim().length > 0).join('\n\n').trim();
