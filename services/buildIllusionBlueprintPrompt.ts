@@ -34,6 +34,8 @@ export type IllusionBlueprintMatchedOutput = {
   index: number;
   label: 'A' | 'B';
   directive: string;
+  operationalState: 'empty-display' | 'production-reveal';
+  stateDescription: string;
 };
 
 export type IllusionBlueprintImagePromptParams = {
@@ -52,11 +54,15 @@ export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[
     index: 0,
     label: 'A',
     directive: 'MATCHED DESIGN A: compact touring version that preserves the seed silhouette and primary props, uses practical support/base logic only where needed, includes builder-visible access or rigging cues, modest scenic trim, and a restrained premium stage finish.',
+    operationalState: 'empty-display',
+    stateDescription: 'EMPTY-DISPLAY STATE: the apparatus is opened or presented to show a clean, apparently empty interior. No production moment is shown. No dog, assistant, object, or final reveal appears in this state unless the selected seed already explicitly shows it.',
   },
   {
     index: 1,
     label: 'B',
     directive: 'MATCHED DESIGN B: slightly more theatrical version that preserves the same seed silhouette, prop relationships, footprint, and mechanism direction while adding polished theatre finish, stronger scenic framing, and practical transport/support details.',
+    operationalState: 'production-reveal',
+    stateDescription: 'PRODUCTION / REVEAL STATE: the apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only if the requested effect calls for it. Do not also show the empty-display proof in the same image.',
   },
 ];
 
@@ -123,6 +129,25 @@ const DIMENSIONED_PAIR_LOCK_REQUIREMENTS = `Dimensioned pair lock requirements:
 - Preserve the same measured proportions implied by the blueprint dimensions.`;
 
 
+
+const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
+- Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
+- Do not merge multiple moments of the illusion into one render or one blueprint view unless a blueprint explicitly labels separate state diagrams.
+- Display-empty state means the performer is demonstrating the apparatus apparently empty; the produced item or final reveal must not be visible in that same render.
+- Production/reveal state means the later effect moment is shown; do not also show the full empty-display proof at the same time.
+- Closed-ready state means the apparatus is closed, staged, stable, and ready for operation; no reveal is visible.
+- Reset/service state is for builder planning only and should be described as non-exposure crew access, panel service, or transport reset cues.
+- Blueprint sheets may define transition arrows, operator positions, concealment flow zones, and state labels at a high level.
+- Concept renders must show exactly ONE operational state per image. No split-screen, no before/after collage, no simultaneous empty-and-reveal contradiction.`;
+
+const getOperationalStateBrief = (matchedOutput: IllusionBlueprintMatchedOutput): string => [
+  `OPERATIONAL STATE FOR MATCHED DESIGN ${matchedOutput.label}: ${matchedOutput.operationalState.toUpperCase()}.`,
+  matchedOutput.stateDescription,
+  matchedOutput.operationalState === 'empty-display'
+    ? 'Render instruction: show the apparatus in empty-display mode only. Doors/panels may be open to suggest the interior is being shown cleanly, but do not show the produced object, final reveal, or a second later moment.'
+    : 'Render instruction: show the apparatus in production/reveal mode only. The reveal may be visible if it belongs to the requested effect, but do not include a separate empty-proof display, before/after split, or duplicate operational moment.',
+].join('\n');
+
 const BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS = `Blueprint / render separation requirements:
 - Blueprint generation and concept render generation have separate roles.
 - Blueprint prompts may include dimensions, cutaways, mechanisms, section views, hidden paths, annotations, fabrication notes, exploded views, and measurement callouts.
@@ -158,6 +183,7 @@ const buildRenderStructureAnchors = ({ plan, visualAnchor, venueScale, performer
     `Venue / scale: ${venueScale}.`,
     `Performer style: ${performerStyle}.`,
     `Matched design direction: ${matchedOutput.directive}.`,
+    getOperationalStateBrief(matchedOutput),
     seedBrief,
     identityBrief,
   ].filter(Boolean).join('\n');
@@ -189,6 +215,8 @@ ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
 ${MECHANISM_AND_FABRICATION_INTELLIGENCE}
+
+${OPERATIONAL_STATE_INTELLIGENCE}
 
 ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 
@@ -224,6 +252,8 @@ const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imag
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
+
+${OPERATIONAL_STATE_INTELLIGENCE}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
@@ -274,9 +304,11 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     `Base/platform cue: ${plan.recommended_construction.mobility_modularity}.`,
     `Stage scale: ${venueScale}. Performer style: ${performerStyle}.`,
     `Design direction: ${matchedOutput.directive}.`,
+    getOperationalStateBrief(matchedOutput),
     seedBrief,
     '',
     'Show one real stage apparatus centered on a theatre floor with practical lighting, believable shadows, and one complete magician or assistant positioned naturally beside it.',
+    'Show only the assigned operational state. Do not create a before/after layout, split-screen sequence, or contradictory empty-and-reveal composition.',
     'The image must look like commercial illusion catalog photography or a staged promotional render.',
     'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
@@ -294,6 +326,8 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
     MECHANISM_AND_FABRICATION_INTELLIGENCE,
+    '',
+    OPERATIONAL_STATE_INTELLIGENCE,
     '',
     generationContext,
     '',
@@ -344,6 +378,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
     'Blueprint view requirement: include at least one cutaway or exploded-view style area that clarifies structure, support, access, and operation-state relationships without exposing a secret method.',
+    getOperationalStateBrief(matchedOutput),
+    'Blueprint operational-state requirement: define closed-ready, display-empty, production/reveal, and reset/service as separate labeled state notes or small state diagrams where helpful. Keep transition logic high-level and non-exposure. Show operator/performer position overlays and audience sightline direction without revealing secret method steps.',
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
     'Seed continuity requirement: the technical drawing must look engineered from the selected source concept, preserving its primary props, dominant geometry, silhouette, performer-to-prop relationship, stage layout, material language, and mood. The broad illusion category is less important than the seed image identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
@@ -387,10 +423,12 @@ export function buildIllusionConceptImagePrompt({
     '',
     'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
+    getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
     'Forbidden in the render: printed paper, blueprint sheets, white document panels, measurement labels, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, diagram overlays, and technical-document artifacts.',
-    'Render-state requirement: show a realistic closed-state or reveal-state stage view that preserves the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
+    'Render-state requirement: show exactly the assigned operational state for this matched concept. Preserve the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
+    'Anti-state-blending rule: do not show the apparatus both empty and producing at once; do not show before/after split screens; do not combine closed-ready, display-empty, reveal, and reset into a single photorealistic render.',
     'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must remain plausible and match the exterior proportions without adding fantasy space, impossible voids, labels, or exposed secret workings.',
     'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
