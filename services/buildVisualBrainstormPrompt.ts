@@ -23,19 +23,26 @@ const VISUAL_BRAINSTORM_REALISM_GUIDANCE = `
 Create a highly realistic professional magic visualization.
 
 The image should resemble:
-- real theatrical photography
+- professional theatrical stage photography
+- commercial illusion advertising photography
+- clean centered composition with the prop/apparatus as the focal point
 - believable stage or parlor magic
 - commercially buildable illusion concepts
 - authentic lighting, props, staging, and audience placement
 - practical materials and engineering
 - realistic body proportions, natural hand anatomy, and complete visible human figures
+- complete performers with natural staging composition and no partial bodies entering from image edges
+- single magician presenting the apparatus on stage unless the user explicitly requests assistants or spectators
 - physically plausible environments and reflections
 - every visible arm, hand, leg, and face must belong to a clearly visible person or assistant in the scene
 - ropes, rings, and props must be physically supported by hands, stands, tables, rigging, or visible apparatus
 - professional magician wardrobe and venue details
 
 Preferred aesthetic:
-- cinematic realism
+- professional theatrical stage photography
+- commercial illusion advertising photography
+- clean centered composition
+- cinematic realism only when it remains physically realistic
 - practical stagecraft
 - real-world textures
 - grounded theatrical presentation
@@ -48,7 +55,7 @@ Avoid unless explicitly requested:
 - surreal floating geometry
 - dreamlike distortions
 - cartoon or anime aesthetics
-- warped anatomy, malformed hands, disembodied limbs, floating arms, extra fingers, duplicated body parts, or partial people entering from nowhere
+- warped anatomy, malformed hands, disembodied limbs, floating arms, extra fingers, duplicated body parts, phantom assistants, cropped body fragments, floating audience interaction hands, horror-style appendages, or partial people entering from image edges
 - impossible prop structures
 - science-fiction machinery
 - abstract AI-art compositions
@@ -56,14 +63,27 @@ Avoid unless explicitly requested:
 The final image should look like a real magician could actually perform this routine on stage today.
 `.trim();
 
-const VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT =
-  'Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, disembodied limbs, floating arms, extra hands, partial people, or unrealistic physics unless explicitly requested by the user.';
+const VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION = `
+Anatomical artifact suppression:
+- Use realistic human anatomy only.
+- Do not generate extra limbs, floating hands, detached arms, partial assistants, cropped body fragments, phantom assistants, malformed anatomy, disembodied audience interaction, or AI horror-style appendages.
+- Show complete performers with natural staging composition.
+- Avoid partial bodies entering from image edges.
+- Avoid floating audience interaction hands.
+- For prop showcases, illusion demos, and apparatus reveals: use a single complete magician presenting the apparatus on stage unless assistants or spectators are explicitly requested.
+`.trim();
+
+const VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT = `
+Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, disembodied limbs, floating arms, extra hands, partial people, or unrealistic physics unless explicitly requested by the user.
+
+NO: extra arms, extra hands, floating limbs, detached hands, detached arms, cropped assistants, phantom audience hands, phantom assistants, surreal anatomy, mutated limbs, horror appendages, partial people entering from image edges, disembodied human features.
+`.trim();
 
 const VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION = `
 Fresh generation context isolation:
 - This is a clean-slate, prompt-only image generation request.
 - Do not reference, preserve, continue, or echo any prior image, prior prop, prior costume, prior apparatus, prior color palette, prior stage design, prior motif, or prior session artifact.
-- Only depict objects, performers, materials, staging, and atmosphere explicitly requested in the current user concept.
+- Only depict objects, performers, materials, staging, human figures, and atmosphere explicitly requested in the current user concept.
 - Treat unrelated elements from earlier generations as prohibited visual contamination.
 `.trim();
 
@@ -125,6 +145,7 @@ export function buildVisualBrainstormImagePrompt({
     realismEnabled ? VISUAL_BRAINSTORM_REALISM_GUIDANCE : '',
     freshContext && !hasUploadedImage ? VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION : '',
     STYLE_MODE_GUIDANCE[styleMode],
+    realismEnabled ? VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION : '',
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
       : '',

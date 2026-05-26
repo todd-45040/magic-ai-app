@@ -1019,9 +1019,9 @@ const refinementPresets: Array<{ label: string; instruction: string }> = [
     { label: 'More Minimalist', instruction: 'make it more minimalist, clean composition, fewer elements' },
     { label: 'More Comedy', instruction: 'make it more playful and comedic, whimsical visual details' },
     { label: 'More Stage Lighting', instruction: 'add strong stage lighting, spotlights, theatrical atmosphere' },
-    { label: 'More Audience Interaction', instruction: 'show audience interaction, spectators reacting, participatory feel' },
-    { label: 'More Mysterious', instruction: 'make it more mysterious, subtle fog, magical glow, intrigue' },
-    { label: 'Add Fog & Atmosphere', instruction: 'add fog, haze, and atmospheric depth with magical particles' },
+    { label: 'More Audience Interaction', instruction: 'show realistic audience reaction from seated spectators in the background only, no floating hands, no partial arms entering from image edges, no disembodied audience interaction' },
+    { label: 'More Mysterious', instruction: 'make it more mysterious with subtle theatrical fog and controlled stage lighting, not horror imagery, no disembodied limbs or surreal appendages' },
+    { label: 'Add Fog & Atmosphere', instruction: 'add low theatrical fog and haze around the apparatus while preserving clean realistic anatomy, complete performers, and centered professional stage composition' },
     { label: 'Audience Perspective', instruction: 'shift to an audience perspective viewpoint, stage in the distance' },
   ];
 
