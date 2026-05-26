@@ -1020,30 +1020,39 @@ const activeSession = useMemo(() => {
   };
 
 
-  const buildVisualWorkflowPayload = (targetTool: 'effect_engine' | 'illusion_blueprint') => {
-    const title = conceptTitle?.trim() || activeItem?.title || buildConceptTitle() || 'Visual Brainstorm Concept';
-    const prompt = String(promptUsed || finalPrompt || '').trim();
-    const imageUrl = generatedImage || '';
+  const buildVisualWorkflowPayload = (
+    targetTool: 'effect_engine' | 'illusion_blueprint',
+    selected?: { imageUrl?: string | null; historyId?: string | null; variationIndex?: number | null }
+  ) => {
+    const selectedHistoryId = selected?.historyId || activeHistoryId || null;
+    const selectedItem = selectedHistoryId ? history.find((h) => h.id === selectedHistoryId) || null : null;
+    const selectedImageUrl = selected?.imageUrl || selectedItem?.imageUrl || generatedImage || '';
+    const selectedPrompt = String(selectedItem?.promptUsed || promptUsed || finalPrompt || '').trim();
+    const title = conceptTitle?.trim() || selectedItem?.title || activeItem?.title || buildConceptTitle() || 'Visual Brainstorm Concept';
+    const linkedAssetIds = [savedIdeaId, selectedHistoryId, activeSessionId].filter(Boolean) as string[];
     const project = buildCreativeProjectLink({
       originTool: 'visual_brainstorm',
       projectTitle: title,
-      prompt,
+      prompt: selectedPrompt,
       projectType: targetTool === 'illusion_blueprint' ? 'illusion_blueprint' : 'effect',
       projectStage: targetTool === 'illusion_blueprint' ? 'development' : 'concept',
-      linkedAssetIds: [savedIdeaId, activeHistoryId, activeSessionId].filter(Boolean) as string[],
+      linkedAssetIds,
     });
 
     return {
       source: 'visual_image',
       sourceTool: 'visual_brainstorm',
       targetTool,
-      imageUrl,
-      prompt,
+      imageUrl: selectedImageUrl,
+      selectedImageUrl,
+      prompt: selectedPrompt,
       title,
       project,
       ideaId: savedIdeaId || undefined,
-      historyId: activeHistoryId || undefined,
-      sessionId: activeSessionId || undefined,
+      historyId: selectedHistoryId || undefined,
+      selectedHistoryId: selectedHistoryId || undefined,
+      sessionId: activeSessionId || selectedItem?.sessionId || undefined,
+      selectedVariationIndex: typeof selected?.variationIndex === 'number' ? selected.variationIndex : undefined,
       created_at: new Date().toISOString(),
     };
   };
@@ -1084,14 +1093,16 @@ const activeSession = useMemo(() => {
     }
   };
 
-  const handleUseInIllusionBlueprint = () => {
-    if (!generatedImage) return;
+  const handleUseInIllusionBlueprint = (selected?: { imageUrl?: string | null; historyId?: string | null; variationIndex?: number | null }) => {
+    const selectedImageUrl = selected?.imageUrl || generatedImage;
+    if (!selectedImageUrl) return;
 
-    const payload = buildVisualWorkflowPayload('illusion_blueprint');
+    const payload = buildVisualWorkflowPayload('illusion_blueprint', selected);
     const { imageUrl, prompt, title } = payload;
 
     try {
       localStorage.setItem('maw_illusion_blueprint_visual_handoff', JSON.stringify(payload));
+      window.dispatchEvent(new CustomEvent('maw:illusion-blueprint-handoff', { detail: payload }));
     } catch {
       // If storage is unavailable, still route the user and let them copy the prompt manually.
     }
@@ -1105,13 +1116,13 @@ const activeSession = useMemo(() => {
         title,
       });
       try { window.dispatchEvent(new CustomEvent('maw:pipeline-session-updated', { detail: session })); } catch {}
-      trackPipelineAdvance('image', 'routine', 'visual_brainstorm_to_illusion_blueprint', { historyId: activeHistoryId || null, ideaId: savedIdeaId || null, projectId: payload.project.projectId });
+      trackPipelineAdvance('image', 'routine', 'visual_brainstorm_to_illusion_blueprint', { historyId: payload.historyId || null, ideaId: savedIdeaId || null, projectId: payload.project.projectId });
     } catch {
       // Pipeline state is helpful, but navigation should still work without it.
     }
 
     try {
-      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'illusion-blueprint', source: 'visual_brainstorm', historyId: activeHistoryId || null, projectId: payload.project.projectId } }));
+      window.dispatchEvent(new CustomEvent('maw:navigate', { detail: { view: 'illusion-blueprint', source: 'visual_brainstorm', historyId: payload.historyId || null, projectId: payload.project.projectId, selectedImageUrl: imageUrl } }));
     } catch {
       window.location.hash = 'illusion-blueprint';
     }
@@ -1777,40 +1788,67 @@ ${visualPrompt}`,
                 <div className="p-4">
                   {/* Phase 5: Multi-image variations grid (2x2). */}
                   {(!isEditing && variationImages.length > 1) ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      {variationImages.slice(0, 4).map((url, idx) => {
-                        const isSel = url === generatedImage;
-                        return (
-                          <button
-                            key={`${url.slice(0, 24)}_${idx}`}
-                            type="button"
-                            onClick={() => {
-                              const hid = variationHistoryIds[idx];
-                              if (hid) {
-                                setActiveHistoryId(hid);
-                                openDetail({ historyId: hid });
-                              } else {
-                                setGeneratedImage(url);
-                                openDetail();
+                    <div>
+                      <div className="mb-3 rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-2 text-xs text-purple-100">
+                        Choose the strongest visual concept, then send that specific image into Illusion Blueprint.
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {variationImages.slice(0, 4).map((url, idx) => {
+                          const isSel = url === generatedImage;
+                          const hid = variationHistoryIds[idx] || null;
+                          return (
+                            <div
+                              key={`${url.slice(0, 24)}_${idx}`}
+                              className={
+                                `relative rounded-xl overflow-hidden border shadow-lg transition-all duration-200 bg-slate-950/50 ` +
+                                (isSel ? 'border-purple-500/80' : 'border-slate-800/70 hover:border-slate-700')
                               }
-                            }}
-                            className={
-                              `relative rounded-xl overflow-hidden border shadow-lg transition-all duration-200 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-purple-500/40 ` +
-                              (isSel ? 'border-purple-500/80' : 'border-slate-800/70 hover:border-slate-700')
-                            }
-                            title={`Variation ${idx + 1}`}
-                          >
-                            <img
-                              src={url}
-                              alt={`Generated concept art variation ${idx + 1}`}
-                              className="w-full h-[250px] object-cover"
-                            />
-                            <div className="absolute top-2 left-2 text-[11px] px-2 py-1 rounded-md bg-black/55 text-slate-100 border border-white/10">
-                              V{idx + 1}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (hid) {
+                                    setActiveHistoryId(hid);
+                                    openDetail({ historyId: hid });
+                                  } else {
+                                    setGeneratedImage(url);
+                                    openDetail();
+                                  }
+                                }}
+                                className="block w-full focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                                title={`View variation ${idx + 1}`}
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Generated concept art variation ${idx + 1}`}
+                                  className="w-full h-[250px] object-cover"
+                                />
+                              </button>
+                              <div className="absolute top-2 left-2 text-[11px] px-2 py-1 rounded-md bg-black/55 text-slate-100 border border-white/10">
+                                V{idx + 1}
+                              </div>
+                              {isSel ? (
+                                <div className="absolute top-2 right-2 text-[11px] px-2 py-1 rounded-md bg-purple-600 text-white border border-white/10">
+                                  Selected
+                                </div>
+                              ) : null}
+                              <div className="p-2 bg-slate-950/80 border-t border-slate-800/70">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setGeneratedImage(url);
+                                    if (hid) setActiveHistoryId(hid);
+                                    handleUseInIllusionBlueprint({ imageUrl: url, historyId: hid, variationIndex: idx });
+                                  }}
+                                  className="w-full px-3 py-2 rounded-lg border border-purple-500/40 bg-purple-600/20 text-purple-100 text-sm font-semibold hover:bg-purple-600/30 transition-colors"
+                                >
+                                  Use V{idx + 1} in Blueprint
+                                </button>
+                              </div>
                             </div>
-                          </button>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
                     <div className="w-full flex items-center justify-center">
@@ -1904,9 +1942,9 @@ ${visualPrompt}`,
                         tone: 'primary',
                       }}
                       secondaryLeft={{
-                        label: 'Use in Blueprint',
-                        onClick: handleUseInIllusionBlueprint,
-                        disabled: !generatedImage,
+                        label: variationImages.length > 1 ? 'Choose Image Above' : 'Use in Blueprint',
+                        onClick: () => handleUseInIllusionBlueprint(),
+                        disabled: !generatedImage || variationImages.length > 1,
                         tone: 'secondary',
                       }}
                       secondaryRight={{

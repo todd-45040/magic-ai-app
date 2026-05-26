@@ -102,6 +102,11 @@ type VisualBlueprintHandoff = {
   projectTitle?: string;
   ideaId?: string;
   ideaIds?: string[];
+  historyId?: string;
+  selectedHistoryId?: string;
+  sessionId?: string;
+  selectedImageUrl?: string;
+  selectedVariationIndex?: number;
   created_at?: string;
 };
 
@@ -122,7 +127,8 @@ function buildEffectInputFromVisualHandoff(handoff: VisualBlueprintHandoff): str
     handoff.title ? `Project concept: ${handoff.title}` : '',
     handoff.project?.projectTitle || handoff.projectTitle ? `Creative project: ${handoff.project?.projectTitle || handoff.projectTitle}` : '',
     handoff.prompt ? `Source direction: ${handoff.prompt}` : '',
-    handoff.imageUrl ? `Reference image URL: ${handoff.imageUrl}` : '',
+    (handoff.selectedImageUrl || handoff.imageUrl) ? `Selected reference image URL: ${handoff.selectedImageUrl || handoff.imageUrl}` : '',
+    typeof handoff.selectedVariationIndex === 'number' ? `Selected Visual Brainstorm variation: V${handoff.selectedVariationIndex + 1}` : '',
     'Convert this into a realistic stage illusion blueprint with a physically plausible apparatus, practical materials, believable sightlines, and real-world theatrical staging.',
   ].filter(Boolean);
   return lines.join('\n\n');
@@ -671,22 +677,37 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handoff = safeParseVisualBlueprintHandoff(localStorage.getItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY));
-    if (!handoff) return;
 
-    setVisualHandoff(handoff);
-    setEffectInput((prev) => (prev.trim() ? prev : buildEffectInputFromVisualHandoff(handoff)));
-    setSpecialNotes((prev) => {
-      if (prev.trim()) return prev;
-      const lines = [
-        'Imported from Visual Brainstorm. Preserve the visual concept as the starting point, but convert it into a realistic, stage-ready illusion apparatus.',
-        handoff.imageUrl ? `Reference image: ${handoff.imageUrl}` : '',
-        handoff.project?.projectTitle ? `Project: ${handoff.project.projectTitle}` : '',
-      ].filter(Boolean);
-      return lines.join('\n');
-    });
+    const applyVisualHandoff = (handoff: VisualBlueprintHandoff | null) => {
+      if (!handoff) return;
+      setVisualHandoff(handoff);
+      setEffectInput((prev) => (prev.trim() ? prev : buildEffectInputFromVisualHandoff(handoff)));
+      setSpecialNotes((prev) => {
+        if (prev.trim()) return prev;
+        const referenceImage = handoff.selectedImageUrl || handoff.imageUrl || '';
+        const lines = [
+          'Imported from Visual Brainstorm. Preserve the selected visual concept as the starting point, but convert it into a realistic, stage-ready illusion apparatus.',
+          referenceImage ? `Selected reference image: ${referenceImage}` : '',
+          typeof handoff.selectedVariationIndex === 'number' ? `Selected variation: V${handoff.selectedVariationIndex + 1}` : '',
+          handoff.project?.projectTitle ? `Project: ${handoff.project.projectTitle}` : '',
+        ].filter(Boolean);
+        return lines.join('\n');
+      });
+    };
 
-    try { localStorage.removeItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY); } catch {}
+    const storedHandoff = safeParseVisualBlueprintHandoff(localStorage.getItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY));
+    applyVisualHandoff(storedHandoff);
+    if (storedHandoff) {
+      try { localStorage.removeItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY); } catch {}
+    }
+
+    const onHandoff = (event: Event) => {
+      const detail = (event as CustomEvent<VisualBlueprintHandoff>).detail;
+      applyVisualHandoff(detail && typeof detail === 'object' ? detail : null);
+    };
+
+    window.addEventListener('maw:illusion-blueprint-handoff', onHandoff as EventListener);
+    return () => window.removeEventListener('maw:illusion-blueprint-handoff', onHandoff as EventListener);
   }, []);
 
   const applyPreset = (preset: (typeof DEMO_PRESETS)[number]) => {
@@ -1278,12 +1299,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             <div className="mb-4 rounded-xl border border-violet-400/30 bg-violet-500/10 p-3 text-sm text-violet-100">
               <div className="font-semibold">Imported from Visual Brainstorm</div>
               <div className="mt-1 text-xs text-violet-100/80">
-                This blueprint request was prefilled from {visualHandoff.project?.projectTitle || visualHandoff.title || 'a visual concept'}.
-                The generated plan should preserve the concept while converting it into a realistic stage illusion apparatus.
+                This blueprint request was prefilled from {visualHandoff.project?.projectTitle || visualHandoff.title || 'a selected visual concept'}.
+                The generated plan should preserve the selected image while converting it into a realistic stage illusion apparatus.
+                {typeof visualHandoff.selectedVariationIndex === 'number' ? ` Selected source: V${visualHandoff.selectedVariationIndex + 1}.` : ''}
               </div>
-              {visualHandoff.imageUrl ? (
+              {(visualHandoff.selectedImageUrl || visualHandoff.imageUrl) ? (
                 <div className="mt-3 overflow-hidden rounded-lg border border-violet-300/20 bg-slate-950/40">
-                  <img src={visualHandoff.imageUrl} alt="Visual Brainstorm reference" className="max-h-44 w-full object-cover" />
+                  <img src={visualHandoff.selectedImageUrl || visualHandoff.imageUrl} alt="Selected Visual Brainstorm reference" className="max-h-44 w-full object-cover" />
                 </div>
               ) : null}
             </div>
