@@ -529,6 +529,7 @@ const generateValidatedMatchedImage = async ({
   let prompt = basePrompt;
   let lastReason = '';
   let lastSafeImage: string | null = null;
+  let lastNonRejectedConceptImage: string | null = null;
 
   const maxAttempts = kind === 'concept' && recoveryPrompt ? 3 : 2;
 
@@ -547,8 +548,11 @@ const generateValidatedMatchedImage = async ({
 
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
 
-    if (kind === 'concept' && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts && validation.containsIllusionApparatus) {
-      lastSafeImage = image;
+    if (kind === 'concept' && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
+      lastNonRejectedConceptImage = image;
+      if (validation.containsIllusionApparatus || validation.containsIllusionStructure || validation.containsStageEnvironment) {
+        lastSafeImage = image;
+      }
     }
 
     if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
@@ -571,6 +575,13 @@ const generateValidatedMatchedImage = async ({
 
   if (kind === 'concept' && lastSafeImage) {
     return lastSafeImage;
+  }
+
+  if (kind === 'concept' && lastNonRejectedConceptImage) {
+    // Do not blank the matched concept gallery simply because the secondary QA model
+    // was stricter than the image prompt. We still reject obvious product/food/document
+    // artifacts above, but allow a plausible guarded render to be shown for review.
+    return lastNonRejectedConceptImage;
   }
 
   // Avoid displaying obvious off-subject failures such as product/food images.
@@ -1273,7 +1284,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       setIsGeneratingVisuals(true);
 
       try {
-        const conceptResults = await Promise.all(
+        const conceptResults = await Promise.allSettled(
           ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
             const designSpec = buildIllusionDesignSpec({
               plan,
@@ -1314,7 +1325,9 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        const matchedConcepts = conceptResults.slice(0, 2);
+        const matchedConcepts = conceptResults
+          .map((result) => result.status === 'fulfilled' ? result.value : null)
+          .slice(0, 2);
         setImageOptions(matchedConcepts);
         if (matchedConcepts.filter(Boolean).length < 2) {
           setWarning('One or more concept images failed the visual continuity check, so unrelated output was hidden. Regenerate for a complete matched pair.');
