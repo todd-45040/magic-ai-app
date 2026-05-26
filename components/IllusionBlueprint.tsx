@@ -10,6 +10,7 @@ import {
   buildIllusionConceptImagePrompt,
 } from '../services/buildIllusionBlueprintPrompt';
 import { buildIllusionIdentity } from '../services/buildIllusionIdentity';
+import { buildIllusionSeedIdentity, buildSeedIdentityBrief } from '../services/illusionSeedIdentity';
 import { saveIdea } from '../services/ideasService';
 import { trackClientEvent } from '../services/telemetryClient';
 import { CohesionActions } from './CohesionActions';
@@ -459,7 +460,7 @@ const deriveVisualAnchor = (plan: BuilderPlan, originalEffect: string): string =
   return compactPhrase(plan.project_title || originalEffect, 'custom stage illusion');
 };
 
-const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string): string => {
+const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string, seedIdentityBrief = ''): string => {
   const visualAnchor = deriveVisualAnchor(plan, originalEffect);
   const mainStructure = compactPhrase(plan.recommended_construction.main_structure.join(', '), 'practical theatrical structure');
   const materials = compactPhrase(plan.recommended_construction.materials.slice(0, 4).join(', '), 'realistic stage fabrication materials');
@@ -473,7 +474,8 @@ const buildVisualContinuityBrief = (plan: BuilderPlan, originalEffect: string): 
     `Visual material language must align with: ${materials}.`,
     `Scale and footprint must feel consistent with: ${footprint}.`,
     `Do not change the effect category, prop type, or stage footprint between the plan, blueprint drawings, and concept gallery.`,
-  ].join('\n');
+    seedIdentityBrief,
+  ].filter(Boolean).join('\n');
 };
 
 const buildStrictMatchedOutputRetryPrompt = (
@@ -793,6 +795,23 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
     });
   };
 
+  const visualSeedText = useMemo(() => {
+    if (!visualHandoff) return effectInput;
+    return [
+      visualHandoff.title ? `Selected Visual Brainstorm title: ${visualHandoff.title}` : '',
+      visualHandoff.prompt ? `Selected Visual Brainstorm prompt: ${visualHandoff.prompt}` : '',
+      visualHandoff.project?.projectTitle || visualHandoff.projectTitle ? `Project title: ${visualHandoff.project?.projectTitle || visualHandoff.projectTitle}` : '',
+      effectInput ? `Blueprint request: ${effectInput}` : '',
+    ].filter(Boolean).join('\n');
+  }, [effectInput, visualHandoff]);
+
+  const seedIdentity = useMemo(
+    () => buildIllusionSeedIdentity(visualSeedText, visualHandoff ? 'visual_brainstorm' : 'manual'),
+    [visualSeedText, visualHandoff]
+  );
+
+  const seedIdentityBrief = useMemo(() => buildSeedIdentityBrief(seedIdentity), [seedIdentity]);
+
   const generationContext = useMemo(
     () => [
       `Requested effect: ${effectInput.trim() || '(none provided)'}`,
@@ -806,7 +825,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       `Safety concerns: ${safetyConcerns.trim() || 'Not specified'}`,
       `Materials preference: ${materialsPreference.trim() || 'Not specified'}`,
       `Special notes: ${specialNotes.trim() || 'Not specified'}`,
-    ].join('\n'),
+      seedIdentityBrief ? `Structural seed identity:\n${seedIdentityBrief}` : '',
+    ].filter(Boolean).join('\n'),
     [
       effectInput,
       venueScale,
@@ -819,6 +839,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       safetyConcerns,
       materialsPreference,
       specialNotes,
+      seedIdentityBrief,
     ]
   );
 
@@ -977,7 +998,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         stageLimitations,
         materialsPreference,
       });
-      const visualContinuityBrief = buildVisualContinuityBrief(builderPlan, effectInput);
+      const visualContinuityBrief = buildVisualContinuityBrief(builderPlan, effectInput, seedIdentityBrief);
       const visualAnchor = illusionIdentity.illusionType;
 
       const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
@@ -988,6 +1009,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         venueScale,
         performerStyle,
         matchedOutput,
+        seedIdentity,
       });
 
       const conceptPrompt = buildIllusionConceptImagePrompt({
@@ -998,6 +1020,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         venueScale,
         performerStyle,
         matchedOutput,
+        seedIdentity,
       });
 
       const [newBlueprint, newConcept] = await Promise.all([
@@ -1064,7 +1087,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
     void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_start', metadata: { venueScale, performerStyle, budgetLevel, crewSize, resetRequirement } });
 
-    const planPrompt = buildIllusionBlueprintPlanPrompt({ generationContext });
+    const planPrompt = buildIllusionBlueprintPlanPrompt({ generationContext, seedIdentity });
 
     try {
       setLoadingStage('Generating builder plan…');
@@ -1106,7 +1129,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         stageLimitations,
         materialsPreference,
       });
-      const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput);
+      const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput, seedIdentityBrief);
       const visualAnchor = illusionIdentity.illusionType;
 
       setLoadingStage('Generating matched blueprint drawings…');
@@ -1124,6 +1147,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               venueScale,
               performerStyle,
               matchedOutput,
+              seedIdentity,
             });
             return generateValidatedMatchedImage({
               basePrompt: blueprintPrompt,
@@ -1160,6 +1184,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               venueScale,
               performerStyle,
               matchedOutput,
+              seedIdentity,
             });
             return generateValidatedMatchedImage({
               basePrompt: imagePrompt,

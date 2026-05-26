@@ -67,6 +67,7 @@ export const deriveIllusionType = (plan: IllusionIdentityPlanInput, originalEffe
     .toLowerCase();
 
   const typePatterns: Array<[RegExp, string]> = [
+    [/rope|cord|ring|rings|linking/, 'rope-and-ring stage illusion concept'],
     [/vanish|vanishing|disappear/, 'vanishing platform stage illusion'],
     [/appear|appearance|production/, 'appearance platform stage illusion'],
     [/levitat|float|floating|suspension/, 'assistant levitation stage illusion'],
@@ -120,6 +121,8 @@ export const buildIllusionIdentity = (
       'same silhouette, base, major panels, staging footprint, material direction, and audience orientation',
       'real-world physics, stable load paths, human-scale proportions, and believable theatrical construction',
       'hard anti-drift rule: no food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, product photography, stock objects, landscapes, magical energy, portals, or impossible floating structures',
+      'structural continuity rule: preserve any source image props, silhouette, performer relationship, dominant geometry, and stage composition ahead of generic illusion category labels',
+      'anti-generic substitution rule: do not collapse unique rope/ring/suspension/open-apparatus source concepts into generic cabinets, dollhouses, cottages, house facades, standard boxes, or unrelated stage furniture',
       'professional fabrication, rehearsal, load testing, and safety review required before real-world construction or performance',
     ],
   };

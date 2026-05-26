@@ -1,4 +1,6 @@
 import type { IllusionIdentity } from './buildIllusionIdentity';
+import type { IllusionSeedIdentity } from './illusionSeedIdentity';
+import { buildSeedIdentityBrief } from './illusionSeedIdentity';
 import { buildIllusionIdentityBrief } from './buildIllusionIdentity';
 
 export type IllusionBlueprintStyleMode =
@@ -8,6 +10,7 @@ export type IllusionBlueprintStyleMode =
 
 export type IllusionBlueprintPlanParams = {
   generationContext: string;
+  seedIdentity?: IllusionSeedIdentity | null;
 };
 
 export type IllusionBlueprintVisualPlan = {
@@ -41,18 +44,19 @@ export type IllusionBlueprintImagePromptParams = {
   venueScale: string;
   performerStyle: string;
   matchedOutput: IllusionBlueprintMatchedOutput;
+  seedIdentity?: IllusionSeedIdentity | null;
 };
 
 export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[] = [
   {
     index: 0,
     label: 'A',
-    directive: 'MATCHED DESIGN A: compact touring version with clean rectangular geometry, visible wheeled base, practical access panels, modest scenic trim, and a restrained premium stage finish.',
+    directive: 'MATCHED DESIGN A: compact touring version that preserves the seed silhouette and primary props, uses practical support/base logic only where needed, includes builder-visible access or rigging cues, modest scenic trim, and a restrained premium stage finish.',
   },
   {
     index: 1,
     label: 'B',
-    directive: 'MATCHED DESIGN B: slightly more theatrical scenic-shell version with the same footprint and mechanism direction, reinforced base, practical caster support, builder-visible panel logic, and a polished theatre finish.',
+    directive: 'MATCHED DESIGN B: slightly more theatrical version that preserves the same seed silhouette, prop relationships, footprint, and mechanism direction while adding polished theatre finish, stronger scenic framing, and practical transport/support details.',
   },
 ];
 
@@ -164,7 +168,8 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   'The rendered concept image should look like a realistic staged/photo version of the matching blueprint, not a new visual idea.',
 ].join('\n');
 
-export function buildIllusionBlueprintPlanPrompt({ generationContext }: IllusionBlueprintPlanParams): string {
+export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdentity }: IllusionBlueprintPlanParams): string {
+  const seedIdentityBrief = buildSeedIdentityBrief(seedIdentity || null);
   return [
     'Create a realistic builder plan for the following illusion request.',
     '',
@@ -172,6 +177,9 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext }: Illusion
     '',
     generationContext,
     '',
+    seedIdentityBrief,
+    '',
+    'STRUCTURAL CONTINUITY REQUIREMENT: If a seed image identity is provided, the builder plan must evolve that exact selected concept. Preserve the seed props, dominant geometry, silhouette, performer staging, material style, atmosphere, and composition. Do not collapse the design into a generic cabinet, random box, dollhouse, cottage, standard appearance cage, trunk, or unrelated illusion archetype unless those forms are explicitly present in the seed identity.',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
@@ -188,11 +196,14 @@ export function buildIllusionBlueprintDrawingPrompt({
   visualAnchor,
   illusionIdentity,
   matchedOutput,
+  seedIdentity,
 }: IllusionBlueprintImagePromptParams): string {
   return [
     BLUEPRINT_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    buildSeedIdentityBrief(seedIdentity || null),
     '',
     illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
     '',
@@ -206,6 +217,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
+    'Seed continuity requirement: the technical drawing must look engineered from the selected source concept, preserving its primary props, dominant geometry, silhouette, performer-to-prop relationship, stage layout, material language, and mood. The broad illusion category is less important than the seed image identity.',
+    'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
     'Pairing requirement: This blueprint must be visually matchable to the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, and visible construction cues consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
@@ -222,11 +235,14 @@ export function buildIllusionConceptImagePrompt({
   venueScale,
   performerStyle,
   matchedOutput,
+  seedIdentity,
 }: IllusionBlueprintImagePromptParams): string {
   return [
     IMAGE_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    buildSeedIdentityBrief(seedIdentity || null),
     '',
     illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
     '',
@@ -239,6 +255,8 @@ export function buildIllusionConceptImagePrompt({
     `Venue / scale: ${venueScale}`,
     `Performer style: ${performerStyle}`,
     `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
+    'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',
+    'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),
     APPARATUS_VALIDATION_REQUIREMENTS,
     `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
