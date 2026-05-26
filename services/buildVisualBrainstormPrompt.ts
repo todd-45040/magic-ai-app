@@ -81,6 +81,18 @@ Composition exclusions:
 - no unrelated prior-session props
 `.trim();
 
+
+const VISUAL_BRAINSTORM_PROFESSIONAL_ILLUSION_REFINEMENT = `
+Professional illusion design refinement:
+- Apparatus engineering realism: show believable wheel/caster placement, base width, stage transport logic, balanced center of gravity, visible support points, practical pedestal/table geometry, and stable load paths.
+- Trap/access plausibility: if the concept needs access, suggest it visually through plausible panel seams, hinged doors, removable lids, service panels, or builder-friendly openings without exposing secrets.
+- Performance blocking intelligence: place the magician in a natural working stance beside the apparatus, facing the audience with clear reveal orientation, ergonomic reach distance, and sightline-aware spacing.
+- Assistant positioning: include assistants only when explicitly requested; if included, show complete assistants in natural positions with clear purpose and no cropped limbs.
+- Stage lighting intelligence: use realistic theatre spotlights, practical stage wash, believable shadows, controlled fog/haze, and commercial promo-photo lighting.
+- Builder material intelligence: render credible wood grain, metal brackets, hinges, latches, casters, seams, trim, scenic paint, theatrical finish materials, and fabrication details.
+- Keep the image useful to an illusion designer: the apparatus should look like it could be fabricated, transported, rolled into position, rehearsed, and photographed professionally.
+`.trim();
+
 const VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION = `
 Fresh generation context isolation:
 - This is a clean-slate, prompt-only image generation request.
@@ -166,6 +178,7 @@ export function buildVisualBrainstormImagePrompt({
     STYLE_MODE_GUIDANCE[styleMode],
     realismEnabled ? VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION : '',
     realismEnabled ? buildStrictSinglePresenterGuidance(userPrompt) : '',
+    realismEnabled ? VISUAL_BRAINSTORM_PROFESSIONAL_ILLUSION_REFINEMENT : '',
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
       : '',

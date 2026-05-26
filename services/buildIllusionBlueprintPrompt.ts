@@ -86,6 +86,16 @@ Rules:
 - English language only. Return every title, label, section, note, and generated text field in clear English. Do not use non-English words unless they are part of a proper noun supplied by the user.`;
 
 
+
+const PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT = `Professional illusion design refinement:
+- Apparatus engineering realism: specify and depict believable base stability, wheel/caster placement, load paths, center-of-gravity logic, floor contact, transport modularity, and human-scale proportions.
+- Trap/access plausibility: include high-level access logic through plausible seams, hinged panels, removable sections, service openings, platform/base access, or scenic shells without exposing secret methods.
+- Performance blocking intelligence: preserve practical performer stance, reveal orientation, audience sightlines, ergonomic reach distance, reset path, and safe operating space.
+- Stage lighting intelligence: use practical theatre spotlights, realistic stage wash, controlled fog/haze, believable floor shadows, and commercial promo-photo lighting rather than surreal atmosphere.
+- Builder material intelligence: use credible wood grain, plywood, aluminum/steel framing, hinges, latches, casters, handles, brackets, seams, scenic paint, trim, and theatrical finish materials.
+- The design should feel like a professional illusion development environment output: buildable, transportable, rehearseable, stage-ready, and visually tied to the selected concept.`;
+
+
 const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
 - Do not generate food, hamburgers, sandwiches, cakes, drinks, or any edible object.
 - Do not generate furniture unless it is explicitly part of the illusion apparatus described in the builder plan.
@@ -107,6 +117,8 @@ const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a stage illusion prop.
 
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
+
+${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
@@ -134,6 +146,8 @@ const APPARATUS_VALIDATION_REQUIREMENTS = `Phase 4 apparatus validation requirem
 const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imagery.
 
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
+
+${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
@@ -175,6 +189,8 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     '',
     PHYSICS_AND_BUILDABILITY_GUIDANCE,
     '',
+    PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
+    '',
     generationContext,
     '',
     seedIdentityBrief,
@@ -202,6 +218,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     BLUEPRINT_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
     buildSeedIdentityBrief(seedIdentity || null),
     '',
@@ -241,6 +259,8 @@ export function buildIllusionConceptImagePrompt({
     IMAGE_STYLE_GUIDE,
     '',
     visualContinuityBrief,
+    '',
+    PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
     buildSeedIdentityBrief(seedIdentity || null),
     '',
