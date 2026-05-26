@@ -62,6 +62,15 @@ export type IllusionBlueprintDesignSpec = {
   pedestalInheritance: string;
   rooflineInheritance: string;
   partPersistence: string;
+  fabricationProfile: string;
+  structuralStyle: string;
+  materialLanguage: string;
+  trimDensity: string;
+  hardwareStyle: string;
+  pedestalEngineeringStyle: string;
+  casterStyle: string;
+  ornamentIntensity: string;
+  constructionSophistication: string;
 };
 
 export type IllusionBlueprintImagePromptParams = {
@@ -173,6 +182,15 @@ const APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS = `Apparatus component inheri
 - Operational state may change only allowed movable conditions: door open/closed, roof/panel open/closed, interior shown empty, reveal visible, performer gesture, fog/lighting level, and audience-facing angle.
 - Do not regenerate, beautify, simplify, replace, or improvise inherited parts. No undercarriage redesign, pedestal reinterpretation, facade replacement, trim regeneration, support-frame drift, alternate wheel layout, or new roof family.
 - Variant A and Variant B may show different operational states or finish polish, but each variant must remain a revision of the same inherited prop family, not a new apparatus design.`;
+
+
+const FABRICATION_PROFILE_LOCK_REQUIREMENTS = `Fabrication profile lock requirements:
+- Treat fabrication style as a locked profile shared by Blueprint A, Concept A, Blueprint B, and Concept B.
+- Preserve the same structural style, material language, trim density, hardware style, pedestal/base engineering style, caster/wheel style, ornament intensity, and construction sophistication across every output.
+- Operational state may change doors, panels, visible reveal condition, performer pose, lighting, fog, and stage angle, but it must not change the fabrication profile.
+- Do not let one output become rustic while another becomes ornate, steampunk, gothic, modern, skeletal, luxury, or simplified unless that exact fabrication profile was inherited from the selected seed/spec.
+- Do not improvise different undercarriage engineering, different trim density, different caster type, different hardware finish, different wood/metal language, or different scenic finish between the paired blueprint and render.
+- The four generated images should feel like the same shop/fabricator built the same apparatus family with the same construction vocabulary.`;
 
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
@@ -368,6 +386,71 @@ const inferPartPersistence = (matchedOutput: IllusionBlueprintMatchedOutput): st
   'Not allowed: new roof, new facade, new base, new wheel layout, new support frame, new trim pattern, new panel geometry, new opening location, or changed proportions.',
 ].join(' ');
 
+
+const inferFabricationProfile = ({ plan, seedIdentity }: Pick<IllusionBlueprintImagePromptParams, 'plan' | 'seedIdentity'>): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.materialStyle?.join(' ') || ''} ${seedIdentity?.atmosphere?.join(' ') || ''} ${plan.recommended_construction.materials.join(' ')}`.toLowerCase();
+  const style = /haunt|halloween|spooky|old|weathered/.test(raw)
+    ? 'aged haunted theatrical scenic build'
+    : /steam|brass|victorian/.test(raw)
+      ? 'Victorian/steampunk theatrical fabrication'
+      : /modern|sleek|corporate/.test(raw)
+        ? 'clean modern stage fabrication'
+        : 'practical professional theatrical fabrication';
+  const materials = compactList(seedIdentity?.materialStyle, compactList(plan.recommended_construction.materials, 'painted plywood, scenic trim, steel or aluminum support, conventional stage hardware', 4), 4);
+  return `FABRICATION PROFILE: ${style}; materials and finish language: ${materials}; use one consistent shop-built construction vocabulary in every blueprint and render.`;
+};
+
+const inferStructuralStyle = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ') || ''} ${seedIdentity?.materialStyle?.join(' ') || ''}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) return 'STRUCTURAL STYLE LOCK: small scenic dog-house shell with plank wall faces, pitched roof, visible framed opening, and raised platform base; do not switch to cabinet/trunk/table/suspension construction language.';
+  if (/box|cabinet|case|trunk/.test(raw)) return 'STRUCTURAL STYLE LOCK: rectangular stage box/cabinet construction with consistent front face, lid/topline, side panels, and raised base language; do not switch to cottage, table, or rigging language.';
+  return 'STRUCTURAL STYLE LOCK: preserve the selected seed apparatus construction family and visible build vocabulary across every paired output.';
+};
+
+const inferMaterialLanguage = ({ plan, seedIdentity }: Pick<IllusionBlueprintImagePromptParams, 'plan' | 'seedIdentity'>): string => {
+  const materials = compactList(seedIdentity?.materialStyle, compactList(plan.recommended_construction.materials, 'painted plywood, scenic skins, visible hardware, stage-safe finish', 5), 5);
+  return `MATERIAL LANGUAGE LOCK: use the same material palette in all outputs: ${materials}. Do not alternate between unfinished rustic wood, glossy luxury wood, black metal, ornate brass, skeletal truss, or modern laminate unless that palette is specified here.`;
+};
+
+const inferTrimDensity = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.materialStyle?.join(' ') || ''} ${seedIdentity?.atmosphere?.join(' ') || ''}`.toLowerCase();
+  if (/ornate|victorian|gothic|steampunk/.test(raw)) return 'TRIM DENSITY LOCK: medium-high decorative trim density; keep the same placement and density of trim bands, corner trim, roof trim, and façade accents across blueprint and render.';
+  if (/plain|minimal|modern|simple/.test(raw)) return 'TRIM DENSITY LOCK: low clean trim density; avoid adding ornate ornament, gears, scrollwork, or heavy gothic decoration in later outputs.';
+  return 'TRIM DENSITY LOCK: medium theatrical scenic trim; keep decorative complexity consistent and do not suddenly add or remove ornament density between outputs.';
+};
+
+const inferHardwareStyle = ({ plan, seedIdentity }: Pick<IllusionBlueprintImagePromptParams, 'plan' | 'seedIdentity'>): string => {
+  const hardware = compactList(plan.recommended_construction.hardware, 'dark hinges, latches, handles, corner brackets, casters, visible fasteners', 6);
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.materialStyle?.join(' ') || ''}`.toLowerCase();
+  const finish = /old|haunt|gothic|spooky|weathered/.test(raw) ? 'aged dark metal hardware' : /brass|steam|victorian/.test(raw) ? 'brass or antique metal hardware' : 'standard theatrical black or silver hardware';
+  return `HARDWARE STYLE LOCK: ${finish}; hardware set: ${hardware}. Keep hinge size, latch style, handle placement, brackets, and visible fasteners consistent across all outputs.`;
+};
+
+const inferPedestalEngineeringStyle = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.dominantGeometry?.join(' ') || ''}`.toLowerCase();
+  if (/platform|pedestal|wheel|caster|roller/.test(raw)) return 'PEDESTAL ENGINEERING LOCK: rectangular raised platform/pedestal with stable floor-contact stance, visible bracing or apron structure, and consistent caster-ready base; do not change to tripod, ornate table, truss tower, or separate dolly.';
+  return 'PEDESTAL ENGINEERING LOCK: maintain the same base/pedestal support architecture, height relationship, bracing language, and footprint in every output.';
+};
+
+const inferCasterStyle = ({ plan, seedIdentity }: Pick<IllusionBlueprintImagePromptParams, 'plan' | 'seedIdentity'>): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${plan.recommended_construction.mobility_modularity}`.toLowerCase();
+  if (/wheel|caster|roller/.test(raw)) return 'CASTER / WHEEL STYLE LOCK: use the same small stage casters or rolling platform wheels at the same corner/floor-contact positions in every blueprint and render; do not alternate between hidden wheels, oversized wagon wheels, truss casters, or no wheels.';
+  return 'CASTER / WHEEL STYLE LOCK: if mobility is visible, keep wheel/caster type, quantity, scale, and placement consistent; if not visible, do not invent prominent new wheels in only one output.';
+};
+
+const inferOrnamentIntensity = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.materialStyle?.join(' ') || ''} ${seedIdentity?.atmosphere?.join(' ') || ''}`.toLowerCase();
+  if (/haunt|halloween|spooky|old/.test(raw)) return 'ORNAMENT INTENSITY LOCK: aged spooky scenic details at moderate intensity; keep cracks, signs, cobweb-like dressing, gothic accents, gears, and distressing consistent rather than escalating or simplifying randomly.';
+  if (/modern|minimal/.test(raw)) return 'ORNAMENT INTENSITY LOCK: low ornament intensity; keep the design clean and do not add decorative clutter.';
+  return 'ORNAMENT INTENSITY LOCK: keep scenic ornament intensity consistent across all outputs; do not make one output plain and another heavily decorated.';
+};
+
+const inferConstructionSophistication = ({ plan }: Pick<IllusionBlueprintImagePromptParams, 'plan'>): string => {
+  const combined = `${plan.build_concept} ${plan.recommended_construction.main_structure.join(' ')} ${plan.mechanism_approach.primary}`.toLowerCase();
+  if (/tour|modular|transport|caster|reset/.test(combined)) return 'CONSTRUCTION SOPHISTICATION LOCK: professional touring-prop level construction with modular access, serviceable panels, stable support, and practical handling; keep complexity consistent in all outputs.';
+  return 'CONSTRUCTION SOPHISTICATION LOCK: professional stage-prop construction, not toy-like, not luxury furniture, not rough hobby craft; keep build sophistication consistent in every paired output.';
+};
+
 export function buildIllusionDesignSpec({
   plan,
   matchedOutput,
@@ -410,6 +493,15 @@ export function buildIllusionDesignSpec({
     pedestalInheritance: inferPedestalInheritance(seedIdentity),
     rooflineInheritance: inferRooflineInheritance(seedIdentity),
     partPersistence: inferPartPersistence(matchedOutput),
+    fabricationProfile: inferFabricationProfile({ plan, seedIdentity }),
+    structuralStyle: inferStructuralStyle(seedIdentity),
+    materialLanguage: inferMaterialLanguage({ plan, seedIdentity }),
+    trimDensity: inferTrimDensity(seedIdentity),
+    hardwareStyle: inferHardwareStyle({ plan, seedIdentity }),
+    pedestalEngineeringStyle: inferPedestalEngineeringStyle(seedIdentity),
+    casterStyle: inferCasterStyle({ plan, seedIdentity }),
+    ornamentIntensity: inferOrnamentIntensity(seedIdentity),
+    constructionSophistication: inferConstructionSophistication({ plan }),
   };
 }
 
@@ -438,6 +530,15 @@ const buildDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): string 
     designSpec.pedestalInheritance,
     designSpec.rooflineInheritance,
     designSpec.partPersistence,
+    designSpec.fabricationProfile,
+    designSpec.structuralStyle,
+    designSpec.materialLanguage,
+    designSpec.trimDensity,
+    designSpec.hardwareStyle,
+    designSpec.pedestalEngineeringStyle,
+    designSpec.casterStyle,
+    designSpec.ornamentIntensity,
+    designSpec.constructionSophistication,
     `Pair rule: Blueprint ${designSpec.label} and Concept ${designSpec.label} must be generated from this exact same inherited component map. Do not independently reinterpret, simplify, replace, beautify, or redesign the apparatus.`
   ].join('\n');
 };
@@ -463,6 +564,15 @@ const buildRenderDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): s
     designSpec.pedestalInheritance,
     designSpec.rooflineInheritance,
     designSpec.partPersistence,
+    designSpec.fabricationProfile,
+    designSpec.structuralStyle,
+    designSpec.materialLanguage,
+    designSpec.trimDensity,
+    designSpec.hardwareStyle,
+    designSpec.pedestalEngineeringStyle,
+    designSpec.casterStyle,
+    designSpec.ornamentIntensity,
+    designSpec.constructionSophistication,
     'Do not introduce a new apparatus family, new roofline, new platform type, different door layout, different support frame, different opening location, different trim map, different wheel/caster layout, different facade, or different scenic shell.'
   ].join('\n');
 };
@@ -503,6 +613,8 @@ ${GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS}
 
 ${APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS}
 
+${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
+
 ${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
@@ -536,6 +648,8 @@ ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
 ${OPERATIONAL_STATE_INTELLIGENCE}
 
+${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
+
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 ${APPARATUS_VALIDATION_REQUIREMENTS}
@@ -564,6 +678,7 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   'Do not reinterpret the apparatus. Do not redesign the illusion. Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, landscape, or unrelated object.',
   'Component inheritance is mandatory: same facade, same roof/topline, same front opening, same base/pedestal, same support/caster layout, same trim map, same panel geometry, and same proportions as the paired design spec.',
   APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
+  FABRICATION_PROFILE_LOCK_REQUIREMENTS,
   HARD_ANTI_DRIFT_EXCLUSIONS,
   'The rendered concept image should look like a professional staged/photo version of the matching apparatus, not a new visual idea and not a technical drawing.',
 ].join('\n');
@@ -600,6 +715,7 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
+    FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
   ].filter(Boolean).join('\n');
 }
@@ -668,6 +784,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
+    FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
@@ -720,6 +837,7 @@ export function buildIllusionConceptImagePrompt({
     'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
+    FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
