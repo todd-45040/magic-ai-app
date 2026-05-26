@@ -528,14 +528,16 @@ const generateValidatedMatchedImage = async ({
 }): Promise<string | null> => {
   let prompt = basePrompt;
   let lastReason = '';
+  let lastGeneratedImage: string | null = null;
   let lastSafeImage: string | null = null;
-  let lastNonRejectedConceptImage: string | null = null;
+  let lastNonRejectedMatchedImage: string | null = null;
 
   const maxAttempts = kind === 'concept' && recoveryPrompt ? 3 : 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const [image] = await generateImages(prompt, '16:9', 1, user);
     if (!image) return null;
+    lastGeneratedImage = image;
 
     const validation = await validateIllusionBlueprintGeneratedImage(image, kind, visualAnchor, label, user);
     const hasRequiredApparatusCues = kind === 'blueprint'
@@ -548,9 +550,14 @@ const generateValidatedMatchedImage = async ({
 
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
 
-    if (kind === 'concept' && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
-      lastNonRejectedConceptImage = image;
-      if (validation.containsIllusionApparatus || validation.containsIllusionStructure || validation.containsStageEnvironment) {
+    if (!validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
+      lastNonRejectedMatchedImage = image;
+      if (
+        validation.containsIllusionApparatus ||
+        validation.containsIllusionStructure ||
+        validation.containsStageEnvironment ||
+        (kind === 'blueprint' && (validation.passes || validation.matchesExpectedSubject))
+      ) {
         lastSafeImage = image;
       }
     }
@@ -573,19 +580,25 @@ const generateValidatedMatchedImage = async ({
       : buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
   }
 
-  if (kind === 'concept' && lastSafeImage) {
+  if (lastSafeImage) {
     return lastSafeImage;
   }
 
-  if (kind === 'concept' && lastNonRejectedConceptImage) {
-    // Do not blank the matched concept gallery simply because the secondary QA model
-    // was stricter than the image prompt. We still reject obvious product/food/document
-    // artifacts above, but allow a plausible guarded render to be shown for review.
-    return lastNonRejectedConceptImage;
+  if (lastNonRejectedMatchedImage) {
+    // Do not blank the paired blueprint/concept galleries simply because the
+    // secondary QA model is stricter than the guarded generation prompt.
+    // The user can still regenerate a pair, but the workflow should return the
+    // two generated image sets whenever the image service produced usable data.
+    return lastNonRejectedMatchedImage;
   }
 
-  // Avoid displaying obvious off-subject failures such as product/food images.
-  // A missing image is preferable to showing a non-illusion artifact in the matched set.
+  if (lastGeneratedImage) {
+    // Last-resort continuity fallback: keep the A/B set populated instead of
+    // replacing a completed generation with empty cards. This protects the
+    // builder workflow from false-negative visual QA results.
+    return lastGeneratedImage;
+  }
+
   return null;
 };
 
@@ -1239,7 +1252,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       let matchedBlueprints: MatchedImageSlots = [];
 
       try {
-        const drawingResults = await Promise.all(
+        const drawingResults = await Promise.allSettled(
           ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
             const designSpec = buildIllusionDesignSpec({
               plan,
@@ -1268,10 +1281,12 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
             });
           })
         );
-        matchedBlueprints = drawingResults.slice(0, 2);
+        matchedBlueprints = drawingResults
+          .map((result) => result.status === 'fulfilled' ? result.value : null)
+          .slice(0, 2);
         setBlueprintDrawings(matchedBlueprints);
         if (matchedBlueprints.filter(Boolean).length < 2) {
-          setWarning('One or more blueprint drawings failed the visual continuity check. Regenerate if you need a complete matched pair.');
+          setWarning('One or more blueprint drawings could not be generated. Regenerate Pair A/B if you need a complete matched set.');
         }
       } catch {
         matchedBlueprints = [];
@@ -1330,7 +1345,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           .slice(0, 2);
         setImageOptions(matchedConcepts);
         if (matchedConcepts.filter(Boolean).length < 2) {
-          setWarning('One or more concept images failed the visual continuity check, so unrelated output was hidden. Regenerate for a complete matched pair.');
+          setWarning('One or more concept renders could not be generated. Regenerate Pair A/B if you need a complete matched set.');
         }
       } catch (imageErr: any) {
         setWarning(imageErr?.message || 'Builder plan generated, but matched concept images could not be created this time.');
