@@ -225,12 +225,6 @@ ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
-${MECHANISM_AND_FABRICATION_INTELLIGENCE}
-
-${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
-
-${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
-
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 ${APPARATUS_VALIDATION_REQUIREMENTS}
@@ -260,6 +254,35 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   HARD_ANTI_DRIFT_EXCLUSIONS,
   'The rendered concept image should look like a professional staged/photo version of the matching apparatus, not a new visual idea and not a technical drawing.',
 ].join('\n');
+
+
+export function buildIllusionConceptRenderRecoveryPrompt({
+  plan,
+  visualAnchor,
+  venueScale,
+  performerStyle,
+  matchedOutput,
+  seedIdentity,
+}: IllusionBlueprintImagePromptParams): string {
+  const seedBrief = buildSeedIdentityBrief(seedIdentity || null);
+  return [
+    'RECOVERY MODE: Create a clean photorealistic stage render only.',
+    `Render Matched Concept ${matchedOutput.label}: ${visualAnchor}.`,
+    `Subject: ${plan.project_title}.`,
+    `Visible apparatus: ${plan.recommended_construction.main_structure.slice(0, 3).join(', ')}.`,
+    `Visible materials: ${plan.recommended_construction.materials.slice(0, 4).join(', ')}.`,
+    `Base/platform cue: ${plan.recommended_construction.mobility_modularity}.`,
+    `Stage scale: ${venueScale}. Performer style: ${performerStyle}.`,
+    `Design direction: ${matchedOutput.directive}.`,
+    seedBrief,
+    '',
+    'Show one real stage apparatus centered on a theatre floor with practical lighting, believable shadows, and one complete magician or assistant positioned naturally beside it.',
+    'The image must look like commercial illusion catalog photography or a staged promotional render.',
+    'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
+    'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
+    'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
+  ].filter(Boolean).join('\n');
+}
 
 export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdentity }: IllusionBlueprintPlanParams): string {
   const seedIdentityBrief = buildSeedIdentityBrief(seedIdentity || null);
@@ -354,21 +377,19 @@ export function buildIllusionConceptImagePrompt({
   });
 
   return [
-    IMAGE_STYLE_GUIDE,
+    'Create a clean photorealistic theatrical stage concept render, not a technical drawing.',
     '',
-    BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS,
+    PHYSICS_AND_BUILDABILITY_GUIDANCE,
     '',
-    RENDER_SANITIZATION_REQUIREMENTS,
-    '',
-    RENDER_ONLY_MECHANISM_VISUALS,
+    HARD_ANTI_DRIFT_EXCLUSIONS,
     '',
     sanitizedStructureAnchors,
     '',
-    'RENDER ROLE: You are creating ONLY the matched photorealistic concept render. You are not creating a blueprint, plan sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, or instruction page.',
+    'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
-    'Blueprint annotations are forbidden in the render. Do not show measurements, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, or any printed document artifacts.',
+    'Forbidden in the render: printed paper, blueprint sheets, white document panels, measurement labels, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, diagram overlays, and technical-document artifacts.',
     'Render-state requirement: show a realistic closed-state or reveal-state stage view that preserves the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
     'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must remain plausible and match the exterior proportions without adding fantasy space, impossible voids, labels, or exposed secret workings.',
     'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',

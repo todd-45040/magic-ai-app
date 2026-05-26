@@ -8,6 +8,7 @@ import {
   buildIllusionBlueprintDrawingPrompt,
   buildIllusionBlueprintPlanPrompt,
   buildIllusionConceptImagePrompt,
+  buildIllusionConceptRenderRecoveryPrompt,
 } from '../services/buildIllusionBlueprintPrompt';
 import { buildIllusionIdentity } from '../services/buildIllusionIdentity';
 import { buildIllusionSeedIdentity, buildSeedIdentityBrief } from '../services/illusionSeedIdentity';
@@ -515,17 +516,22 @@ const generateValidatedMatchedImage = async ({
   visualAnchor,
   label,
   user,
+  recoveryPrompt,
 }: {
   basePrompt: string;
   kind: 'blueprint' | 'concept';
   visualAnchor: string;
   label: string;
   user: User;
+  recoveryPrompt?: string;
 }): Promise<string | null> => {
   let prompt = basePrompt;
   let lastReason = '';
+  let lastSafeImage: string | null = null;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  const maxAttempts = kind === 'concept' && recoveryPrompt ? 3 : 2;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const [image] = await generateImages(prompt, '16:9', 1, user);
     if (!image) return null;
 
@@ -540,6 +546,10 @@ const generateValidatedMatchedImage = async ({
 
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
 
+    if (kind === 'concept' && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts && validation.containsIllusionApparatus) {
+      lastSafeImage = image;
+    }
+
     if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
       return image;
     }
@@ -553,7 +563,13 @@ const generateValidatedMatchedImage = async ({
     ].filter(Boolean).join(', ');
 
     lastReason = validation.reason || (hasRenderDocumentArtifacts ? 'concept render contained blueprint/document artifacts' : (missingPhase4Requirements ? `missing Phase 4 apparatus cues: ${missingPhase4Requirements}` : 'image did not match the stage illusion subject'));
-    prompt = buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
+    prompt = kind === 'concept' && recoveryPrompt && attempt === 1
+      ? recoveryPrompt
+      : buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
+  }
+
+  if (kind === 'concept' && lastSafeImage) {
+    return lastSafeImage;
   }
 
   // Avoid displaying obvious off-subject failures such as product/food images.
@@ -1075,6 +1091,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         seedIdentity,
       });
 
+      const recoveryPrompt = buildIllusionConceptRenderRecoveryPrompt({
+        plan: builderPlan,
+        visualContinuityBrief,
+        visualAnchor,
+        illusionIdentity,
+        venueScale,
+        performerStyle,
+        matchedOutput,
+        seedIdentity,
+      });
+
       const [newBlueprint, newConcept] = await Promise.all([
         generateValidatedMatchedImage({
           basePrompt: blueprintPrompt,
@@ -1089,6 +1116,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           visualAnchor,
           label: matchedOutput.label,
           user,
+          recoveryPrompt,
         }),
       ]);
 
@@ -1238,12 +1266,23 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               matchedOutput,
               seedIdentity,
             });
+            const recoveryPrompt = buildIllusionConceptRenderRecoveryPrompt({
+              plan,
+              visualContinuityBrief,
+              visualAnchor,
+              illusionIdentity,
+              venueScale,
+              performerStyle,
+              matchedOutput,
+              seedIdentity,
+            });
             return generateValidatedMatchedImage({
               basePrompt: imagePrompt,
               kind: 'concept',
               visualAnchor,
               label: matchedOutput.label,
               user,
+              recoveryPrompt,
             });
           })
         );
