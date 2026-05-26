@@ -38,6 +38,23 @@ export type IllusionBlueprintMatchedOutput = {
   stateDescription: string;
 };
 
+export type IllusionBlueprintDesignSpec = {
+  label: 'A' | 'B';
+  designName: string;
+  apparatusFamily: string;
+  fixedSilhouette: string;
+  roofOrTopline: string;
+  frontOpening: string;
+  doorPanelLayout: string;
+  basePlatform: string;
+  supportAndCasters: string;
+  facadeTrim: string;
+  visibleHardware: string;
+  proportions: string;
+  performerBlocking: string;
+  operationalState: string;
+};
+
 export type IllusionBlueprintImagePromptParams = {
   plan: IllusionBlueprintVisualPlan;
   visualContinuityBrief: string;
@@ -47,6 +64,7 @@ export type IllusionBlueprintImagePromptParams = {
   performerStyle: string;
   matchedOutput: IllusionBlueprintMatchedOutput;
   seedIdentity?: IllusionSeedIdentity | null;
+  designSpec?: IllusionBlueprintDesignSpec;
 };
 
 export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[] = [
@@ -166,7 +184,7 @@ const RENDER_ONLY_MECHANISM_VISUALS = `Render-only mechanism interpretation:
 - Do not visualize secret method details, hidden load paths, load chambers, cutaways, internal construction diagrams, mechanism labels, or service notes in the photorealistic render.
 - If the apparatus is open or in reveal state, show only a plausible visible interior and consistent doors/panels; do not show explanatory labels or exposed secret workings.`;
 
-const buildRenderStructureAnchors = ({ plan, visualAnchor, venueScale, performerStyle, matchedOutput, seedIdentity, illusionIdentity }: IllusionBlueprintImagePromptParams): string => {
+const buildRenderStructureAnchors = ({ plan, visualAnchor, venueScale, performerStyle, matchedOutput, seedIdentity, illusionIdentity, designSpec }: IllusionBlueprintImagePromptParams): string => {
   const seedBrief = buildSeedIdentityBrief(seedIdentity || null);
   const identityBrief = illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '';
   return [
@@ -183,12 +201,106 @@ const buildRenderStructureAnchors = ({ plan, visualAnchor, venueScale, performer
     `Venue / scale: ${venueScale}.`,
     `Performer style: ${performerStyle}.`,
     `Matched design direction: ${matchedOutput.directive}.`,
+    buildRenderDesignSpecBrief(designSpec),
     getOperationalStateBrief(matchedOutput),
     seedBrief,
     identityBrief,
   ].filter(Boolean).join('\n');
 };
 
+
+
+const compactList = (items: string[] | undefined, fallback: string, limit = 4): string => {
+  const clean = (items || []).map((item) => String(item || '').trim()).filter(Boolean);
+  return clean.length ? clean.slice(0, limit).join(', ') : fallback;
+};
+
+const inferTopline = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ') || ''}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|haunted\s*house|house/.test(raw)) return 'pitched dog-house roofline with one front gable, visible roof thickness, and no alternate roof redesign';
+  if (/ring|rope|suspend|hanging/.test(raw)) return 'open vertical rope/ring topline with visible suspension geometry and no sealed-box substitution';
+  if (/trunk|chest|crate/.test(raw)) return 'rectangular trunk top with consistent lid line and hinge-side orientation';
+  return 'same topline/roofline implied by the seed and builder plan';
+};
+
+const inferOpening = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.primaryObjects?.join(' ') || ''}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) return 'single front dog-house opening with arched or rectangular doorway preserved in every paired output';
+  if (/box|cabinet|case/.test(raw)) return 'single audience-facing opening or door location preserved exactly between blueprint and render';
+  return 'primary audience-facing opening or interaction zone preserved exactly between blueprint and render';
+};
+
+export function buildIllusionDesignSpec({
+  plan,
+  matchedOutput,
+  seedIdentity,
+  venueScale,
+  performerStyle,
+}: Pick<IllusionBlueprintImagePromptParams, 'plan' | 'matchedOutput' | 'seedIdentity' | 'venueScale' | 'performerStyle'>): IllusionBlueprintDesignSpec {
+  const seedApparatus = compactList(seedIdentity?.apparatusForm, 'apparatus form from the selected seed image', 3);
+  const seedGeometry = compactList(seedIdentity?.dominantGeometry, 'dominant silhouette from the selected seed image', 3);
+  const seedMaterials = compactList(seedIdentity?.materialStyle, compactList(plan.recommended_construction.materials, 'theatrical wood/metal scenic finish', 3), 3);
+  const baseCue = plan.recommended_construction.mobility_modularity || 'visible stage base/platform with caster-ready support';
+  const proportionCue = plan.dimensions_footprint || 'human-scale stage prop proportions';
+  const variantCue = matchedOutput.label === 'A'
+    ? 'compact practical touring version; restrained trim; clear empty-display access orientation'
+    : 'more theatrical premium version; same family and footprint; reveal-state presentation details only';
+
+  return {
+    label: matchedOutput.label,
+    designName: `Matched Design ${matchedOutput.label}`,
+    apparatusFamily: `${seedIdentity?.illusionCategory || plan.project_title}; ${seedApparatus}`,
+    fixedSilhouette: `${seedGeometry}; same outer profile in Blueprint ${matchedOutput.label} and Concept ${matchedOutput.label}`,
+    roofOrTopline: inferTopline(seedIdentity),
+    frontOpening: inferOpening(seedIdentity),
+    doorPanelLayout: matchedOutput.label === 'A'
+      ? 'front door/panel system shown in empty-display orientation; same hinge side, opening size, and panel count in both paired outputs'
+      : 'front door/panel system shown in production/reveal orientation; same hinge side, opening size, and panel count in both paired outputs',
+    basePlatform: `same ${baseCue}; do not change base footprint between blueprint and render`,
+    supportAndCasters: 'same visible support structure, bracing language, caster/wheel count, and floor-contact points in both paired outputs',
+    facadeTrim: `${seedMaterials}; same facade trim, decorative motif, window/vent placement, and scenic finish in both paired outputs`,
+    visibleHardware: compactList(plan.recommended_construction.hardware, 'hinges, latches, handles, casters, brackets, seams', 5),
+    proportions: `${proportionCue}; preserve width/depth/height ratio, base height, opening scale, and performer-to-prop scale`,
+    performerBlocking: `${venueScale} staging with ${performerStyle} performer style; performer stands beside the apparatus without hiding the fixed silhouette`,
+    operationalState: `${matchedOutput.operationalState}: ${matchedOutput.stateDescription} ${variantCue}`,
+  };
+}
+
+const buildDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): string => {
+  if (!designSpec) return '';
+  return [
+    `DESIGN SPEC LOCK — ${designSpec.designName}:`,
+    `Apparatus family: ${designSpec.apparatusFamily}`,
+    `Fixed silhouette: ${designSpec.fixedSilhouette}`,
+    `Roof/topline: ${designSpec.roofOrTopline}`,
+    `Front opening: ${designSpec.frontOpening}`,
+    `Door/panel layout: ${designSpec.doorPanelLayout}`,
+    `Base/platform: ${designSpec.basePlatform}`,
+    `Support/casters: ${designSpec.supportAndCasters}`,
+    `Facade/trim/materials: ${designSpec.facadeTrim}`,
+    `Visible hardware: ${designSpec.visibleHardware}`,
+    `Proportions: ${designSpec.proportions}`,
+    `Performer blocking: ${designSpec.performerBlocking}`,
+    `Operational state: ${designSpec.operationalState}`,
+    `Pair rule: Blueprint ${designSpec.label} and Concept ${designSpec.label} must be generated from this exact same design spec. Do not independently reinterpret, simplify, replace, or redesign the apparatus.`
+  ].join('\n');
+};
+
+const buildRenderDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): string => {
+  if (!designSpec) return '';
+  return [
+    `RENDER DESIGN SPEC LOCK — CONCEPT ${designSpec.label}:`,
+    `Render the exact staged/photo version of this fixed apparatus family: ${designSpec.apparatusFamily}.`,
+    `Preserve silhouette: ${designSpec.fixedSilhouette}.`,
+    `Preserve roof/topline: ${designSpec.roofOrTopline}.`,
+    `Preserve front opening and panels: ${designSpec.frontOpening}; ${designSpec.doorPanelLayout}.`,
+    `Preserve base/support/casters: ${designSpec.basePlatform}; ${designSpec.supportAndCasters}.`,
+    `Preserve materials/trim/hardware: ${designSpec.facadeTrim}; ${designSpec.visibleHardware}.`,
+    `Preserve proportions and blocking: ${designSpec.proportions}; ${designSpec.performerBlocking}.`,
+    `Render only this state: ${designSpec.operationalState}.`,
+    'Do not introduce a new apparatus family, new roofline, new platform type, different door layout, different support frame, different opening location, or different scenic shell.'
+  ].join('\n');
+};
 
 const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
 - Do not generate food, hamburgers, sandwiches, cakes, drinks, or any edible object.
@@ -293,8 +405,10 @@ export function buildIllusionConceptRenderRecoveryPrompt({
   performerStyle,
   matchedOutput,
   seedIdentity,
+  designSpec,
 }: IllusionBlueprintImagePromptParams): string {
   const seedBrief = buildSeedIdentityBrief(seedIdentity || null);
+  const renderDesignSpecBrief = buildRenderDesignSpecBrief(designSpec);
   return [
     'RECOVERY MODE: Create a clean photorealistic stage render only.',
     `Render Matched Concept ${matchedOutput.label}: ${visualAnchor}.`,
@@ -304,6 +418,7 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     `Base/platform cue: ${plan.recommended_construction.mobility_modularity}.`,
     `Stage scale: ${venueScale}. Performer style: ${performerStyle}.`,
     `Design direction: ${matchedOutput.directive}.`,
+    renderDesignSpecBrief,
     getOperationalStateBrief(matchedOutput),
     seedBrief,
     '',
@@ -351,7 +466,9 @@ export function buildIllusionBlueprintDrawingPrompt({
   illusionIdentity,
   matchedOutput,
   seedIdentity,
+  designSpec,
 }: IllusionBlueprintImagePromptParams): string {
+  const designSpecBrief = buildDesignSpecBrief(designSpec);
   return [
     BLUEPRINT_STYLE_GUIDE,
     '',
@@ -364,6 +481,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     buildSeedIdentityBrief(seedIdentity || null),
     '',
     illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
+    '',
+    designSpecBrief,
     '',
     `Project title: ${plan.project_title}`,
     `Audience effect: ${plan.audience_effect}`,
@@ -400,6 +519,7 @@ export function buildIllusionConceptImagePrompt({
   performerStyle,
   matchedOutput,
   seedIdentity,
+  designSpec,
 }: IllusionBlueprintImagePromptParams): string {
   const sanitizedStructureAnchors = buildRenderStructureAnchors({
     plan,
@@ -410,6 +530,7 @@ export function buildIllusionConceptImagePrompt({
     performerStyle,
     matchedOutput,
     seedIdentity,
+    designSpec,
   });
 
   return [

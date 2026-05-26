@@ -9,6 +9,7 @@ import {
   buildIllusionBlueprintPlanPrompt,
   buildIllusionConceptImagePrompt,
   buildIllusionConceptRenderRecoveryPrompt,
+  buildIllusionDesignSpec,
 } from '../services/buildIllusionBlueprintPrompt';
 import { buildIllusionIdentity } from '../services/buildIllusionIdentity';
 import { buildIllusionSeedIdentity, buildSeedIdentityBrief } from '../services/illusionSeedIdentity';
@@ -1068,6 +1069,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       });
       const visualContinuityBrief = buildVisualContinuityBrief(builderPlan, effectInput, seedIdentityBrief);
       const visualAnchor = illusionIdentity.illusionType;
+      const designSpec = buildIllusionDesignSpec({
+        plan: builderPlan,
+        matchedOutput,
+        seedIdentity,
+        venueScale,
+        performerStyle,
+      });
 
       const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
         plan: builderPlan,
@@ -1078,6 +1086,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         performerStyle,
         matchedOutput,
         seedIdentity,
+        designSpec,
       });
 
       const conceptPrompt = buildIllusionConceptImagePrompt({
@@ -1089,6 +1098,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         performerStyle,
         matchedOutput,
         seedIdentity,
+        designSpec,
       });
 
       const recoveryPrompt = buildIllusionConceptRenderRecoveryPrompt({
@@ -1100,6 +1110,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         performerStyle,
         matchedOutput,
         seedIdentity,
+        designSpec,
       });
 
       const [newBlueprint, newConcept] = await Promise.all([
@@ -1219,6 +1230,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       try {
         const drawingResults = await Promise.all(
           ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
+            const designSpec = buildIllusionDesignSpec({
+              plan,
+              matchedOutput,
+              seedIdentity,
+              venueScale,
+              performerStyle,
+            });
             const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
               plan,
               visualContinuityBrief,
@@ -1228,6 +1246,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               performerStyle,
               matchedOutput,
               seedIdentity,
+              designSpec,
             });
             return generateValidatedMatchedImage({
               basePrompt: blueprintPrompt,
@@ -1256,6 +1275,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       try {
         const conceptResults = await Promise.all(
           ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
+            const designSpec = buildIllusionDesignSpec({
+              plan,
+              matchedOutput,
+              seedIdentity,
+              venueScale,
+              performerStyle,
+            });
             const imagePrompt = buildIllusionConceptImagePrompt({
               plan,
               visualContinuityBrief,
@@ -1265,6 +1291,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               performerStyle,
               matchedOutput,
               seedIdentity,
+              designSpec,
             });
             const recoveryPrompt = buildIllusionConceptRenderRecoveryPrompt({
               plan,
@@ -1275,6 +1302,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               performerStyle,
               matchedOutput,
               seedIdentity,
+              designSpec,
             });
             return generateValidatedMatchedImage({
               basePrompt: imagePrompt,
