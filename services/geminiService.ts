@@ -956,6 +956,7 @@ export type IllusionBlueprintImageValidation = {
   containsMagicianStagingLanguage: boolean;
   matchesExpectedSubject: boolean;
   isUnrelatedStockOrProductImage: boolean;
+  containsBlueprintOrDocumentArtifacts?: boolean;
 };
 
 function parseDataUrlForInlineImage(dataUrl: string): { mimeType: string; data: string } | null {
@@ -997,6 +998,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
     'Fail if the image is food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, a hamburger, sandwich, consumer product, landscape, random stock photo, fantasy portal, or an unrelated object.',
     'For a concept image, the central subject must be the stage illusion apparatus or performance prop, not a random object.',
     'For a concept image, verify all Phase 4 apparatus requirements: stage environment, apparatus, illusion structure, theatrical context, and magician staging language or magician-performance staging cues.',
+    'For a concept image, fail if it contains blueprint pages, white document fragments, text-heavy note blocks, measurement labels, dimension arrows, cutaway diagrams, instruction sheets, split-screen plan artifacts, or technical drawing overlays. Concept renders must be clean photorealistic staged apparatus images, not documents.',
     'For a blueprint image, the image must be a technical drawing or builder-style sheet for the same stage illusion concept with apparatus/structure cues.',
     'Set containsStageEnvironment true only when the image or drawing clearly suggests a stage, theatre, parlor, platform, wings, curtains, audience sightline, performance floor, or show venue.',
     'Set containsIllusionStructure true only when the subject has a clear apparatus structure such as cabinet, trunk, platform, base, frame, panel, support, scenic shell, lift housing, or builder-visible prop geometry.',
@@ -1016,6 +1018,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
       containsMagicianStagingLanguage: { type: Type.BOOLEAN },
       matchesExpectedSubject: { type: Type.BOOLEAN },
       isUnrelatedStockOrProductImage: { type: Type.BOOLEAN },
+      containsBlueprintOrDocumentArtifacts: { type: Type.BOOLEAN },
     },
     required: [
       'passes',
@@ -1027,6 +1030,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
       'containsMagicianStagingLanguage',
       'matchesExpectedSubject',
       'isUnrelatedStockOrProductImage',
+      'containsBlueprintOrDocumentArtifacts',
     ],
   };
 
@@ -1059,6 +1063,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
       containsMagicianStagingLanguage: Boolean(parsed.containsMagicianStagingLanguage),
       matchesExpectedSubject: Boolean(parsed.matchesExpectedSubject),
       isUnrelatedStockOrProductImage: Boolean(parsed.isUnrelatedStockOrProductImage),
+      containsBlueprintOrDocumentArtifacts: Boolean(parsed.containsBlueprintOrDocumentArtifacts),
     };
   } catch {
     // If QA is temporarily unavailable, do not block generation entirely.
@@ -1073,6 +1078,7 @@ export const validateIllusionBlueprintGeneratedImage = async (
       containsMagicianStagingLanguage: true,
       matchesExpectedSubject: true,
       isUnrelatedStockOrProductImage: false,
+      containsBlueprintOrDocumentArtifacts: false,
     };
   }
 };

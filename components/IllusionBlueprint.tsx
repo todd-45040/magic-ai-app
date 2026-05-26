@@ -506,7 +506,8 @@ const buildStrictMatchedOutputRetryPrompt = (
   'Show practical stage indicators such as performance floor, curtains, audience orientation, stage lighting, wings, platform, assistant/performer position, or theatre/parlor context where appropriate.',
   'Do not render food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, hamburgers, sandwiches, consumer products, landscapes, unrelated stock photography, or random objects.',
   'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
-].join('\n');
+  kind === 'concept' ? 'Concept render repair: do NOT show blueprint pages, white document fragments, text blocks, measurement labels, arrows, cutaway diagrams, instruction sheets, split-screen plan artifacts, or technical drawing overlays. Render only the clean photorealistic staged apparatus.' : '',
+].filter(Boolean).join('\n');
 
 const generateValidatedMatchedImage = async ({
   basePrompt,
@@ -537,7 +538,9 @@ const generateValidatedMatchedImage = async ({
         && validation.containsTheatricalContext
         && validation.containsMagicianStagingLanguage;
 
-    if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage) {
+    const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
+
+    if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
       return image;
     }
 
@@ -549,7 +552,7 @@ const generateValidatedMatchedImage = async ({
       kind === 'concept' && !validation.containsMagicianStagingLanguage ? 'magician staging language' : '',
     ].filter(Boolean).join(', ');
 
-    lastReason = validation.reason || (missingPhase4Requirements ? `missing Phase 4 apparatus cues: ${missingPhase4Requirements}` : 'image did not match the stage illusion subject');
+    lastReason = validation.reason || (hasRenderDocumentArtifacts ? 'concept render contained blueprint/document artifacts' : (missingPhase4Requirements ? `missing Phase 4 apparatus cues: ${missingPhase4Requirements}` : 'image did not match the stage illusion subject'));
     prompt = buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
   }
 
