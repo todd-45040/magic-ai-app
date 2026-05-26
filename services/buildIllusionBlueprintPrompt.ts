@@ -53,6 +53,10 @@ export type IllusionBlueprintDesignSpec = {
   proportions: string;
   performerBlocking: string;
   operationalState: string;
+  geometryProfile: string;
+  silhouetteLock: string;
+  proportionLock: string;
+  componentInheritance: string;
 };
 
 export type IllusionBlueprintImagePromptParams = {
@@ -147,6 +151,15 @@ const DIMENSIONED_PAIR_LOCK_REQUIREMENTS = `Dimensioned pair lock requirements:
 - Preserve the same measured proportions implied by the blueprint dimensions.`;
 
 
+const GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS = `Geometric identity lock requirements:
+- Geometry is the controlling artifact. Theme, mood, operational state, and theatrical styling are secondary.
+- Before drawing or rendering, inherit the fixed geometry profile, silhouette lock, component inheritance, and proportion lock from the matched design spec.
+- Lock the same roofline/topline, main body outline, front opening location, door/panel count, side-wall arrangement, base/platform footprint, support/caster layout, facade trim locations, and performer-to-prop scale.
+- Variant A and Variant B may differ in finish, state, and mechanism presentation, but each matched blueprint/render pair must preserve its own exact geometry.
+- Do not reinterpret dimensions, simplify the profile into a generic box, add a different roof, move the opening, change the support platform, invent a new base, or redesign the visible facade.
+- The apparatus should be recognizable as the same object in blueprint and render even if all text and labels are removed.`;
+
+
 
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
@@ -230,6 +243,60 @@ const inferOpening = (seedIdentity?: IllusionSeedIdentity | null): string => {
   return 'primary audience-facing opening or interaction zone preserved exactly between blueprint and render';
 };
 
+
+const inferGeometryProfile = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ') || ''} ${seedIdentity?.dominantGeometry?.join(' ') || ''}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return [
+      'GEOMETRIC PROFILE: one compact dog-house scenic shell only',
+      'single steep gable roof over a rectangular body',
+      'front wall contains the primary opening',
+      'side walls remain vertical plank panels',
+      'roof overhang and body footprint stay consistent',
+      'base is a rectangular wheeled stage platform/pedestal directly under the house body',
+    ].join('; ');
+  }
+  if (/box|cabinet|case/.test(raw)) {
+    return [
+      'GEOMETRIC PROFILE: one rectangular audience-facing cabinet/box only',
+      'flat top or simple hinged lid as implied by seed',
+      'single dominant front face',
+      'base/pedestal directly under the cabinet footprint',
+      'no alternate scenic shell or different cabinet family',
+    ].join('; ');
+  }
+  if (/ring|rope|suspend|hanging/.test(raw)) {
+    return [
+      'GEOMETRIC PROFILE: open rope/ring apparatus only',
+      'visible vertical suspension lines and circular brass/ring forms',
+      'no sealed box, cottage, trunk, or unrelated platform substitution',
+    ].join('; ');
+  }
+  return 'GEOMETRIC PROFILE: preserve the exact primary geometric profile implied by the selected seed image; do not invent a new apparatus outline.';
+};
+
+const inferSilhouetteLock = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ') || ''}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return 'SILHOUETTE LOCK: tall narrow dog-house silhouette, triangular gable roof, centered front opening, simple rectangular side mass, platform below; Blueprint and Render must be recognizable as the same outline at thumbnail size.';
+  }
+  if (/box|cabinet|case/.test(raw)) {
+    return 'SILHOUETTE LOCK: rectangular cabinet silhouette with the same front face, lid/topline, side depth, and base footprint in both blueprint and render.';
+  }
+  return 'SILHOUETTE LOCK: preserve the seed silhouette exactly enough that the blueprint and render read as the same apparatus at a glance.';
+};
+
+const inferComponentInheritance = (seedIdentity?: IllusionSeedIdentity | null): string => {
+  const raw = `${seedIdentity?.rawSeedText || ''} ${seedIdentity?.apparatusForm?.join(' ')} ${seedIdentity?.primaryObjects?.join(' ')}`.toLowerCase();
+  if (/dog\s*house|hound\s*house|house/.test(raw)) {
+    return [
+      'COMPONENT INHERITANCE: every paired output must retain the same dog-house body, roof, front opening, side plank wall, hinged/display door, rectangular base/pedestal, floor-contact supports, and caster/wheel strategy',
+      'operational state may open/close panels or reveal/empty the interior, but may not move the opening to a new wall, change the roof family, replace the base, or convert the unit into a different cabinet style',
+    ].join('; ');
+  }
+  return 'COMPONENT INHERITANCE: every paired output inherits the same primary apparatus components from the seed/spec before applying state or style changes.';
+};
+
 export function buildIllusionDesignSpec({
   plan,
   matchedOutput,
@@ -263,6 +330,10 @@ export function buildIllusionDesignSpec({
     proportions: `${proportionCue}; preserve width/depth/height ratio, base height, opening scale, and performer-to-prop scale`,
     performerBlocking: `${venueScale} staging with ${performerStyle} performer style; performer stands beside the apparatus without hiding the fixed silhouette`,
     operationalState: `${matchedOutput.operationalState}: ${matchedOutput.stateDescription} ${variantCue}`,
+    geometryProfile: inferGeometryProfile(seedIdentity),
+    silhouetteLock: inferSilhouetteLock(seedIdentity),
+    proportionLock: `PROPORTION LOCK: ${proportionCue}; keep the same width-to-height ratio, roof-to-body ratio, opening-to-body ratio, base-to-body ratio, platform footprint, caster scale, and performer-to-prop scale in Blueprint ${matchedOutput.label} and Concept ${matchedOutput.label}.`,
+    componentInheritance: inferComponentInheritance(seedIdentity),
   };
 }
 
@@ -282,6 +353,10 @@ const buildDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): string 
     `Proportions: ${designSpec.proportions}`,
     `Performer blocking: ${designSpec.performerBlocking}`,
     `Operational state: ${designSpec.operationalState}`,
+    designSpec.geometryProfile,
+    designSpec.silhouetteLock,
+    designSpec.proportionLock,
+    designSpec.componentInheritance,
     `Pair rule: Blueprint ${designSpec.label} and Concept ${designSpec.label} must be generated from this exact same design spec. Do not independently reinterpret, simplify, replace, or redesign the apparatus.`
   ].join('\n');
 };
@@ -298,6 +373,10 @@ const buildRenderDesignSpecBrief = (designSpec?: IllusionBlueprintDesignSpec): s
     `Preserve materials/trim/hardware: ${designSpec.facadeTrim}; ${designSpec.visibleHardware}.`,
     `Preserve proportions and blocking: ${designSpec.proportions}; ${designSpec.performerBlocking}.`,
     `Render only this state: ${designSpec.operationalState}.`,
+    designSpec.geometryProfile,
+    designSpec.silhouetteLock,
+    designSpec.proportionLock,
+    designSpec.componentInheritance,
     'Do not introduce a new apparatus family, new roofline, new platform type, different door layout, different support frame, different opening location, or different scenic shell.'
   ].join('\n');
 };
@@ -333,6 +412,8 @@ ${OPERATIONAL_STATE_INTELLIGENCE}
 ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
+
+${GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS}
 
 ${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
 
@@ -427,6 +508,7 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     'The image must look like commercial illusion catalog photography or a staged promotional render.',
     'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
+    GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
   ].filter(Boolean).join('\n');
 }
@@ -493,6 +575,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
     DIMENSIONED_BLUEPRINT_REQUIREMENTS,
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
+    GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
@@ -543,6 +626,7 @@ export function buildIllusionConceptImagePrompt({
     sanitizedStructureAnchors,
     '',
     'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
+    GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
