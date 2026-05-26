@@ -30,12 +30,11 @@ The image should resemble:
 - commercially buildable illusion concepts
 - authentic lighting, props, staging, and audience placement
 - practical materials and engineering
-- realistic body proportions, natural hand anatomy, and complete visible human figures
-- complete performers with natural staging composition and no partial bodies entering from image edges
-- single magician presenting the apparatus on stage unless the user explicitly requests assistants or spectators
+- one complete, clearly visible magician or presenter unless the user explicitly requests assistants or spectators
+- complete human silhouettes with natural proportions and conservative gesture poses
+- clean empty frame edges with no partial people entering from the sides
 - physically plausible environments and reflections
-- every visible arm, hand, leg, and face must belong to a clearly visible person or assistant in the scene
-- ropes, rings, and props must be physically supported by hands, stands, tables, rigging, or visible apparatus
+- ropes, rings, and props physically supported by visible hands, stands, tables, rigging, or visible apparatus
 - professional magician wardrobe and venue details
 
 Preferred aesthetic:
@@ -55,28 +54,31 @@ Avoid unless explicitly requested:
 - surreal floating geometry
 - dreamlike distortions
 - cartoon or anime aesthetics
-- warped anatomy, malformed hands, disembodied limbs, floating arms, extra fingers, duplicated body parts, phantom assistants, cropped body fragments, floating audience interaction hands, horror-style appendages, or partial people entering from image edges
 - impossible prop structures
 - science-fiction machinery
-- abstract AI-art compositions
+- horror-style body-part imagery or surreal haunted-house appendage effects
 
 The final image should look like a real magician could actually perform this routine on stage today.
 `.trim();
 
 const VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION = `
-Anatomical artifact suppression:
-- Use realistic human anatomy only.
-- Do not generate extra limbs, floating hands, detached arms, partial assistants, cropped body fragments, phantom assistants, malformed anatomy, disembodied audience interaction, or AI horror-style appendages.
-- Show complete performers with natural staging composition.
-- Avoid partial bodies entering from image edges.
-- Avoid floating audience interaction hands.
-- For prop showcases, illusion demos, and apparatus reveals: use a single complete magician presenting the apparatus on stage unless assistants or spectators are explicitly requested.
+Human staging lock:
+- Use a clean one-presenter stage composition unless the user explicitly requests assistants or spectators.
+- Any visible person must appear as a complete, naturally proportioned human figure.
+- Keep the sides of the image clear; do not place isolated human body parts at the frame edges.
+- Keep performer gestures natural and attached to visible bodies.
+- For prop showcases, illusion demos, and apparatus reveals: center the apparatus and place one complete magician beside it.
 `.trim();
 
 const VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT = `
-Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, disembodied limbs, floating arms, extra hands, partial people, or unrealistic physics unless explicitly requested by the user.
-
-NO: extra arms, extra hands, floating limbs, detached hands, detached arms, cropped assistants, phantom audience hands, phantom assistants, surreal anatomy, mutated limbs, horror appendages, partial people entering from image edges, disembodied human features.
+Composition exclusions:
+- no extra people unless explicitly requested
+- no isolated body parts at image edges
+- no partial assistants entering from the sides
+- no horror-appendage staging
+- no surreal anatomy
+- no unrealistic physics
+- no unrelated prior-session props
 `.trim();
 
 const VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION = `
@@ -132,6 +134,23 @@ export function userExplicitlyRequestedFantasy(prompt: string): boolean {
   );
 }
 
+
+function needsStrictSinglePresenterLock(prompt: string): boolean {
+  return /\b(prop|apparatus|box|production|dog house|cabinet|platform|pedestal|stand|show empty|fog machine|display|showcase|illusion demo)\b/i.test(prompt);
+}
+
+function buildStrictSinglePresenterGuidance(prompt: string): string {
+  if (!needsStrictSinglePresenterLock(prompt)) return '';
+  return `
+Strict prop-showcase composition:
+- Center the requested apparatus/prop as the main subject.
+- Show exactly one complete magician/presenter standing beside the apparatus.
+- Do not include assistants, spectators, reaching audience interaction, or side-of-frame people unless the user explicitly asks for them.
+- Use a clean professional stage product-photo layout with open space around the prop.
+- If the concept involves Halloween, haunted, scary, or mysterious styling, express it through lighting, scenic texture, aged paint, and fog only; do not use horror-body imagery.
+`.trim();
+}
+
 export function buildVisualBrainstormImagePrompt({
   prompt,
   styleMode = 'realistic_stage',
@@ -146,6 +165,7 @@ export function buildVisualBrainstormImagePrompt({
     freshContext && !hasUploadedImage ? VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION : '',
     STYLE_MODE_GUIDANCE[styleMode],
     realismEnabled ? VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION : '',
+    realismEnabled ? buildStrictSinglePresenterGuidance(userPrompt) : '',
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
       : '',
