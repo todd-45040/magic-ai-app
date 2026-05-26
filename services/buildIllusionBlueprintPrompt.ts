@@ -97,6 +97,16 @@ const PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT = `Professional illusion design re
 
 
 
+
+
+const MECHANISM_AND_FABRICATION_INTELLIGENCE = `Mechanism and fabrication intelligence:
+- Mechanism plausibility: show or describe non-exposure concealment volume, believable hidden access paths, realistic load chambers, and production routing as high-level theatrical engineering cues only.
+- Structural realism: reinforce weight support, load-bearing frame members, hinge logic, panel operation, caster load realism, bracing, platform stability, center-of-gravity control, and stage mobility engineering.
+- Blueprint intelligence: include clearer labeled sections, cutaway sections, exploded mechanism-style views, front/side/top relationships, service-panel callouts, performer-position overlays, audience sightline arrows, and operation-state notes when visually appropriate.
+- Render intelligence: preserve closed-state and reveal-state continuity, interior visibility logic, practical performer blocking, reveal orientation, service access placement, and operation-stage continuity from the paired blueprint.
+- Keep all mechanism information non-exposure and principle-based. Do not reveal secret methods, detailed load procedures, hidden-person instructions, trap construction steps, or unsafe rigging instructions.
+- The output should look like a builder/fabricator can evaluate plausibility without receiving exposure-level instructions.`;
+
 const DIMENSIONED_BLUEPRINT_REQUIREMENTS = `Dimensioned blueprint requirements:
 - Include clear approximate builder dimensions directly on the blueprint drawing, using readable English measurement callouts.
 - Dimension callouts should include overall width, overall depth, overall height, base/platform height, door or visible opening size, caster/wheel diameter, access panel location, roof/top clearance, and usable load/interior area where relevant.
@@ -136,6 +146,8 @@ ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
+${MECHANISM_AND_FABRICATION_INTELLIGENCE}
+
 ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
@@ -168,6 +180,8 @@ const IMAGE_STYLE_GUIDE = `Create theatrical but practical illusion concept imag
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
+
+${MECHANISM_AND_FABRICATION_INTELLIGENCE}
 
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
 
@@ -216,6 +230,8 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     '',
     PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
+    MECHANISM_AND_FABRICATION_INTELLIGENCE,
+    '',
     generationContext,
     '',
     seedIdentityBrief,
@@ -246,6 +262,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     '',
     PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
+    MECHANISM_AND_FABRICATION_INTELLIGENCE,
+    '',
     buildSeedIdentityBrief(seedIdentity || null),
     '',
     illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
@@ -261,6 +279,8 @@ export function buildIllusionBlueprintDrawingPrompt({
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
+    'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
+    'Blueprint view requirement: include at least one cutaway or exploded-view style area that clarifies structure, support, access, and operation-state relationships without exposing a secret method.',
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
     'Seed continuity requirement: the technical drawing must look engineered from the selected source concept, preserving its primary props, dominant geometry, silhouette, performer-to-prop relationship, stage layout, material language, and mood. The broad illusion category is less important than the seed image identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
@@ -289,6 +309,8 @@ export function buildIllusionConceptImagePrompt({
     '',
     PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT,
     '',
+    MECHANISM_AND_FABRICATION_INTELLIGENCE,
+    '',
     buildSeedIdentityBrief(seedIdentity || null),
     '',
     illusionIdentity ? buildIllusionIdentityBrief(illusionIdentity) : '',
@@ -303,6 +325,8 @@ export function buildIllusionConceptImagePrompt({
     `Venue / scale: ${venueScale}`,
     `Performer style: ${performerStyle}`,
     `Matched output requirement: This is Concept ${matchedOutput.label}. ${matchedOutput.directive}`,
+    'Render-state requirement: show a realistic closed-state or reveal-state stage view that preserves the same apparatus, access placement, visible panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired blueprint.',
+    'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must match the paired blueprint proportions and remain plausible without adding fantasy space, impossible voids, or a redesigned shell.',
     'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),

@@ -62,6 +62,17 @@ type BuilderPlan = {
   assembly_overview: string[];
   safety_stability_notes: string[];
   reset_transport_crew: string[];
+  fabrication_intelligence: {
+    concealment_volume: string;
+    access_paths: string;
+    load_chamber: string;
+    support_structure: string;
+    hinge_panel_operation: string;
+    caster_mobility: string;
+    performer_positioning: string;
+    sightline_orientation: string;
+    closed_reveal_states: string;
+  };
   build_complexity: {
     rating_1_to_5: number;
     rationale: string;
@@ -579,6 +590,7 @@ const normalizeBuilderPlan = (raw: any, originalEffect = ''): BuilderPlan => {
   const construction = raw?.recommended_construction || raw?.construction || raw?.build || {};
   const mechanism = raw?.mechanism_approach || raw?.mechanism || raw?.method_approach || {};
   const complexity = raw?.build_complexity || raw?.complexity || {};
+  const fabrication = raw?.fabrication_intelligence || raw?.mechanism_fabrication || raw?.fabrication || {};
   const titleFallback = originalEffect ? originalEffect.slice(0, 58) + ' Builder Plan' : 'Illusion Builder Plan';
 
   return {
@@ -599,6 +611,17 @@ const normalizeBuilderPlan = (raw: any, originalEffect = ''): BuilderPlan => {
     assembly_overview: firstArray(['Assemble frame and base modules.', 'Attach scenic panels and trim.', 'Verify stability, access, and sightlines before rehearsal.'], raw?.assembly_overview, raw?.assembly, raw?.build_steps),
     safety_stability_notes: firstArray(['Confirm load ratings and balance before use.', 'Keep all performer paths clear and rehearsed.', 'Use non-slip surfaces and secure locking hardware.'], raw?.safety_stability_notes, raw?.safety_notes, raw?.safety),
     reset_transport_crew: firstArray(['Pack into labeled modules.', 'Use protected transport surfaces.', 'Rehearse reset duties with the assigned crew.'], raw?.reset_transport_crew, raw?.transport_reset, raw?.reset),
+    fabrication_intelligence: {
+      concealment_volume: firstString('Preserve a plausible non-exposure concealment volume sized to the stated effect and visible footprint.', fabrication?.concealment_volume, fabrication?.concealmentVolume),
+      access_paths: firstString('Use high-level service access paths through logical seams, panels, or base/platform access without exposing method steps.', fabrication?.access_paths, fabrication?.accessPaths),
+      load_chamber: firstString('Keep any load chamber reference conceptual, human-safe, ventilated where relevant, and consistent with the external dimensions.', fabrication?.load_chamber, fabrication?.loadChamber),
+      support_structure: firstString('Use credible load-bearing frame members, bracing, base spread, and center-of-gravity control.', fabrication?.support_structure, fabrication?.supportStructure),
+      hinge_panel_operation: firstString('Use practical hinge, latch, removable-panel, or sliding-panel logic with safe reach and pinch-point awareness.', fabrication?.hinge_panel_operation, fabrication?.hingePanelOperation),
+      caster_mobility: firstString('Use locking casters or stage wheels with realistic load rating, floor contact, and transport handling.', fabrication?.caster_mobility, fabrication?.casterMobility),
+      performer_positioning: firstString('Place the performer where reach, sightlines, and reveal orientation feel practical and rehearsable.', fabrication?.performer_positioning, fabrication?.performerPositioning),
+      sightline_orientation: firstString('Orient the apparatus toward the audience with believable front, side, and service-angle control.', fabrication?.sightline_orientation, fabrication?.sightlineOrientation),
+      closed_reveal_states: firstString('Keep closed-state and reveal-state visuals consistent so doors, panels, rooflines, and interior visibility do not redesign the apparatus.', fabrication?.closed_reveal_states, fabrication?.closedRevealStates),
+    },
     build_complexity: {
       rating_1_to_5: Math.min(5, Math.max(1, asNumber(complexity?.rating_1_to_5 ?? complexity?.rating, 3))),
       rationale: firstString('Moderate build complexity because it requires reliable scenic construction, safe handling, and careful rehearsal.', complexity?.rationale, complexity?.notes, raw?.complexity_rationale),
@@ -675,6 +698,31 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         assembly_overview: { type: Type.ARRAY, items: { type: Type.STRING } },
         safety_stability_notes: { type: Type.ARRAY, items: { type: Type.STRING } },
         reset_transport_crew: { type: Type.ARRAY, items: { type: Type.STRING } },
+        fabrication_intelligence: {
+          type: Type.OBJECT,
+          properties: {
+            concealment_volume: { type: Type.STRING },
+            access_paths: { type: Type.STRING },
+            load_chamber: { type: Type.STRING },
+            support_structure: { type: Type.STRING },
+            hinge_panel_operation: { type: Type.STRING },
+            caster_mobility: { type: Type.STRING },
+            performer_positioning: { type: Type.STRING },
+            sightline_orientation: { type: Type.STRING },
+            closed_reveal_states: { type: Type.STRING },
+          },
+          required: [
+            'concealment_volume',
+            'access_paths',
+            'load_chamber',
+            'support_structure',
+            'hinge_panel_operation',
+            'caster_mobility',
+            'performer_positioning',
+            'sightline_orientation',
+            'closed_reveal_states',
+          ],
+        },
         build_complexity: {
           type: Type.OBJECT,
           properties: {
@@ -694,6 +742,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         'assembly_overview',
         'safety_stability_notes',
         'reset_transport_crew',
+        'fabrication_intelligence',
         'build_complexity',
       ],
     }),
@@ -1746,6 +1795,23 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                         <div className="rounded-xl border border-slate-800 bg-slate-950/20 p-4">
                           <div className="text-xs text-slate-400 mb-2">Alternate Mechanism Approach</div>
                           <TextBlock text={builderPlan.mechanism_approach.alternate} leadIn="Backup direction" />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200 mb-3">Mechanism & Fabrication Intelligence</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <TextBlock text={builderPlan.fabrication_intelligence.concealment_volume} leadIn="Concealment volume" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.access_paths} leadIn="Access paths" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.load_chamber} leadIn="Load chamber logic" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.support_structure} leadIn="Support structure" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.hinge_panel_operation} leadIn="Hinge / panel operation" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.caster_mobility} leadIn="Caster mobility" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.performer_positioning} leadIn="Performer positioning" />
+                          <TextBlock text={builderPlan.fabrication_intelligence.sightline_orientation} leadIn="Sightline orientation" />
+                        </div>
+                        <div className="mt-3 border-t border-amber-300/10 pt-3">
+                          <TextBlock text={builderPlan.fabrication_intelligence.closed_reveal_states} leadIn="Closed / reveal state continuity" />
                         </div>
                       </div>
 
