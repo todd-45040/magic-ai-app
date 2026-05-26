@@ -82,6 +82,21 @@ Composition exclusions:
 `.trim();
 
 
+
+
+const VISUAL_BRAINSTORM_OPERATIONAL_STATE_ANCHOR = `
+Operational state anchor:
+- Preserve the requested apparatus identity across every generated variation. The operational state may change, but the apparatus family must not change.
+- Keep the same primary silhouette, scale, base/platform form, dominant geometry, material language, theatrical setting, and illusion category from the user concept.
+- Operational-state changes may ONLY alter door positions, panel positions, lid/roof position, empty/reveal condition, performer interaction, visibility state, and lighting emphasis.
+- Do not replace the requested apparatus with a different illusion type, levitation rig, suspension device, black-art platform, generic demonstration stand, abstract display rig, hoop/ring apparatus, rope apparatus, cabinet substitute, or unrelated stage mechanism.
+- If the prompt asks for a dog house production, every variation must remain a dog-house production apparatus. If the prompt asks for a box, every variation must remain that box family. If the prompt asks for a cabinet/platform/pedestal, preserve that apparatus category.
+- Apply state inheritance before styling: apparatus category first, primary silhouette second, structural geometry third, base/platform form fourth, theatrical setting fifth, then operational state.
+- For empty-display mode, show the same apparatus with doors/panels open and the interior visibly empty; do not invent a different inspection rig.
+- For closed-ready mode, show the same apparatus closed and prepared for presentation.
+- For reveal/production mode, show the same apparatus in reveal condition; do not switch to another production method or unrelated scenic prop.
+`.trim();
+
 const VISUAL_BRAINSTORM_PROFESSIONAL_ILLUSION_REFINEMENT = `
 Professional illusion design refinement:
 - Apparatus engineering realism: show believable wheel/caster placement, base width, stage transport logic, balanced center of gravity, visible support points, practical pedestal/table geometry, and stable load paths.
@@ -178,6 +193,7 @@ export function buildVisualBrainstormImagePrompt({
     STYLE_MODE_GUIDANCE[styleMode],
     realismEnabled ? VISUAL_BRAINSTORM_ANATOMY_SUPPRESSION : '',
     realismEnabled ? buildStrictSinglePresenterGuidance(userPrompt) : '',
+    realismEnabled ? VISUAL_BRAINSTORM_OPERATIONAL_STATE_ANCHOR : '',
     realismEnabled ? VISUAL_BRAINSTORM_PROFESSIONAL_ILLUSION_REFINEMENT : '',
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
