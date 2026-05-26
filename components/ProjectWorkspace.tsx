@@ -22,12 +22,22 @@ type WorkspaceGroup = {
   lastUpdatedAt: number;
 };
 
+type WorkspaceSuggestion = {
+  id: string;
+  label: string;
+  title: string;
+  body: string;
+  targetView: MagicianView;
+  confidence: 'High' | 'Medium';
+};
+
 interface ProjectWorkspaceProps {
   ideas: SavedIdea[];
   onNavigate: (view: MagicianView) => void;
 }
 
 const WORKSPACE_SELECTION_KEY = 'maw_project_workspace_selected_v1';
+const WORKSPACE_ASSISTANT_MEMORY_KEY = 'maw_workspace_assistant_suggestions_v1';
 
 function safeParse(value: string): any | null {
   try {
@@ -201,6 +211,76 @@ function nextStepCopy(group: WorkspaceGroup): { view: MagicianView; title: strin
   return { view, title: 'Move into show planning', body: 'Add the developed routine to a show plan with props, tasks, staging notes, and production details.' };
 }
 
+function hasToolOrCategory(group: WorkspaceGroup, matcher: (value: string) => boolean): boolean {
+  return group.assets.some((asset) => matcher(`${asset.tool} ${asset.stage} ${asset.idea.category || ''}`.toLowerCase()));
+}
+
+function buildWorkspaceAssistantSuggestions(group: WorkspaceGroup): WorkspaceSuggestion[] {
+  const hasImage = group.assets.some((asset) => Boolean(asset.imageUrl) || asset.idea.type === 'image' || asset.idea.category === 'image');
+  const hasBlueprint = hasToolOrCategory(group, (value) => value.includes('blueprint'));
+  const hasScript = hasToolOrCategory(group, (value) => value.includes('patter') || value.includes('script'));
+  const hasRehearsal = hasToolOrCategory(group, (value) => value.includes('rehears'));
+  const hasShowPlan = hasToolOrCategory(group, (value) => value.includes('show') || value.includes('planner'));
+  const suggestions: WorkspaceSuggestion[] = [];
+
+  if (hasImage && !hasBlueprint) {
+    suggestions.push({
+      id: 'generate-blueprint-pair',
+      label: 'Best next move',
+      title: 'Generate a realistic blueprint pair',
+      body: 'Use the visual anchor to create buildable apparatus thinking before the concept drifts away from practical stage constraints.',
+      targetView: 'illusion-blueprint',
+      confidence: 'High',
+    });
+  }
+
+  if (!hasScript) {
+    suggestions.push({
+      id: 'write-performance-script',
+      label: hasBlueprint ? 'Creative continuity' : 'Presentation layer',
+      title: 'Write the performance script',
+      body: 'Convert the current concept into patter, beats, timing, and audience-facing language that can be rehearsed.',
+      targetView: 'patter-engine',
+      confidence: hasBlueprint ? 'High' : 'Medium',
+    });
+  }
+
+  if (hasScript && !hasRehearsal) {
+    suggestions.push({
+      id: 'rehearse-script',
+      label: 'Production readiness',
+      title: 'Rehearse the script next',
+      body: 'Run the routine through Live Rehearsal to check pacing, confidence, clarity, and real-world delivery before show planning.',
+      targetView: 'live-rehearsal',
+      confidence: 'High',
+    });
+  }
+
+  if ((hasScript || hasRehearsal || hasBlueprint) && !hasShowPlan) {
+    suggestions.push({
+      id: 'add-to-show-planner',
+      label: 'Professional workflow',
+      title: 'Add this routine to Show Planner',
+      body: 'Connect the creative work to props, tasks, cues, reset notes, and performance logistics so it becomes production-ready.',
+      targetView: 'show-planner',
+      confidence: hasRehearsal ? 'High' : 'Medium',
+    });
+  }
+
+  if (suggestions.length === 0) {
+    suggestions.push({
+      id: 'review-workspace',
+      label: 'Maintenance',
+      title: 'Review the full project workspace',
+      body: 'This project has a healthy chain of assets. Review the timeline, tighten weak links, or continue refining the next performance version.',
+      targetView: 'project-workspace',
+      confidence: 'Medium',
+    });
+  }
+
+  return suggestions.slice(0, 3);
+}
+
 function sourceViewForAsset(asset: WorkspaceAsset): MagicianView {
   const raw = `${asset.tool} ${asset.idea.category || ''}`.toLowerCase();
   if (raw.includes('visual') || asset.idea.type === 'image') return 'visual-brainstorm';
@@ -241,11 +321,18 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
   const selected = groups.find((group) => group.id === selectedId) || groups[0] || null;
   const nextView = selected ? nextViewForGroup(selected) : 'saved-ideas';
   const nextStep = selected ? nextStepCopy(selected) : null;
+  const selectedSuggestions = useMemo(() => selected ? buildWorkspaceAssistantSuggestions(selected) : [], [selected]);
 
   const selectGroup = (group: WorkspaceGroup) => {
     setSelectedId(group.id);
     try {
       localStorage.setItem(WORKSPACE_SELECTION_KEY, JSON.stringify({ projectId: group.id, projectTitle: group.label, updatedAt: Date.now() }));
+      localStorage.setItem(WORKSPACE_ASSISTANT_MEMORY_KEY, JSON.stringify({
+        projectId: group.id,
+        projectTitle: group.label,
+        suggestions: buildWorkspaceAssistantSuggestions(group),
+        updatedAt: Date.now(),
+      }));
     } catch {}
   };
 
@@ -273,6 +360,13 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
 
     try {
       localStorage.setItem(WORKSPACE_SELECTION_KEY, JSON.stringify({ projectId: group.id, projectTitle: group.label, updatedAt: Date.now() }));
+      localStorage.setItem(WORKSPACE_ASSISTANT_MEMORY_KEY, JSON.stringify({
+        projectId: group.id,
+        projectTitle: group.label,
+        acceptedSuggestionView: targetView,
+        suggestions: buildWorkspaceAssistantSuggestions(group),
+        updatedAt: Date.now(),
+      }));
       localStorage.setItem('maw_project_continuity_handoff_v1', JSON.stringify({
         version: 2,
         source: 'project_workspace',
@@ -471,6 +565,30 @@ const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ ideas, onNavigate }
                 </div>
               </section>
             ) : null}
+
+            <section className="rounded-2xl border border-purple-400/20 bg-gradient-to-br from-purple-500/10 via-slate-900/60 to-slate-950/60 p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-purple-200/80">Workspace Assistant</div>
+                  <h2 className="mt-1 text-lg font-black text-white">Suggested professional next moves</h2>
+                  <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Metadata-based guidance for keeping this project moving through a realistic creative workflow.</p>
+                </div>
+                <div className="text-xs text-slate-500">{selected.tools.length} source tool{selected.tools.length === 1 ? '' : 's'} considered</div>
+              </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                {selectedSuggestions.map((suggestion) => (
+                  <article key={suggestion.id} className="rounded-2xl border border-slate-800 bg-slate-950/45 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="rounded-full border border-purple-400/25 bg-purple-500/10 px-2 py-0.5 text-[11px] font-bold text-purple-100">{suggestion.label}</span>
+                      <span className="text-[11px] font-bold text-slate-500">{suggestion.confidence} confidence</span>
+                    </div>
+                    <h3 className="mt-3 text-sm font-black text-white">{suggestion.title}</h3>
+                    <p className="mt-2 text-xs leading-5 text-slate-400">{suggestion.body}</p>
+                    <button onClick={() => continueProject(selected, suggestion.targetView)} className="mt-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-100 hover:bg-emerald-500/20">Continue in {viewLabel(suggestion.targetView)}</button>
+                  </article>
+                ))}
+              </div>
+            </section>
 
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {selected.assets.length === 1 ? (
