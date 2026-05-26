@@ -84,6 +84,13 @@ const CREW_SIZES: CrewSize[] = ['Solo', '1 Assistant', '2-3 Crew', '4+ Crew'];
 const RESET_REQUIREMENTS: ResetRequirement[] = ['Instant', 'Under 1 minute', 'Under 3 minutes', 'Flexible'];
 
 const VISUAL_TO_BLUEPRINT_HANDOFF_KEY = 'maw_illusion_blueprint_visual_handoff';
+const VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY = 'maw_illusion_blueprint_visual_handoff_session';
+
+declare global {
+  interface Window {
+    __mawIllusionBlueprintVisualHandoff?: unknown;
+  }
+}
 
 type VisualBlueprintHandoff = {
   source?: string;
@@ -111,13 +118,32 @@ type VisualBlueprintHandoff = {
   created_at?: string;
 };
 
+function normalizeVisualBlueprintHandoff(value: unknown): VisualBlueprintHandoff | null {
+  if (!value || typeof value !== 'object') return null;
+  const parsed = value as VisualBlueprintHandoff;
+  const selectedImageUrl = typeof parsed.selectedImageUrl === 'string' ? parsed.selectedImageUrl : '';
+  const imageUrl = typeof parsed.imageUrl === 'string' ? parsed.imageUrl : '';
+  const hasUsefulContext = Boolean(
+    parsed.prompt ||
+    parsed.title ||
+    selectedImageUrl ||
+    imageUrl ||
+    parsed.project?.projectTitle ||
+    parsed.projectTitle
+  );
+  if (!hasUsefulContext) return null;
+
+  return {
+    ...parsed,
+    imageUrl: selectedImageUrl || imageUrl,
+    selectedImageUrl: selectedImageUrl || imageUrl,
+  };
+}
+
 function safeParseVisualBlueprintHandoff(raw: string | null): VisualBlueprintHandoff | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as VisualBlueprintHandoff;
-    if (!parsed || typeof parsed !== 'object') return null;
-    const hasUsefulContext = Boolean(parsed.prompt || parsed.title || parsed.imageUrl || parsed.project?.projectTitle || parsed.projectTitle);
-    return hasUsefulContext ? parsed : null;
+    return normalizeVisualBlueprintHandoff(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -696,15 +722,20 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       });
     };
 
+    const inMemoryHandoff = normalizeVisualBlueprintHandoff(window.__mawIllusionBlueprintVisualHandoff);
+    const sessionHandoff = safeParseVisualBlueprintHandoff(sessionStorage.getItem(VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY));
     const storedHandoff = safeParseVisualBlueprintHandoff(localStorage.getItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY));
-    applyVisualHandoff(storedHandoff);
-    if (storedHandoff) {
+    const recoveredHandoff = inMemoryHandoff || sessionHandoff || storedHandoff;
+    applyVisualHandoff(recoveredHandoff);
+    if (recoveredHandoff) {
+      try { sessionStorage.removeItem(VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY); } catch {}
       try { localStorage.removeItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY); } catch {}
+      try { window.__mawIllusionBlueprintVisualHandoff = undefined; } catch {}
     }
 
     const onHandoff = (event: Event) => {
       const detail = (event as CustomEvent<VisualBlueprintHandoff>).detail;
-      applyVisualHandoff(detail && typeof detail === 'object' ? detail : null);
+      applyVisualHandoff(normalizeVisualBlueprintHandoff(detail));
     };
 
     window.addEventListener('maw:illusion-blueprint-handoff', onHandoff as EventListener);

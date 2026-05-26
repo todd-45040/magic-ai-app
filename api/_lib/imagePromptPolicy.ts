@@ -8,7 +8,9 @@ const PRACTICAL_IMAGE_GUARDRAIL = [
   '- Avoid dream-like, surreal, cosmic, sci-fi, impossible, floating, or fantasy-engineering visuals unless the user explicitly requests poster-art styling.',
   '- Show designs that could realistically be fabricated for stage, parlor, platform, or trade-show performance.',
   '- Favor clean theatrical realism over abstract art.',
-  '- No impossible architecture, impossible physics, or magical energy effects.',
+  '- No impossible architecture, impossible physics, magical energy effects, disembodied limbs, floating arms, extra hands, or partial people entering the frame unnaturally.',
+  '- Every visible arm, hand, face, or body part must belong to a complete, clearly visible performer, assistant, or audience member.',
+  '- Props such as ropes, rings, boxes, and stands must be physically supported by visible hands, stands, tables, rigging, or plausible apparatus.',
   '- If the prompt is vague, interpret it as practical stage design rather than fantasy illustration.',
 ].join('\n');
 

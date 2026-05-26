@@ -22,8 +22,10 @@ The image should resemble:
 - commercially buildable illusion concepts
 - authentic lighting, props, staging, and audience placement
 - practical materials and engineering
-- realistic body proportions and hand anatomy
+- realistic body proportions, natural hand anatomy, and complete visible human figures
 - physically plausible environments and reflections
+- every visible arm, hand, leg, and face must belong to a clearly visible person or assistant in the scene
+- ropes, rings, and props must be physically supported by hands, stands, tables, rigging, or visible apparatus
 - professional magician wardrobe and venue details
 
 Preferred aesthetic:
@@ -40,7 +42,7 @@ Avoid unless explicitly requested:
 - surreal floating geometry
 - dreamlike distortions
 - cartoon or anime aesthetics
-- warped anatomy or malformed hands
+- warped anatomy, malformed hands, disembodied limbs, floating arms, extra fingers, duplicated body parts, or partial people entering from nowhere
 - impossible prop structures
 - science-fiction machinery
 - abstract AI-art compositions
@@ -49,7 +51,7 @@ The final image should look like a real magician could actually perform this rou
 `.trim();
 
 const VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT =
-  'Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics unless explicitly requested by the user.';
+  'Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, disembodied limbs, floating arms, extra hands, partial people, or unrealistic physics unless explicitly requested by the user.';
 
 const STYLE_MODE_GUIDANCE: Record<VisualBrainstormStyleMode, string> = {
   realistic_stage:

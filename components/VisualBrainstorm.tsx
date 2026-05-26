@@ -17,7 +17,35 @@ import { buildVisualBrainstormImagePrompt } from '../services/buildVisualBrainst
 import { buildCreativeProjectLink } from '../services/creativeProjectContinuity';
 import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
-const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals.';
+const PRACTICAL_VISUAL_BRAINSTORM_LABEL = 'Realism mode: outputs are biased toward believable, buildable magic visuals with realistic anatomy.';
+
+const VISUAL_TO_BLUEPRINT_HANDOFF_KEY = 'maw_illusion_blueprint_visual_handoff';
+const VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY = 'maw_illusion_blueprint_visual_handoff_session';
+
+declare global {
+  interface Window {
+    __mawIllusionBlueprintVisualHandoff?: unknown;
+  }
+}
+
+function persistVisualBlueprintHandoff(payload: unknown): boolean {
+  let persisted = false;
+  try {
+    window.__mawIllusionBlueprintVisualHandoff = payload;
+  } catch {}
+
+  try {
+    sessionStorage.setItem(VISUAL_TO_BLUEPRINT_HANDOFF_SESSION_KEY, JSON.stringify(payload));
+    persisted = true;
+  } catch {}
+
+  try {
+    localStorage.setItem(VISUAL_TO_BLUEPRINT_HANDOFF_KEY, JSON.stringify(payload));
+    persisted = true;
+  } catch {}
+
+  return persisted;
+}
 
 interface VisualBrainstormProps {
     onIdeaSaved: () => void;
@@ -1101,11 +1129,16 @@ const activeSession = useMemo(() => {
     const payload = buildVisualWorkflowPayload('illusion_blueprint', selected);
     const { imageUrl, prompt, title } = payload;
 
+    const handoffPersisted = persistVisualBlueprintHandoff(payload);
+
     try {
-      localStorage.setItem('maw_illusion_blueprint_visual_handoff', JSON.stringify(payload));
       window.dispatchEvent(new CustomEvent('maw:illusion-blueprint-handoff', { detail: payload }));
     } catch {
-      // If storage is unavailable, still route the user and let them copy the prompt manually.
+      // If the current view is not mounted yet, the Blueprint page will recover from sessionStorage/localStorage/window handoff.
+    }
+
+    if (!handoffPersisted) {
+      console.warn('Visual Brainstorm handoff could not be persisted; relying on in-memory navigation payload.');
     }
 
     try {
