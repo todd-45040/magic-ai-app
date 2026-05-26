@@ -59,6 +59,12 @@ export function hasActivePaidSubscription(user?: User | null): boolean {
 
 export function getEffectiveMembership(user?: User | null): CanonicalTier {
   if (!user) return 'free';
+
+  // Admin access can arrive from either the canonical membership field or the
+  // separate admin flag used by the dashboard/profile payload. Treat both as
+  // unlimited before any trial, Stripe, or quota logic runs.
+  if (user.isAdmin || String((user as any).is_admin || '').toLowerCase() === 'true') return 'admin';
+
   const tier = normalizeTier(user.membership);
   if (tier === 'admin') return 'admin';
 

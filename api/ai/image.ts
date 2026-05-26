@@ -20,7 +20,8 @@ import {
   mapProviderError,
   withTimeout,
 } from './_lib/hardening.js';
-import { applyUsageHeaders, bestEffortIncrementAiUsage, guardAiUsage } from './_lib/usageGuard.js';
+import { applyUsageHeaders } from './_lib/usageGuard.js';
+import { enforceAiUsage } from '../../server/usage.js';
 import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
@@ -110,16 +111,28 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Supabase usage guard (single source of truth)
-    const guard = await guardAiUsage(req, 1);
-    if (!guard.ok) {
-      return jsonError(res, guard.status, guard.error);
-    }
-
     const provider = await resolveProvider(req);
     const body = req.body || {};
     const { aspectRatio = '1:1' } = body;
     const requestedCount = Math.max(1, Math.min(4, Math.floor(Number(body.count) || 1)));
+    const requestedTool = String(body.tool || '').trim() === 'visual_brainstorm'
+      ? 'visual_brainstorm'
+      : 'image_generation';
+
+    // Tool-aware Supabase quota enforcement. This path intentionally uses the
+    // canonical server quota function instead of the generic guard so admin
+    // users are bypassed before image quotas are checked and so successful
+    // admin requests are not charged against daily/monthly image counters.
+    const usage = await enforceAiUsage(req, requestedCount, { tool: requestedTool });
+    if (!usage.ok) {
+      return jsonError(res, usage.status || 429, {
+        ok: false,
+        error_code: usage.error_code === 'RATE_LIMITED' ? 'RATE_LIMITED' : 'QUOTA_EXCEEDED',
+        message: usage.error || 'AI usage limit reached.',
+        retryable: usage.retryable ?? true,
+        ...(isPreviewEnv() ? { details: { membership: usage.membership, remaining: usage.remaining, limit: usage.limit } } : {}),
+      });
+    }
 
     // Canonical input: messages[]; derive prompt if prompt is missing.
     const prompt =
@@ -199,11 +212,7 @@ export default async function handler(req: any, res: any) {
 
     const result = await withTimeout(run(), TIMEOUT_MS, 'TIMEOUT');
 
-    // Best-effort increment AFTER success
-    // IMPORTANT: await so metering reliably persists in serverless runtimes
-    await bestEffortIncrementAiUsage(req, 1);
-
-    applyUsageHeaders(res, guard.usage);
+    applyUsageHeaders(res, usage);
     res.setHeader('X-AI-Provider-Used', provider);
 
     return res.status(200).json({ ok: true, data: result });
