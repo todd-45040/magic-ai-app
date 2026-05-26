@@ -96,6 +96,22 @@ const PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT = `Professional illusion design re
 - The design should feel like a professional illusion development environment output: buildable, transportable, rehearseable, stage-ready, and visually tied to the selected concept.`;
 
 
+
+const DIMENSIONED_BLUEPRINT_REQUIREMENTS = `Dimensioned blueprint requirements:
+- Include clear approximate builder dimensions directly on the blueprint drawing, using readable English measurement callouts.
+- Dimension callouts should include overall width, overall depth, overall height, base/platform height, door or visible opening size, caster/wheel diameter, access panel location, roof/top clearance, and usable load/interior area where relevant.
+- Use realistic approximate stage prop dimensions in inches or feet based on the builder plan footprint; examples: OVERALL 48" W x 36" D x 72" H, BASE 8" H, DOOR 24" W x 30" H, CASTERS 4", ACCESS PANEL, LOAD AREA.
+- Keep measurements non-exposure and fabrication-planning oriented; do not describe secret method steps.
+- Measurement labels must be legible English and placed as builder callouts, arrows, side notes, or dimension lines.`;
+
+const DIMENSIONED_PAIR_LOCK_REQUIREMENTS = `Dimensioned pair lock requirements:
+- Blueprint A controls Concept A. Blueprint B controls Concept B.
+- The concept render must be a photorealistic stage rendition of the exact same apparatus shown in its paired blueprint.
+- Do not redesign the roofline, base, wheels, platform, doors, panels, proportions, decoration, trim, support structure, access panel placement, or visible hardware.
+- The blueprint is the controlling source of truth for the matching concept render.
+- The concept render may add realistic lighting, performer stance, stage curtains, practical fog, and material texture, but it must not invent a different apparatus.
+- Preserve the same measured proportions implied by the blueprint dimensions.`;
+
 const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
 - Do not generate food, hamburgers, sandwiches, cakes, drinks, or any edible object.
 - Do not generate furniture unless it is explicitly part of the illusion apparatus described in the builder plan.
@@ -119,6 +135,10 @@ const BLUEPRINT_STYLE_GUIDE = `Create technical blueprint-style drawings for a s
 ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
+
+${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
+
+${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
@@ -149,6 +169,8 @@ ${PHYSICS_AND_BUILDABILITY_GUIDANCE}
 
 ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 
+${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
+
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 ${APPARATUS_VALIDATION_REQUIREMENTS}
@@ -169,6 +191,9 @@ Visual requirements:
 const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<IllusionBlueprintImagePromptParams, 'matchedOutput' | 'visualAnchor'>): string => [
   `BLUEPRINT-TO-RENDER LOCK FOR MATCHED DESIGN ${matchedOutput.label}:`,
   `Render THIS EXACT illusion apparatus shown in Blueprint ${matchedOutput.label} for the same ${visualAnchor}.`,
+  `Blueprint ${matchedOutput.label} is the controlling design source for Concept ${matchedOutput.label}.`,
+  'The concept render must be a photorealistic stage rendition of the exact same apparatus shown in its paired blueprint.',
+  'Do not redesign the roofline, base, wheels, platform, doors, panels, proportions, decoration, trim, support structure, access panel placement, visible hardware, or caster/wheel arrangement.',
   'Maintain identical silhouette from the blueprint drawing.',
   'Maintain the same staging footprint and floor relationship from the blueprint drawing.',
   'Maintain the same mechanism placement and visible apparatus logic from the blueprint drawing.',
@@ -232,16 +257,18 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Materials: ${plan.recommended_construction.materials.join(', ')}`,
     `Hardware: ${plan.recommended_construction.hardware.join(', ')}`,
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
+    DIMENSIONED_BLUEPRINT_REQUIREMENTS,
+    DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
     'Seed continuity requirement: the technical drawing must look engineered from the selected source concept, preserving its primary props, dominant geometry, silhouette, performer-to-prop relationship, stage layout, material language, and mood. The broad illusion category is less important than the seed image identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
-    'Pairing requirement: This blueprint must be visually matchable to the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, and visible construction cues consistent.',
+    'Pairing requirement: This blueprint must be the controlling design source for the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, measured proportions, hardware, access panels, roofline/top line, platform geometry, and visible construction cues consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
     'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
-    `Create one technical drawing style image suitable for illusion build planning. Do not create multiple alternate concepts inside the same image; only show Matched Design ${matchedOutput.label}.`,
+    `Create one dimensioned technical drawing style image suitable for illusion build planning. Do not create multiple alternate concepts inside the same image; only show Matched Design ${matchedOutput.label}. The image must include visible dimension callouts and measurement lines.`,
   ].join('\n');
 }
 
@@ -270,6 +297,7 @@ export function buildIllusionConceptImagePrompt({
     `Audience effect: ${plan.audience_effect}`,
     `Build concept: ${plan.build_concept}`,
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
+    DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
     `Materials direction: ${plan.recommended_construction.materials.join(', ')}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     `Venue / scale: ${venueScale}`,
@@ -279,7 +307,7 @@ export function buildIllusionConceptImagePrompt({
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),
     APPARATUS_VALIDATION_REQUIREMENTS,
-    `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
+    `Concept continuity requirement: Produce exactly one realistic staged rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}. The concept render must be a photorealistic stage rendition of the exact same apparatus shown in Blueprint ${matchedOutput.label}. Do not redesign the roofline, base, wheels, platform, doors, panels, proportions, decoration, or support structure. This concept image must match Blueprint ${matchedOutput.label} in silhouette, base shape, major panels, footprint, visible structure, finish direction, practical construction cues, audience orientation, proportions, materials, mechanism placement, and theatrical context.`,
     'Pairing requirement: Do not invent a new prop. Do not change the illusion category. Do not replace the blueprint with an unrelated cabinet, platform, trunk, table, scenic unit, food item, consumer product, animal, landscape, or stock-photo object. Do not reinterpret or redesign the apparatus.',
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     HARD_ANTI_DRIFT_EXCLUSIONS,

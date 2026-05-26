@@ -1577,8 +1577,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
                       ['operations', 'Safety & Ops'],
-                      ['blueprints', 'Blueprint Drawings'],
-                      ['visuals', 'Visual Concepts'],
+                      ['blueprints', 'Dimensioned Blueprint Drawings'],
+                      ['visuals', 'Matched Concept Renders'],
                     ].map(([key, label]) => (
                       <button
                         key={key}
@@ -1798,8 +1798,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
                 <div id="ib-blueprints">
                   <CollapsibleCard
-                    title="Blueprint Drawings"
-                    subtitle="Technical concept drawings for build planning"
+                    title="Dimensioned Blueprint Drawings"
+                    subtitle="Dimensioned technical concept drawings for build planning"
                     isOpen={openSections.blueprints}
                     onToggle={() => toggleSection('blueprints')}
                     actions={
@@ -1813,8 +1813,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     <div className="space-y-5">
                       <SectionIntro
                         icon={<BlueprintIcon className="h-4 w-4" />}
-                        title="Technical Drawing Set"
-                        subtitle="Blueprint-style concept drawings to help visualize structure, layout, and mechanism direction."
+                        title="Dimensioned Technical Drawing Set"
+                        subtitle="Blueprint-style concept drawings with approximate measurement callouts for structure, layout, and mechanism direction."
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
@@ -1860,13 +1860,13 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                     <div>
                                       <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
                                       <div className="mt-1 text-xs text-slate-400">
-                                        Matched technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
+                                        Dimensioned technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
                                       </div>
                                     </div>
                                   </div>
 
                                   <div className="mt-3 flex items-center justify-between gap-3">
-                                    <span className="text-[11px] text-slate-500">Technical blueprint drawing</span>
+                                    <span className="text-[11px] text-slate-500">Dimensioned technical blueprint drawing</span>
                                     <div className="flex items-center gap-2">
                                       <button
                                         type="button"
@@ -1902,8 +1902,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
 
                 <div id="ib-visuals">
                   <CollapsibleCard
-                    title="Visual Concepts"
-                    subtitle="Builder-oriented image directions to choose from"
+                    title="Matched Concept Renders"
+                    subtitle="Photorealistic renders locked to each paired blueprint"
                     isOpen={openSections.visuals}
                     onToggle={() => toggleSection('visuals')}
                     actions={
@@ -1917,16 +1917,16 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     <div className="space-y-5">
                       <SectionIntro
                         icon={<ImageIcon className="h-4 w-4" />}
-                        title="Concept Gallery"
-                        subtitle="Compare the two matched concept images, each paired to its blueprint drawing."
+                        title="Matched Render Gallery"
+                        subtitle="Compare the two matched concept renders, each locked to its paired dimensioned blueprint drawing."
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Visual continuity:</span> both concepts are prompted as matched renditions of <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same A/B design directions as the two blueprint drawings.
+                          <span className="font-semibold">Pair lock:</span> each concept render is prompted as a photorealistic rendition of its paired dimensioned blueprint for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same A/B design directions as the two blueprint drawings.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (
-                      <ImageGenerationCard label="Generating visual concepts" />
+                      <ImageGenerationCard label="Generating matched concept renders" />
                     ) : imageOptions.length ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
@@ -1981,7 +1981,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                 </div>
 
                                 <div className="mt-3 flex items-center justify-between gap-3">
-                                  <span className="text-[11px] text-slate-500">Builder concept image</span>
+                                  <span className="text-[11px] text-slate-500">Matched concept render</span>
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
@@ -2021,7 +2021,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
-                        The builder plan completed, but concept images were not returned on this attempt.
+                        The builder plan completed, but matched concept renders were not returned on this attempt.
                       </div>
                     )}
                     </div>
