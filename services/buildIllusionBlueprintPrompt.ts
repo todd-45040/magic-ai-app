@@ -98,7 +98,7 @@ export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[
     label: 'B',
     directive: 'MATCHED DESIGN B: slightly more theatrical version that preserves the same seed silhouette, prop relationships, footprint, and mechanism direction while adding polished theatre finish, stronger scenic framing, and practical transport/support details.',
     operationalState: 'production-reveal',
-    stateDescription: 'PRODUCTION / REVEAL STATE: the apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only if the requested effect calls for it. Do not also show the empty-display proof in the same image.',
+    stateDescription: 'PRODUCTION / REVEAL STATE: the same single apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only inside, on, emerging from, or directly interacting with the existing apparatus if the requested effect calls for it. Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate prop, or separate reveal container. Do not also show the empty-display proof in the same image.',
   },
 ];
 
@@ -587,6 +587,13 @@ const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
 - Do not generate surreal abstract art, dreamlike AI-art compositions, magical energy beams, floating geometry, or non-physical fantasy scenes.
 - If the request could be interpreted as one of these excluded subjects, ignore that interpretation and render the practical theatrical illusion apparatus instead.`;
 
+const SINGLE_APPARATUS_CONTINUITY_LOCK = `Single-apparatus continuity lock:
+- The matched blueprint/render pair must depict exactly one primary illusion apparatus unless the user's original request explicitly asks for multiple apparatus units.
+- Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate reveal container, separate scenic crate, spare pedestal, unrelated side prop, or second version of the apparatus.
+- Any reveal must occur inside, on top of, emerging from, or directly interacting with the same primary apparatus shown in the paired blueprint.
+- Concept B may show a later production/reveal state, but the reveal must not be represented by adding another trunk, cabinet, box, house, platform, or replacement apparatus.
+- Assistants, performers, curtains, ropes, lighting, practical fog, and stage dressing are allowed only when they do not read as a second illusion apparatus.`;
+
 const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 - Keep the concept grounded in real-world physics and stagecraft.
 - Use practical theatrical construction, conventional materials, believable load paths, and safe human-scale operation.
@@ -608,6 +615,8 @@ ${OPERATIONAL_STATE_INTELLIGENCE}
 ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
+
+${SINGLE_APPARATUS_CONTINUITY_LOCK}
 
 ${GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS}
 
@@ -785,6 +794,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
+    SINGLE_APPARATUS_CONTINUITY_LOCK,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
@@ -831,6 +841,7 @@ export function buildIllusionConceptImagePrompt({
     PHYSICS_AND_BUILDABILITY_GUIDANCE,
     '',
     HARD_ANTI_DRIFT_EXCLUSIONS,
+    SINGLE_APPARATUS_CONTINUITY_LOCK,
     '',
     sanitizedStructureAnchors,
     '',
@@ -838,13 +849,16 @@ export function buildIllusionConceptImagePrompt({
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
+    SINGLE_APPARATUS_CONTINUITY_LOCK,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
     'Forbidden in the render: printed paper, blueprint sheets, white document panels, measurement labels, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, diagram overlays, and technical-document artifacts.',
+    'Single-apparatus render rule: no secondary trunk, sub-trunk, duplicate cabinet, extra production box, separate reveal container, alternate apparatus, or additional prop unit may be added unless the user explicitly requested multiple apparatus units.',
     'Render-state requirement: show exactly the assigned operational state for this matched concept. Preserve the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
     'Anti-state-blending rule: do not show the apparatus both empty and producing at once; do not show before/after split screens; do not combine closed-ready, display-empty, reveal, and reset into a single photorealistic render.',
+    'Concept B reveal containment: if this is production/reveal, the produced object or assistant must appear inside, on, emerging from, or directly interacting with the same apparatus, never from a second apparatus or added container.',
     'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must remain plausible and match the exterior proportions without adding fantasy space, impossible voids, labels, or exposed secret workings.',
     'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',

@@ -508,8 +508,36 @@ const buildStrictMatchedOutputRetryPrompt = (
   'Show practical stage indicators such as performance floor, curtains, audience orientation, stage lighting, wings, platform, assistant/performer position, or theatre/parlor context where appropriate.',
   'Do not render food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, hamburgers, sandwiches, consumer products, landscapes, unrelated stock photography, or random objects.',
   'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
+  'Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate reveal container, separate scenic crate, spare pedestal, unrelated side prop, or second version of the apparatus unless the user explicitly requested multiple apparatus units.',
   kind === 'concept' ? 'Concept render repair: do NOT show blueprint pages, white document fragments, text blocks, measurement labels, arrows, cutaway diagrams, instruction sheets, split-screen plan artifacts, or technical drawing overlays. Render only the clean photorealistic staged apparatus.' : '',
 ].filter(Boolean).join('\n');
+
+const logBlueprintContinuityDebug = ({
+  kind,
+  label,
+  phase,
+  prompt,
+  qaReason,
+  passes,
+}: {
+  kind: 'blueprint' | 'concept';
+  label: string;
+  phase: 'primary-prompt' | 'recovery-prompt' | 'qa-result' | 'qa-rejected' | 'qa-unavailable';
+  prompt?: string;
+  qaReason?: string;
+  passes?: boolean;
+}) => {
+  // Temporary continuity diagnostics for Blueprint/Concept Pair A/B verification.
+  // Remove after paired-output QA is stable in production.
+  console.info('[IllusionBlueprint][Blueprint Render Continuity Enforcement]', {
+    pair: label,
+    kind,
+    phase,
+    passes,
+    qaReason,
+    prompt,
+  });
+};
 
 const generateValidatedMatchedImage = async ({
   basePrompt,
@@ -526,14 +554,13 @@ const generateValidatedMatchedImage = async ({
   user: User;
   recoveryPrompt?: string;
 }): Promise<string | null> => {
-  // Production workflow rule:
-  // Generate the paired image once and keep the gallery populated whenever the
-  // image endpoint returns usable data. Earlier versions used strict QA retries;
-  // that could consume several image calls per pair, trigger rate limits, and
-  // replace good generated assets with "rejected by validation" placeholders.
+  // Continuity enforcement rule:
+  // Generate once, validate once, and reject invalid QA results instead of
+  // allowing mismatched artifacts into the paired blueprint/render galleries.
   let generatedImage: string | null = null;
 
   try {
+    logBlueprintContinuityDebug({ kind, label, phase: 'primary-prompt', prompt: basePrompt });
     const [image] = await generateImages(basePrompt, '16:9', 1, user, 'image_generation');
     generatedImage = image || null;
   } catch (primaryErr) {
@@ -541,6 +568,7 @@ const generateValidatedMatchedImage = async ({
     // prompt is rejected by the provider. Blueprints intentionally do not loop.
     if (kind === 'concept' && recoveryPrompt) {
       try {
+        logBlueprintContinuityDebug({ kind, label, phase: 'recovery-prompt', prompt: recoveryPrompt });
         const [image] = await generateImages(recoveryPrompt, '16:9', 1, user, 'image_generation');
         generatedImage = image || null;
       } catch {
@@ -556,16 +584,29 @@ const generateValidatedMatchedImage = async ({
   try {
     const validation = await validateIllusionBlueprintGeneratedImage(generatedImage, kind, visualAnchor, label, user);
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
+    const shouldReject = !validation.passes || validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts;
 
-    // Only suppress images that the QA model says are clearly unrelated stock or
-    // concept renders that accidentally look like blueprint/document sheets.
-    // Do not suppress simply because a secondary validation model missed one of
-    // the staging cues; the generated A/B set is more useful than empty cards.
-    if (validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts) {
-      return generatedImage;
+    logBlueprintContinuityDebug({
+      kind,
+      label,
+      phase: shouldReject ? 'qa-rejected' : 'qa-result',
+      prompt: basePrompt,
+      qaReason: validation.reason,
+      passes: validation.passes,
+    });
+
+    if (shouldReject) {
+      return null;
     }
-  } catch {
-    // Validation is a support check, not a hard dependency for gallery output.
+  } catch (validationErr: any) {
+    logBlueprintContinuityDebug({
+      kind,
+      label,
+      phase: 'qa-unavailable',
+      prompt: basePrompt,
+      qaReason: validationErr?.message || 'Validation unavailable; accepting guarded generated image.',
+      passes: true,
+    });
     return generatedImage;
   }
 
