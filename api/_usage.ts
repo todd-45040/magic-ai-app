@@ -68,6 +68,31 @@ function isAdminUsageBypass(profile: any): boolean {
   return Boolean(profile?.is_admin) || String(profile?.membership || '').trim().toLowerCase() === 'admin';
 }
 
+function normalizeAdminEmail(email?: string | null): string {
+  return String(email || '').trim().toLowerCase();
+}
+
+function configuredAdminEmails(): Set<string> {
+  const defaults = ['admin@magicaiwizard.com', 'todssmartphone@gmail.com'];
+  const raw = [process.env.ADMIN_EMAIL, process.env.ADMIN_EMAILS, process.env.MAW_ADMIN_EMAILS, process.env.VITE_ADMIN_EMAILS]
+    .filter(Boolean)
+    .join(',');
+  const values = raw.split(/[\s,;]+/).map(normalizeAdminEmail).filter(Boolean);
+  return new Set([...defaults.map(normalizeAdminEmail), ...values]);
+}
+
+function isConfiguredAdminEmail(email?: string | null): boolean {
+  const normalized = normalizeAdminEmail(email);
+  return Boolean(normalized) && configuredAdminEmails().has(normalized);
+}
+
+function withConfiguredAdminBypass(profile: any, userId?: string | null, email?: string | null): any {
+  const profileEmail = profile?.email ?? null;
+  const trustedEmail = isConfiguredAdminEmail(profileEmail) ? profileEmail : isConfiguredAdminEmail(email) ? email : null;
+  if (!trustedEmail) return profile;
+  return { ...(profile || {}), id: profile?.id ?? userId ?? null, email: normalizeAdminEmail(trustedEmail), membership: 'admin', is_admin: true };
+}
+
 function logAdminBypass(input: { route?: string | null; userId?: string | null; membership?: any; isAdmin?: any }) {
   try {
     console.log('[ADMIN_BYPASS]', {
@@ -156,10 +181,11 @@ export async function getAiUsageStatus(req: any): Promise<{
   }
 
   const userId = (auth as any).userId as string;
+  const authEmail = (auth as any).email as string | undefined;
   const admin = (auth as any).admin as any;
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -170,12 +196,13 @@ export async function getAiUsageStatus(req: any): Promise<{
   let lastResetDateISO = new Date().toISOString();
 
   if (profile) {
-    if (isAdminUsageBypass(profile)) {
-      logAdminBypass({ route: req?.url ?? 'legacy:getAiUsageStatus', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+    const effectiveProfile = withConfiguredAdminBypass(profile, userId, authEmail);
+    if (isAdminUsageBypass(effectiveProfile)) {
+      logAdminBypass({ route: req?.url ?? 'legacy:getAiUsageStatus', userId, membership: effectiveProfile?.membership, isAdmin: effectiveProfile?.is_admin });
       const unlimited = Number.MAX_SAFE_INTEGER;
       return { ok: true, membership: 'admin', used: 0, limit: unlimited, remaining: unlimited, burstLimit: unlimited, burstRemaining: unlimited };
     }
-    membership = effectiveMembership(profile);
+    membership = effectiveMembership(effectiveProfile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {
@@ -254,6 +281,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   const userId = (auth as any).userId as string;
+  const authEmail = (auth as any).email as string | undefined;
   const admin = (auth as any).admin as any;
   const today = getTodayKeyUTC();
 
@@ -261,7 +289,7 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   // Authed user: enforce against public.users table
   const { data: profile, error: profileErr } = await admin
     .from('users')
-    .select('id, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
+    .select('id, email, membership, is_admin, generation_count, last_reset_date, trial_end_date, stripe_status, stripe_customer_id, stripe_subscription_id, stripe_price_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -275,12 +303,13 @@ export async function enforceAiUsage(req: any, costUnits: number): Promise<{
   }
 
   if (profile) {
-    if (isAdminUsageBypass(profile)) {
-      logAdminBypass({ route: req?.url ?? 'legacy:enforceAiUsage', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+    const effectiveProfile = withConfiguredAdminBypass(profile, userId, authEmail);
+    if (isAdminUsageBypass(effectiveProfile)) {
+      logAdminBypass({ route: req?.url ?? 'legacy:enforceAiUsage', userId, membership: effectiveProfile?.membership, isAdmin: effectiveProfile?.is_admin });
       const unlimited = Number.MAX_SAFE_INTEGER;
       return { ok: true, membership: 'admin', remaining: unlimited, limit: unlimited, burstRemaining: unlimited, burstLimit: unlimited };
     }
-    membership = effectiveMembership(profile);
+    membership = effectiveMembership(effectiveProfile);
     generationCount = profile.generation_count ?? 0;
     lastResetDateISO = profile.last_reset_date ? new Date(profile.last_reset_date).toISOString() : lastResetDateISO;
   } else {

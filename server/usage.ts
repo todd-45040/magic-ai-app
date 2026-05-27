@@ -258,6 +258,25 @@ function buildAdminProfileFallback(userId?: string | null, email?: string | null
   };
 }
 
+function withConfiguredAdminBypass(profile: any, userId?: string | null, email?: string | null): any {
+  const profileEmail = profile?.email ?? null;
+  const trustedEmail = isConfiguredAdminEmail(profileEmail)
+    ? profileEmail
+    : isConfiguredAdminEmail(email)
+      ? email
+      : null;
+
+  if (!trustedEmail) return profile;
+
+  return {
+    ...(profile || {}),
+    id: profile?.id ?? userId ?? null,
+    email: normalizeEmailForAdminCheck(trustedEmail),
+    membership: 'admin',
+    is_admin: true,
+  };
+}
+
 async function selfHealAdminProfile(admin: any, userId?: string | null, email?: string | null): Promise<void> {
   try {
     if (!admin || !userId || !isConfiguredAdminEmail(email)) return;
@@ -988,7 +1007,7 @@ export async function getAiUsageStatus(req: any): Promise<{
     .eq('id', userId)
     .maybeSingle();
 
-  let profile = profileData || buildAdminProfileFallback(userId, userEmail);
+  let profile = withConfiguredAdminBypass(profileData, userId, userEmail) || buildAdminProfileFallback(userId, userEmail);
 
   if (!profileData && profile?.is_admin) {
     void selfHealAdminProfile(admin, userId, userEmail);
@@ -1401,7 +1420,7 @@ export async function enforceAiUsage(
     .eq('id', userId)
     .maybeSingle();
 
-  let profile = profileData || buildAdminProfileFallback(userId, userEmail);
+  let profile = withConfiguredAdminBypass(profileData, userId, userEmail) || buildAdminProfileFallback(userId, userEmail);
   if (!profileData && profile?.is_admin) {
     void selfHealAdminProfile(admin, userId, userEmail);
   }
