@@ -9,7 +9,7 @@ import {
   getUserProfile,
   reconcileFoundingLead,
 } from './services/usersService';
-import { APP_VERSION, isAdminEmail } from './constants';
+import { APP_VERSION_LABEL, isAdminEmail } from './constants';
 import { useAppDispatch, refreshAllData } from './store';
 import ModeSelector from './components/ModeSelector';
 import Auth from './components/Auth';
@@ -817,7 +817,7 @@ function App() {
           </button>
         </div>
 
-        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC — {APP_VERSION}</p>
+        <p>Copyright 2026 Magicians&apos; AI Wizard, LLC — {APP_VERSION_LABEL}</p>
       </footer>
     </div>
   );
