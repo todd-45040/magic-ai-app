@@ -31,8 +31,12 @@ import {
 export const ADMIN_EMAILS = ['admin@magicaiwizard.com', 'todssmartphone@gmail.com'];
 export const ADMIN_EMAIL = ADMIN_EMAILS[0];
 export const isAdminEmail = (email?: string | null) => ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+// Single source of truth for the visible application version.
+// Update APP_VERSION_NUMBER only; APP_VERSION and APP_VERSION_LABEL are derived from it.
 // Keep this in sync with your current git benchmark/tag so the UI + SW cache are coherent.
-export const APP_VERSION = 'v1.1.8';
+export const APP_VERSION_NUMBER = '1.1.8';
+export const APP_VERSION = `v${APP_VERSION_NUMBER}`;
+export const APP_VERSION_LABEL = `Version: ${APP_VERSION}`;
 
 // Add GUEST_USER for Audience Mode services
 export const GUEST_USER: User = {
