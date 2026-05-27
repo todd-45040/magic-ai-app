@@ -9,7 +9,7 @@ import { markLegacyRoute } from './_lib/legacyRoute.js';
 //   1) Caption the input image with Gemini (vision)
 //   2) Generate a new image with Imagen using (caption + user instructions)
 
-import { enforceAiUsage } from '../server/usage.js';
+import { enforceAiUsage, refundAiUsage } from '../server/usage.js';
 import { resolveProvider } from '../lib/server/providers/index.js';
 import { getGoogleAiApiKey } from '../server/gemini.js';
 import { applyImagePromptPolicy } from './_lib/imagePromptPolicy';
@@ -30,6 +30,7 @@ function extractGeminiText(result: any): string {
 
 export default async function handler(request: any, response: any) {
   markLegacyRoute(response, '/api/ai/image-edit');
+  let usageReserved = false;
   try {
     if (request.method !== 'POST') {
       return response.status(405).json({ error: 'Method not allowed' });
@@ -40,7 +41,16 @@ export default async function handler(request: any, response: any) {
       return response.status(401).json({ error: 'Unauthorized.' });
     }
 
-    // AI cost protection (daily caps + per-minute burst limits)
+    const provider = await resolveProvider(request);
+    const { imageBase64, mimeType, prompt, aspectRatio = '1:1' } = request.body || {};
+    const safeEditPrompt = applyImagePromptPolicy(prompt, 'edit');
+
+    if (!imageBase64 || !mimeType || !prompt) {
+      return response.status(400).json({ error: 'Missing required fields: imageBase64, mimeType, prompt.' });
+    }
+
+    // AI cost protection (daily caps + per-minute burst limits). Run after
+    // input validation so bad requests are not charged.
     const usage = await enforceAiUsage(request, 2, { tool: 'image_generation' });
     if (!usage.ok) {
       const rawCode = String(usage.error_code || '').toUpperCase();
@@ -67,14 +77,7 @@ export default async function handler(request: any, response: any) {
           burstLimit: usage.burstLimit,
         });
     }
-
-    const provider = await resolveProvider(request);
-    const { imageBase64, mimeType, prompt, aspectRatio = '1:1' } = request.body || {};
-    const safeEditPrompt = applyImagePromptPolicy(prompt, 'edit');
-
-    if (!imageBase64 || !mimeType || !prompt) {
-      return response.status(400).json({ error: 'Missing required fields: imageBase64, mimeType, prompt.' });
-    }
+    usageReserved = String(usage?.membership || '').toLowerCase() !== 'admin';
 
     let result: any;
 
@@ -182,6 +185,9 @@ export default async function handler(request: any, response: any) {
 
     return response.status(200).json(result);
   } catch (error: any) {
+    if (usageReserved) {
+      await refundAiUsage(request, 2, { tool: 'image_generation', reason: 'PROVIDER_ERROR' });
+    }
     console.error('Image Edit Provider Error:', error);
     return response.status(500).json({
       error: error?.message || 'Failed to edit image. Please try again.',

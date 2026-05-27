@@ -85,11 +85,27 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
     rawCode.includes('SERVICE_UNAVAILABLE') ? 'SERVICE_UNAVAILABLE' :
     'UNKNOWN';
 
-  // Heuristic fallback if no code:
+  // Heuristic fallback if no code. Provider quota/rate language is not the
+  // same thing as a Magic AI Wizard account quota. Only explicit app/account
+  // quota phrases should trigger the upgrade/allowance UX.
+  const heurIsProviderCapacity =
+    msg.includes('resource_exhausted') ||
+    msg.includes('provider quota') ||
+    msg.includes('provider is rate limiting') ||
+    msg.includes('temporarily unavailable from the provider') ||
+    msg.includes('ai image generation is temporarily unavailable') ||
+    msg.includes('overloaded');
   const heurIsRate =
     msg.includes('rate limit') || msg.includes('too many requests') || msg.includes('resource_exhausted');
   const heurIsQuota =
-    msg.includes('quota') || msg.includes('usage limit') || msg.includes('limit reached') || msg.includes('exceeded');
+    !heurIsProviderCapacity &&
+    (msg.includes('daily ai limit') ||
+      msg.includes('monthly quota exceeded') ||
+      msg.includes('daily quota exceeded') ||
+      msg.includes('usage limit reached') ||
+      msg.includes('current allowance') ||
+      msg.includes('quota exceeded for your plan') ||
+      msg.includes('limit reached for your plan'));
   const heurIsAuth =
     msg.includes('unauthorized') || msg.includes('not authorized') || msg.includes('login');
   const heurIsTimeout =
@@ -99,6 +115,7 @@ export function normalizeBlockedUx(err: unknown, opts?: { toolName?: string; pla
     code !== 'UNKNOWN' ? code :
     heurIsAuth ? 'UNAUTHORIZED' :
     heurIsTimeout ? 'TIMEOUT' :
+    heurIsProviderCapacity ? 'SERVICE_UNAVAILABLE' :
     heurIsRate ? 'RATE_LIMITED' :
     heurIsQuota ? 'USAGE_LIMIT_REACHED' :
     'UNKNOWN';
