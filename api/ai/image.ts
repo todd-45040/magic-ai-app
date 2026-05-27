@@ -10,7 +10,6 @@
 // - Accept OpenAI-style `messages` as canonical input
 // - Derive `prompt` from messages when prompt is not provided
 
-import { resolveProvider } from '../../lib/server/providers/index.js';
 import { rateLimit } from './_lib/rateLimit.js';
 import {
   getApproxBodySizeBytes,
@@ -21,7 +20,8 @@ import {
   withTimeout,
 } from './_lib/hardening.js';
 import { applyUsageHeaders } from './_lib/usageGuard.js';
-import { enforceAiUsage, getAiUsageStatus, refundAiUsage } from '../../server/usage.js';
+import { resolveImageProvider } from './_lib/imageProvider.js';
+import { enforceAiUsage } from '../../server/usage.js';
 import { getGoogleAiApiKey } from '../../server/gemini.js';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024; // prompts should be tiny; this is a safety cap
@@ -66,9 +66,6 @@ function promptFromMessages(messages: any[]): string {
 }
 
 export default async function handler(req: any, res: any) {
-  let usageReserved = false;
-  let reservedCount = 0;
-  let reservedTool: 'image_generation' | 'visual_brainstorm' = 'image_generation';
   try {
     if (req.method !== 'POST') {
       return jsonError(res, 405, {
@@ -90,13 +87,68 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const provider = await resolveProvider(req);
     const body = req.body || {};
     const { aspectRatio = '1:1' } = body;
     const requestedCount = Math.max(1, Math.min(4, Math.floor(Number(body.count) || 1)));
     const requestedTool = String(body.tool || '').trim() === 'visual_brainstorm'
       ? 'visual_brainstorm'
       : 'image_generation';
+
+    // Tool-aware Supabase quota enforcement. This path intentionally uses the
+    // canonical server quota function instead of the generic guard so admin
+    // users are bypassed before image quotas are checked and so successful
+    // admin requests are not charged against daily/monthly image counters.
+    const usage = await enforceAiUsage(req, requestedCount, { tool: requestedTool });
+    if (!usage.ok) {
+      const rawCode = String(usage.error_code || '').toUpperCase();
+      const status = Number(usage.status || 429);
+      const error_code = rawCode === 'USAGE_LIMIT_REACHED' || rawCode === 'QUOTA_EXCEEDED'
+        ? 'QUOTA_EXCEEDED'
+        : rawCode === 'RATE_LIMITED' || status === 429
+          ? 'RATE_LIMITED'
+          : status === 401
+            ? 'UNAUTHORIZED'
+            : 'SERVICE_UNAVAILABLE';
+      return jsonError(res, status, {
+        ok: false,
+        error_code,
+        message: usage.error || (error_code === 'QUOTA_EXCEEDED' ? 'AI usage limit reached.' : 'AI temporarily unavailable. Please try again shortly.'),
+        retryable: usage.retryable ?? (status >= 500 || status === 429),
+        ...(isPreviewEnv() ? { details: { membership: usage.membership, remaining: usage.remaining, limit: usage.limit, tool: requestedTool } } : {}),
+      });
+    }
+
+    // Admins must bypass *all* local route throttles. Previous builds bypassed
+    // quota but still hit this route-level limiter before/around image calls,
+    // which made admin testing look like provider or quota failures.
+    const isAdminBypass = String((usage as any)?.membership || '').toLowerCase() === 'admin' || Boolean((usage as any)?.bypass || (usage as any)?.unlimited);
+    if (!isAdminBypass) {
+      let rlKey = await getRateLimitKey(req);
+      // Guests may not have auth context; fall back to IP-based rate limit key.
+      if (!rlKey) {
+        const ip = getClientIp(req) || 'unknown';
+        rlKey = { key: 'ai:image:guest:' + ip, kind: 'guest', ip } as any;
+      }
+
+      const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 10 });
+      if (!rl.ok) {
+        try {
+          res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+        } catch {
+          // ignore
+        }
+        return jsonError(res, 429, {
+          ok: false,
+          error_code: 'RATE_LIMITED',
+          message: 'Too many image requests. Please wait and try again.',
+          retryable: true,
+          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt, membership: usage.membership, tool: requestedTool } } : {}),
+        });
+      }
+    }
+
+    const imageProvider = await resolveImageProvider(req);
+    const provider = imageProvider.provider;
 
     // Canonical input: messages[]; derive prompt if prompt is missing.
     const prompt =
@@ -117,70 +169,6 @@ export default async function handler(req: any, res: any) {
           : {}),
       });
     }
-
-    // This endpoint has a lightweight per-minute route limiter in addition to
-    // the canonical account usage limiter. It must not become another admin
-    // quota door, so we read usage status first and skip this route limiter for
-    // admin/unlimited accounts. Non-admin users still pass through the route
-    // limiter before any account usage is reserved.
-    const usageStatus = await getAiUsageStatus(req).catch(() => null as any);
-    const isAdminUnlimited = usageStatus?.ok && String(usageStatus?.membership || '').toLowerCase() === 'admin';
-
-    if (!isAdminUnlimited) {
-      let rlKey = await getRateLimitKey(req);
-      // Guests may not have auth context; fall back to IP-based rate limit key.
-      if (!rlKey) {
-        const ip = getClientIp(req) || 'unknown';
-        rlKey = { key: 'ai:image:guest:' + ip, kind: 'guest', ip } as any;
-      }
-
-      const rl = rateLimit(rlKey.key, { windowMs: 60_000, max: 10 });
-      if (!rl.ok) {
-        // IMPORTANT: set Retry-After directly (Vercel can drop headers passed via helper)
-        try {
-          res.setHeader('Retry-After', String(rl.retryAfterSeconds));
-        } catch {
-          // ignore
-        }
-        return jsonError(res, 429, {
-          ok: false,
-          error_code: 'RATE_LIMITED',
-          message: 'Too many image requests. Please wait and try again.',
-          retryable: true,
-          ...(isPreviewEnv() ? { details: { key: rlKey.key, resetAt: rl.resetAt } } : {}),
-        });
-      }
-    }
-
-    let usage: any = null;
-    reservedCount = requestedCount;
-    reservedTool = requestedTool;
-
-    // Tool-aware Supabase quota enforcement. This path intentionally uses the
-    // canonical server quota function instead of the generic guard so admin
-    // users are bypassed before image quotas are checked and so successful
-    // admin requests are not charged against daily/monthly image counters.
-    usage = await enforceAiUsage(req, requestedCount, { tool: requestedTool });
-    if (!usage.ok) {
-      const rawCode = String(usage.error_code || '').toUpperCase();
-      const status = Number(usage.status || 429);
-      const error_code = rawCode === 'USAGE_LIMIT_REACHED' || rawCode === 'QUOTA_EXCEEDED'
-        ? 'QUOTA_EXCEEDED'
-        : rawCode === 'RATE_LIMITED' || status === 429
-          ? 'RATE_LIMITED'
-          : status === 401
-            ? 'UNAUTHORIZED'
-            : 'SERVICE_UNAVAILABLE';
-      return jsonError(res, status, {
-        ok: false,
-        error_code,
-        message: usage.error || (error_code === 'QUOTA_EXCEEDED' ? 'AI usage limit reached.' : 'AI temporarily unavailable. Please try again shortly.'),
-        retryable: usage.retryable ?? (status >= 500 || status === 429),
-        ...(isPreviewEnv() ? { details: { membership: usage.membership, remaining: usage.remaining, limit: usage.limit, tool: requestedTool } } : {}),
-      });
-    }
-
-    usageReserved = !usage?.bypass && String(usage?.membership || '').toLowerCase() !== 'admin';
 
     const run = async () => {
       if (provider === 'openai') {
@@ -242,12 +230,11 @@ export default async function handler(req: any, res: any) {
 
     applyUsageHeaders(res, usage);
     res.setHeader('X-AI-Provider-Used', provider);
+    res.setHeader('X-AI-Provider-Requested', imageProvider.requestedProvider);
+    if (imageProvider.warnings.length) res.setHeader('X-AI-Provider-Warning', imageProvider.warnings.join(' | '));
 
-    return res.status(200).json({ ok: true, data: result });
+    return res.status(200).json({ ok: true, data: result, provider, requestedProvider: imageProvider.requestedProvider, warnings: imageProvider.warnings });
   } catch (err: any) {
-    if (usageReserved) {
-      await refundAiUsage(req, reservedCount, { tool: reservedTool, reason: 'PROVIDER_ERROR' });
-    }
     console.error('AI Image Error:', err);
 
     const mapped = mapProviderError(err);

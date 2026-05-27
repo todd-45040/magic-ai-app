@@ -900,9 +900,7 @@ export const generateImage = async (
     result = await postJson<any>(
       '/api/generate-images',
       { prompt, aspectRatio },
-      currentUser,
-      undefined,
-      { retries: 0 }
+      currentUser
     );
   } catch (error: any) {
     const normalized: any = new Error(normalizeAiUserFacingError(error));
@@ -939,9 +937,7 @@ export const generateImages = async (
     result = await postJson<any>(
       '/api/generate-images',
       { prompt, aspectRatio, count: safeCount, tool },
-      currentUser,
-      undefined,
-      { retries: 0 }
+      currentUser
     );
   } catch (error: any) {
     const normalized: any = new Error(normalizeAiUserFacingError(error));
@@ -1123,9 +1119,7 @@ export const editImageWithPrompt = async (
     result = await postJson<any>(
       '/api/edit-images',
       { imageBase64: base64ImageData, mimeType, prompt },
-      currentUser,
-      undefined,
-      { retries: 0 }
+      currentUser
     );
   } catch (error) {
     throw new Error(normalizeAiUserFacingError(error));
