@@ -131,15 +131,19 @@ export function mapProviderError(err: any): {
     return { status: 504, error_code: 'TIMEOUT', message: 'The request timed out. Please try again.', retryable: true };
   }
 
-  // Quota / rate / overload signals
+  // Provider quota / rate / overload signals.
+  // IMPORTANT: do not return QUOTA_EXCEEDED here. QUOTA_EXCEEDED is reserved
+  // for Magic AI Wizard application-level user quota enforcement only. Provider
+  // quota/rate failures must surface as temporary availability problems so the
+  // UI does not incorrectly tell admin users to upgrade or wait for account
+  // usage reset.
   if (/quota|resource[_\s-]?exhausted|rate limit|too many requests/i.test(msg)) {
-    // If it *looks* like provider quota, call it QUOTA_EXCEEDED
-    const isQuota = /quota|resource[_\s-]?exhausted/i.test(msg);
+    const isProviderQuota = /quota|resource[_\s-]?exhausted/i.test(msg);
     return {
-      status: 429,
-      error_code: isQuota ? 'QUOTA_EXCEEDED' : 'PROVIDER_RATE_LIMIT',
-      message: isQuota
-        ? 'AI quota has been temporarily exceeded. Please try again later.'
+      status: isProviderQuota ? 503 : 429,
+      error_code: isProviderQuota ? 'SERVICE_UNAVAILABLE' : 'PROVIDER_RATE_LIMIT',
+      message: isProviderQuota
+        ? 'AI image generation is temporarily unavailable from the provider. Please try again shortly.'
         : 'AI provider is rate limiting requests. Please try again shortly.',
       retryable: true,
     };
