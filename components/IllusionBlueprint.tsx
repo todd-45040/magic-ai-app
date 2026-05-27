@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Type } from '@google/genai';
 
-import { generateImages, generateStructuredResponse, validateIllusionBlueprintGeneratedImage } from '../services/geminiService';
+import { generateImages, generateStructuredResponse } from '../services/geminiService';
 import {
   ILLUSION_BLUEPRINT_MATCHED_OUTPUTS,
   ILLUSION_BLUEPRINT_REALISM_SYSTEM_INSTRUCTION,
@@ -566,22 +566,12 @@ const generateValidatedMatchedImage = async ({
 
   if (!generatedImage) return null;
 
-  try {
-    const validation = await validateIllusionBlueprintGeneratedImage(generatedImage, kind, visualAnchor, label, user);
-    const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
-
-    // Only suppress images that the QA model says are clearly unrelated stock or
-    // concept renders that accidentally look like blueprint/document sheets.
-    // Do not suppress simply because a secondary validation model missed one of
-    // the staging cues; the generated A/B set is more useful than empty cards.
-    if (validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts) {
-      return generatedImage;
-    }
-  } catch {
-    // Validation is a support check, not a hard dependency for gallery output.
-    return generatedImage;
-  }
-
+  // Final polish performance rule:
+  // The continuity prompts now carry the main artifact/identity protections, so
+  // normal generation should not run an additional vision-QA request for every
+  // blueprint/render. That validation pass made the page feel much slower and
+  // could replace useful generated work with rejected placeholders. Return the
+  // generated asset immediately; use Regenerate Pair A/B for manual correction.
   return generatedImage;
 };
 
@@ -1230,55 +1220,15 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
       const visualContinuityBrief = buildVisualContinuityBrief(plan, effectInput, seedIdentityBrief);
       const visualAnchor = illusionIdentity.illusionType;
 
-      setLoadingStage('Generating matched blueprint drawings…');
-      setIsGeneratingBlueprints(true);
-      let matchedBlueprints: MatchedImageSlots = [];
+      setOpenSections({
+        plan: true,
+        construction: false,
+        operations: false,
+        blueprints: false,
+        visuals: true,
+      });
 
-      try {
-        const drawingResults = await Promise.allSettled(
-          ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
-            const designSpec = buildIllusionDesignSpec({
-              plan,
-              matchedOutput,
-              seedIdentity,
-              venueScale,
-              performerStyle,
-            });
-            const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
-              plan,
-              visualContinuityBrief,
-              visualAnchor,
-              illusionIdentity,
-              venueScale,
-              performerStyle,
-              matchedOutput,
-              seedIdentity,
-              designSpec,
-            });
-            return generateValidatedMatchedImage({
-              basePrompt: blueprintPrompt,
-              kind: 'blueprint',
-              visualAnchor,
-              label: matchedOutput.label,
-              user,
-            });
-          })
-        );
-        matchedBlueprints = drawingResults
-          .map((result) => result.status === 'fulfilled' ? result.value : null)
-          .slice(0, 2);
-        setBlueprintDrawings(matchedBlueprints);
-        if (matchedBlueprints.filter(Boolean).length < 2) {
-          setWarning('One or more blueprint drawings could not be generated. Regenerate Pair A/B if you need a complete matched set.');
-        }
-      } catch {
-        matchedBlueprints = [];
-        setBlueprintDrawings([]);
-      } finally {
-        setIsGeneratingBlueprints(false);
-      }
-
-      setLoadingStage('Generating matched concept images…');
+      setLoadingStage('Generating matched concept renders…');
       setIsGeneratingVisuals(true);
 
       try {
@@ -1331,9 +1281,57 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           setWarning('One or more concept renders could not be generated. Regenerate Pair A/B if you need a complete matched set.');
         }
       } catch (imageErr: any) {
-        setWarning(imageErr?.message || 'Builder plan generated, but matched concept images could not be created this time.');
+        setWarning(imageErr?.message || 'Builder plan generated, but matched concept renders could not be created this time.');
       } finally {
         setIsGeneratingVisuals(false);
+      }
+
+      setLoadingStage('Generating matched blueprint drawings…');
+      setIsGeneratingBlueprints(true);
+      let matchedBlueprints: MatchedImageSlots = [];
+
+      try {
+        const drawingResults = await Promise.allSettled(
+          ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map(async (matchedOutput) => {
+            const designSpec = buildIllusionDesignSpec({
+              plan,
+              matchedOutput,
+              seedIdentity,
+              venueScale,
+              performerStyle,
+            });
+            const blueprintPrompt = buildIllusionBlueprintDrawingPrompt({
+              plan,
+              visualContinuityBrief,
+              visualAnchor,
+              illusionIdentity,
+              venueScale,
+              performerStyle,
+              matchedOutput,
+              seedIdentity,
+              designSpec,
+            });
+            return generateValidatedMatchedImage({
+              basePrompt: blueprintPrompt,
+              kind: 'blueprint',
+              visualAnchor,
+              label: matchedOutput.label,
+              user,
+            });
+          })
+        );
+        matchedBlueprints = drawingResults
+          .map((result) => result.status === 'fulfilled' ? result.value : null)
+          .slice(0, 2);
+        setBlueprintDrawings(matchedBlueprints);
+        if (matchedBlueprints.filter(Boolean).length < 2) {
+          setWarning('One or more blueprint drawings could not be generated. Regenerate Pair A/B if you need a complete matched set.');
+        }
+      } catch {
+        matchedBlueprints = [];
+        setBlueprintDrawings([]);
+      } finally {
+        setIsGeneratingBlueprints(false);
       }
     } catch (err: any) {
       void trackClientEvent({ tool: 'illusion_blueprint', action: 'illusion_blueprint_error', outcome: 'ERROR_UPSTREAM', metadata: { venueScale, performerStyle, message: err?.message || 'unknown' } });
