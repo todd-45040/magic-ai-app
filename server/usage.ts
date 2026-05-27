@@ -220,6 +220,55 @@ function isTrialActive(trialEnd: any, nowMs = Date.now()): boolean {
   return nowMs < t;
 }
 
+function normalizeEmailForAdminCheck(email?: string | null): string {
+  return String(email || '').trim().toLowerCase();
+}
+
+function configuredAdminEmails(): Set<string> {
+  const defaults = ['admin@magicaiwizard.com', 'todssmartphone@gmail.com'];
+  const raw = [
+    process.env.ADMIN_EMAIL,
+    process.env.ADMIN_EMAILS,
+    process.env.MAW_ADMIN_EMAILS,
+    process.env.VITE_ADMIN_EMAILS,
+  ]
+    .filter(Boolean)
+    .join(',');
+
+  const values = raw
+    .split(/[\s,;]+/)
+    .map(normalizeEmailForAdminCheck)
+    .filter(Boolean);
+
+  return new Set([...defaults.map(normalizeEmailForAdminCheck), ...values]);
+}
+
+function isConfiguredAdminEmail(email?: string | null): boolean {
+  const normalized = normalizeEmailForAdminCheck(email);
+  return Boolean(normalized) && configuredAdminEmails().has(normalized);
+}
+
+function buildAdminProfileFallback(userId?: string | null, email?: string | null): any | null {
+  if (!isConfiguredAdminEmail(email)) return null;
+  return {
+    id: userId ?? null,
+    email: normalizeEmailForAdminCheck(email),
+    membership: 'admin',
+    is_admin: true,
+  };
+}
+
+async function selfHealAdminProfile(admin: any, userId?: string | null, email?: string | null): Promise<void> {
+  try {
+    if (!admin || !userId || !isConfiguredAdminEmail(email)) return;
+    await admin
+      .from('users')
+      .upsert({ id: userId, email: normalizeEmailForAdminCheck(email), membership: 'admin', is_admin: true }, { onConflict: 'id' });
+  } catch (err) {
+    console.error('Admin profile self-heal non-blocking error:', err);
+  }
+}
+
 export function isAdminUsageBypass(profile: any): boolean {
   if (!profile) return false;
   const membership = String(profile?.membership || '').trim().toLowerCase();
@@ -889,9 +938,13 @@ export async function getAiUsageStatus(req: any): Promise<{
   const auth = admin.auth as unknown as GoTrueClient;
 
   let userId: string | null = null;
+  let userEmail: string | null = null;
   if (token && token !== 'guest') {
     const { data, error } = await auth.getUser(token);
-    if (!error && data?.user?.id) userId = data.user.id;
+    if (!error && data?.user?.id) {
+      userId = data.user.id;
+      userEmail = data.user.email ?? null;
+    }
   }
 
   const identity = userId || ipKey(req);
@@ -935,9 +988,11 @@ export async function getAiUsageStatus(req: any): Promise<{
     .eq('id', userId)
     .maybeSingle();
 
-  let profile = profileData;
+  let profile = profileData || buildAdminProfileFallback(userId, userEmail);
 
-
+  if (!profileData && profile?.is_admin) {
+    void selfHealAdminProfile(admin, userId, userEmail);
+  }
 
   if (profileErr) console.error('Usage lookup error:', profileErr);
 
@@ -1346,8 +1401,11 @@ export async function enforceAiUsage(
     .eq('id', userId)
     .maybeSingle();
 
-  let profile = profileData;
-  const profileEmail = String(profileData?.email || userEmail || '').trim() || null;
+  let profile = profileData || buildAdminProfileFallback(userId, userEmail);
+  if (!profileData && profile?.is_admin) {
+    void selfHealAdminProfile(admin, userId, userEmail);
+  }
+  const profileEmail = String(profile?.email || userEmail || '').trim() || null;
 
   // If no profile exists yet, create one (trial by default)
   let membership: Membership = 'trial';
