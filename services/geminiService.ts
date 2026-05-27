@@ -850,6 +850,42 @@ export function encode(bytes: Uint8Array): string {
 
 // --- Image + News helpers (serverless) ---
 
+
+const extractGeneratedImageItems = (result: any): any[] => {
+  const candidates = [
+    result?.generatedImages,
+    result?.images,
+    result?.data?.generatedImages,
+    result?.data?.images,
+    result?.data?.data,
+    result?.data,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) return candidate;
+  }
+
+  return [];
+};
+
+const extractGeneratedImageDataUrl = (img: any): string | null => {
+  if (typeof img === 'string' && img.startsWith('data:image/')) return img;
+
+  const base64 =
+    img?.image?.imageBytes ||
+    img?.imageBytes ||
+    img?.b64_json ||
+    img?.base64 ||
+    img?.image?.base64;
+  const mime = img?.image?.mimeType || img?.mimeType || img?.mime || 'image/jpeg';
+
+  if (typeof base64 === 'string' && base64.length > 0) {
+    return base64.startsWith('data:image/') ? base64 : `data:${mime};base64,${base64}`;
+  }
+
+  return null;
+};
+
 /**
  * Generate an image using the serverless Imagen endpoint.
  * Returns a data URL you can drop directly into an <img src="..." />.
@@ -870,23 +906,9 @@ export const generateImage = async (
     throw new Error(normalizeAiUserFacingError(error));
   }
 
-  // Try common response shapes
-  const img =
-    result?.generatedImages?.[0] ||
-    result?.images?.[0] ||
-    result?.data?.generatedImages?.[0] ||
-    result?.data?.images?.[0] ||
-    result?.data?.[0];
-  const base64 =
-    img?.image?.imageBytes ||
-    img?.imageBytes ||
-    img?.b64_json ||
-    img?.base64;
-  const mime = img?.mimeType || img?.mime || 'image/jpeg';
-
-  if (typeof base64 === 'string' && base64.length > 0) {
-    return `data:${mime};base64,${base64}`;
-  }
+  const img = extractGeneratedImageItems(result)[0];
+  const dataUrl = extractGeneratedImageDataUrl(img);
+  if (dataUrl) return dataUrl;
 
   throw new Error('No image data returned from /api/generate-images.');
 };
@@ -915,28 +937,15 @@ export const generateImages = async (
     throw new Error(normalizeAiUserFacingError(error));
   }
 
-  const imgs =
-    result?.generatedImages ||
-    result?.images ||
-    result?.data?.generatedImages ||
-    result?.data?.images ||
-    result?.data;
-  if (!Array.isArray(imgs) || imgs.length === 0) {
+  const imgs = extractGeneratedImageItems(result);
+  if (imgs.length === 0) {
     throw new Error('No image data returned from /api/generate-images.');
   }
 
-  const out: string[] = [];
-  for (const img of imgs.slice(0, safeCount)) {
-    const base64 =
-      img?.image?.imageBytes ||
-      img?.imageBytes ||
-      img?.b64_json ||
-      img?.base64;
-    const mime = img?.mimeType || img?.mime || 'image/jpeg';
-    if (typeof base64 === 'string' && base64.length > 0) {
-      out.push(`data:${mime};base64,${base64}`);
-    }
-  }
+  const out = imgs
+    .slice(0, safeCount)
+    .map((img) => extractGeneratedImageDataUrl(img))
+    .filter((src): src is string => Boolean(src));
 
   if (out.length === 0) {
     throw new Error('No image data returned from /api/generate-images.');
