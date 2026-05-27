@@ -594,6 +594,16 @@ const SINGLE_APPARATUS_CONTINUITY_LOCK = `Single-apparatus continuity lock:
 - Concept B may show a later production/reveal state, but the reveal must not be represented by adding another trunk, cabinet, box, house, platform, or replacement apparatus.
 - Assistants, performers, curtains, ropes, lighting, practical fog, and stage dressing are allowed only when they do not read as a second illusion apparatus.`;
 
+
+const BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS = `Blueprint geometry lock requirements:
+- Treat the paired blueprint geometry as canonical truth for the matching render. The render is not a new concept-art interpretation.
+- Render MUST preserve the exact visible silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, and apparatus count from the paired blueprint/design spec.
+- Photorealistic concept renders must be blueprint-derived fabrication renderings directly derived from the supplied blueprint geometry, not cinematic redesigns, alternate scenic versions, or upgraded theatrical variants.
+- Do NOT embellish, redesign, reinterpret, upscale, theatricalize, beautify, simplify, replace, or add scenic architectural complexity beyond the supplied blueprint and matched design spec.
+- Do NOT add ornamental features, extra trim density, extra windows, extra doors, new gears, new roof features, extra support frames, alternate undercarriage, changed caster locations, larger scenic shells, or decorative complexity not present in the blueprint/design spec.
+- Preserve only realistic material texture, stage lighting, floor shadows, practical performer stance, and safe stage context; all aesthetic treatment must remain subordinate to the blueprint geometry.
+- Render may contain ONLY the single apparatus shown in the paired blueprint unless the user explicitly requested multiple apparatus units.`;
+
 const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 - Keep the concept grounded in real-world physics and stagecraft.
 - Use practical theatrical construction, conventional materials, believable load paths, and safe human-scale operation.
@@ -663,6 +673,8 @@ ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 ${APPARATUS_VALIDATION_REQUIREMENTS}
 
+${BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS}
+
 Visual requirements:
 - Show the prop or illusion unit clearly in a real stage, parlor, theatre, ballroom, or event environment.
 - Prioritize believable materials, clean stage presentation, builder-oriented visibility, fabrication realism, and touring-feasible scale.
@@ -678,8 +690,9 @@ Visual requirements:
 
 const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<IllusionBlueprintImagePromptParams, 'matchedOutput' | 'visualAnchor'>): string => [
   `SANITIZED BLUEPRINT-TO-RENDER LOCK FOR MATCHED DESIGN ${matchedOutput.label}:`,
-  `Render a clean photorealistic stage version of the same visible apparatus form intended by Blueprint ${matchedOutput.label} for the same ${visualAnchor}.`,
-  `Blueprint ${matchedOutput.label} controls Concept ${matchedOutput.label} ONLY at the level of visible geometry, silhouette, proportions, roofline/topline, major doors/panels, base/platform, supports, casters, visible hardware, trim, and audience-facing orientation.`,
+  `Render a clean photorealistic fabrication rendering directly derived from Blueprint ${matchedOutput.label} geometry for the same ${visualAnchor}.`,
+  `Blueprint ${matchedOutput.label} is the canonical truth for Concept ${matchedOutput.label}: preserve exact visible geometry, silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, apparatus count, proportions, visible hardware, trim, and audience-facing orientation.`,
+  BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
   'Do not redesign the apparatus, but also do not render the blueprint sheet itself.',
   'Do not render measurement labels, text notes, dimension arrows, cutaway diagrams, exploded-view panels, annotation blocks, or white technical-document fragments.',
   'Translate the blueprint design into a realistic staged apparatus: theatrical lighting, practical fog, performer stance, curtains or performance floor, believable shadows, and real material textures are allowed.',
@@ -722,6 +735,8 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     'The image must look like commercial illusion catalog photography or a staged promotional render.',
     'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
+    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
+    'Recovery geometry instruction: generate a blueprint-derived fabrication render only; do not improve, theatricalize, upscale, or add scenic architectural complexity beyond the matched blueprint/design spec.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
@@ -791,6 +806,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
     DIMENSIONED_BLUEPRINT_REQUIREMENTS,
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
+    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
@@ -845,12 +861,13 @@ export function buildIllusionConceptImagePrompt({
     '',
     sanitizedStructureAnchors,
     '',
-    'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
+    'RENDER ROLE: Create ONLY a photorealistic fabrication rendering directly derived from the paired blueprint geometry. Do not create a new visual concept, cinematic redesign, theatrical upgrade, document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
+    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     SINGLE_APPARATUS_CONTINUITY_LOCK,
-    'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
+    'BLUEPRINT-DERIVED VISUAL ROLE: Preserve the exact visible apparatus form from the paired blueprint/design spec: silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, apparatus count, support structure, visible hardware, trim, material finish, performer blocking, stage orientation, and proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
@@ -867,7 +884,7 @@ export function buildIllusionConceptImagePrompt({
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
     'Language requirement: Prefer no visible text in concept renders. If unavoidable signage appears, it must be simple English only. Never render technical-note text, measurement text, or blueprint labels in the concept render.',
-    `Produce one polished realistic concept image that matches the visible apparatus form for Matched Design ${matchedOutput.label}. The image must contain the illusion apparatus as the central subject in a stage environment and must not look like a document or diagram.`,
+    `Produce one blueprint-derived photorealistic fabrication render for Matched Design ${matchedOutput.label}. The image must contain only the single illusion apparatus as the central subject in a stage environment and must not look like a document, diagram, redesigned concept, or theatrical reinterpretation.`,
   ].join('\n');
 
 }

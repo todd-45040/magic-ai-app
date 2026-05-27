@@ -2097,7 +2097,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Pair lock:</span> each concept render is prompted as a photorealistic rendition of its paired dimensioned blueprint for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, using the same A/B design directions as the two blueprint drawings.
+                          <span className="font-semibold">Geometry lock:</span> each concept render is prompted as a blueprint-derived photorealistic fabrication render of the single apparatus in its paired dimensioned blueprint for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, preserving silhouette, footprint, roofline, door placement, platform geometry, wall proportions, caster structure, openings, and apparatus count.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (
