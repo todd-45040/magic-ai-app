@@ -304,6 +304,21 @@ function logAdminBypass(input: { route?: string | null; userId?: string | null; 
   }
 }
 
+function buildAdminUsageResponse() {
+  const unlimited = Number.MAX_SAFE_INTEGER;
+  return {
+    ok: true,
+    membership: 'admin' as const,
+    remaining: unlimited,
+    limit: unlimited,
+    burstRemaining: unlimited,
+    burstLimit: unlimited,
+    resetAt: nextResetAtISO(),
+    resetTz: RESET_TZ,
+    resetHourLocal: RESET_HOUR_LOCAL,
+  };
+}
+
 function hasActivePaidStripe(profile: any): boolean {
   const status = String(profile?.stripe_status || '').trim().toLowerCase();
   const hasStripeIdentity = Boolean(profile?.stripe_subscription_id || profile?.stripe_customer_id);
@@ -942,6 +957,37 @@ export async function getAiUsageStatus(req: any): Promise<{
     generationCount = 0;
     lastResetDateISO = new Date().toISOString();
   }
+
+  if (isUnlimitedAdmin(profile)) {
+    logAdminBypass({ route: req?.url ?? 'getAiUsageStatus', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+    const unlimited = Number.MAX_SAFE_INTEGER;
+    return {
+      ok: true,
+      membership: 'admin',
+      used: 0,
+      limit: unlimited,
+      remaining: unlimited,
+      resetAt: nextResetAtISO(),
+      resetTz: RESET_TZ,
+      resetHourLocal: RESET_HOUR_LOCAL,
+      sessionsToday: 0,
+      toolsUsedToday: [],
+      distinctToolsToday: 0,
+      liveUsed: 0,
+      liveLimit: unlimited,
+      liveRemaining: unlimited,
+      quota: {
+        live_audio_minutes: { remaining: unlimited, limit: unlimited, daily: { used: 0, limit: unlimited, remaining: unlimited } },
+        image_gen: { remaining: unlimited, limit: unlimited },
+        identify: { remaining: unlimited, limit: unlimited },
+        video_uploads: { remaining: unlimited, limit: unlimited, daily: { used: 0, limit: unlimited, remaining: unlimited } },
+        resetAt: null,
+        nextResetAt: null,
+      },
+      burstLimit: unlimited,
+      burstRemaining: unlimited,
+    };
+  }
 // Phase 2C-B: ensure monthly tool quotas are initialized/reset (best-effort)
 if (profile) {
   const refreshed = await ensureMonthlyQuotas(admin, userId, membership, profile);
@@ -1325,6 +1371,29 @@ export async function enforceAiUsage(
       last_reset_date: new Date().toISOString(),
     });
     if (upsertErr) console.error('Usage profile upsert error:', upsertErr);
+  }
+
+  if (isUnlimitedAdmin(profile)) {
+    logAdminBypass({ route: req?.url ?? 'enforceAiUsage', userId, membership: profile?.membership, isAdmin: profile?.is_admin });
+    await safeLogUsageEvent({
+      request_id: requestId,
+      actor_type: 'user',
+      user_id: userId,
+      identity_key: identity,
+      ip_hash,
+      tool: opts?.tool ?? null,
+      endpoint: req?.url ?? null,
+      outcome: 'SUCCESS_NOT_CHARGED',
+      http_status: 200,
+      error_code: null,
+      retryable: false,
+      units: costUnits,
+      charged_units: 0,
+      membership: 'admin',
+      user_agent: req?.headers?.['user-agent'] || req?.headers?.['User-Agent'] || null,
+      estimated_cost_usd: estimateUsageEventCost(opts?.tool ?? null, costUnits),
+    });
+    return buildAdminUsageResponse();
   }
 
   // Daily reset (UTC midnight by default; configurable)
