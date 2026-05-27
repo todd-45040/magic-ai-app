@@ -125,12 +125,21 @@ export default async function handler(req: any, res: any) {
     // admin requests are not charged against daily/monthly image counters.
     const usage = await enforceAiUsage(req, requestedCount, { tool: requestedTool });
     if (!usage.ok) {
-      return jsonError(res, usage.status || 429, {
+      const rawCode = String(usage.error_code || '').toUpperCase();
+      const status = Number(usage.status || 429);
+      const error_code = rawCode === 'USAGE_LIMIT_REACHED' || rawCode === 'QUOTA_EXCEEDED'
+        ? 'QUOTA_EXCEEDED'
+        : rawCode === 'RATE_LIMITED' || status === 429
+          ? 'RATE_LIMITED'
+          : status === 401
+            ? 'UNAUTHORIZED'
+            : 'SERVICE_UNAVAILABLE';
+      return jsonError(res, status, {
         ok: false,
-        error_code: usage.error_code === 'RATE_LIMITED' ? 'RATE_LIMITED' : 'QUOTA_EXCEEDED',
-        message: usage.error || 'AI usage limit reached.',
-        retryable: usage.retryable ?? true,
-        ...(isPreviewEnv() ? { details: { membership: usage.membership, remaining: usage.remaining, limit: usage.limit } } : {}),
+        error_code,
+        message: usage.error || (error_code === 'QUOTA_EXCEEDED' ? 'AI usage limit reached.' : 'AI temporarily unavailable. Please try again shortly.'),
+        retryable: usage.retryable ?? (status >= 500 || status === 429),
+        ...(isPreviewEnv() ? { details: { membership: usage.membership, remaining: usage.remaining, limit: usage.limit, tool: requestedTool } } : {}),
       });
     }
 

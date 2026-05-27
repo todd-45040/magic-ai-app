@@ -902,8 +902,14 @@ export const generateImage = async (
       { prompt, aspectRatio },
       currentUser
     );
-  } catch (error) {
-    throw new Error(normalizeAiUserFacingError(error));
+  } catch (error: any) {
+    const normalized: any = new Error(normalizeAiUserFacingError(error));
+    normalized.status = error?.status;
+    normalized.error_code = error?.error_code || error?.code;
+    normalized.code = error?.code || error?.error_code;
+    normalized.retryable = error?.retryable;
+    normalized.details = error?.details;
+    throw normalized;
   }
 
   const img = extractGeneratedImageItems(result)[0];
@@ -933,8 +939,14 @@ export const generateImages = async (
       { prompt, aspectRatio, count: safeCount, tool },
       currentUser
     );
-  } catch (error) {
-    throw new Error(normalizeAiUserFacingError(error));
+  } catch (error: any) {
+    const normalized: any = new Error(normalizeAiUserFacingError(error));
+    normalized.status = error?.status;
+    normalized.error_code = error?.error_code || error?.code;
+    normalized.code = error?.code || error?.error_code;
+    normalized.retryable = error?.retryable;
+    normalized.details = error?.details;
+    throw normalized;
   }
 
   const imgs = extractGeneratedImageItems(result);

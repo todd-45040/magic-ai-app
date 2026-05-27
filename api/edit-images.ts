@@ -43,12 +43,26 @@ export default async function handler(request: any, response: any) {
     // AI cost protection (daily caps + per-minute burst limits)
     const usage = await enforceAiUsage(request, 2, { tool: 'image_generation' });
     if (!usage.ok) {
+      const rawCode = String(usage.error_code || '').toUpperCase();
+      const status = Number(usage.status || 429);
+      const error_code = rawCode === 'USAGE_LIMIT_REACHED' || rawCode === 'QUOTA_EXCEEDED'
+        ? 'QUOTA_EXCEEDED'
+        : rawCode === 'RATE_LIMITED' || status === 429
+          ? 'RATE_LIMITED'
+          : status === 401
+            ? 'UNAUTHORIZED'
+            : 'SERVICE_UNAVAILABLE';
       return response
-        .status(usage.status || 429)
+        .status(status)
         .json({
-          error: usage.error || 'AI usage limit reached.',
+          ok: false,
+          error_code,
+          message: usage.error || (error_code === 'QUOTA_EXCEEDED' ? 'AI usage limit reached.' : 'AI temporarily unavailable. Please try again shortly.'),
+          error: usage.error || (error_code === 'QUOTA_EXCEEDED' ? 'AI usage limit reached.' : 'AI temporarily unavailable. Please try again shortly.'),
+          retryable: usage.retryable ?? (status >= 500 || status === 429),
           remaining: usage.remaining,
           limit: usage.limit,
+          membership: usage.membership,
           burstRemaining: usage.burstRemaining,
           burstLimit: usage.burstLimit,
         });

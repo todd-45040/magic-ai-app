@@ -6,7 +6,7 @@
 // - Increment usage AFTER successful upstream response (best-effort; never fail the request)
 // - Return the standard hardened error contract
 
-import { getAiUsageStatus, incrementAiUsage } from "../../../server/usage.js";
+import { enforceAiUsage } from "../../../server/usage.js";
 import { isPreviewEnv, mapProviderError, withTimeout } from './hardening.js';
 
 export type UsageStatus = {
@@ -42,25 +42,41 @@ export type UsageGuardFail = {
   };
 };
 
-function asNumber(v: any): number | undefined {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-// Reads the same Supabase-backed source used by api/ai/usage.ts and enforces limits.
-export async function guardAiUsage(req: any, units = 1): Promise<UsageGuardOk | UsageGuardFail> {
+// Single-source usage guard.
+//
+// IMPORTANT: this function intentionally calls the canonical server enforcement
+// helper once. Older builds did a read-only status check here and then called
+// incrementAiUsage after the upstream AI call. That created a second quota door:
+// different routes could pass the status check but then fail or charge from a
+// different enforcement path. The canonical helper now owns:
+// - admin bypass
+// - daily/monthly quota checks
+// - burst checks
+// - usage charging
+// - denied-request logging
+export async function guardAiUsage(
+  req: any,
+  units = 1,
+  opts?: { tool?: string }
+): Promise<UsageGuardOk | UsageGuardFail> {
   try {
-    // Keep this snappy so we don't add noticeable latency.
-    const status: any = await withTimeout(getAiUsageStatus(req), 8_000, 'TIMEOUT');
+    const status: any = await withTimeout(enforceAiUsage(req, units, opts), 8_000, 'TIMEOUT');
 
     if (!status?.ok) {
       const httpStatus = Number(status?.status) || 503;
+      const rawCode = String(status?.error_code || '').toUpperCase();
       const error_code =
-        httpStatus === 401
-          ? 'UNAUTHORIZED'
-          : httpStatus === 503
-            ? 'SERVICE_UNAVAILABLE'
-            : 'USAGE_UNAVAILABLE';
+        rawCode === 'RATE_LIMITED'
+          ? 'RATE_LIMITED'
+          : rawCode === 'USAGE_LIMIT_REACHED' || rawCode === 'QUOTA_EXCEEDED'
+            ? 'QUOTA_EXCEEDED'
+            : httpStatus === 401
+              ? 'UNAUTHORIZED'
+              : httpStatus === 429
+                ? 'RATE_LIMITED'
+                : httpStatus >= 500
+                  ? 'SERVICE_UNAVAILABLE'
+                  : 'USAGE_UNAVAILABLE';
 
       return {
         ok: false,
@@ -69,53 +85,23 @@ export async function guardAiUsage(req: any, units = 1): Promise<UsageGuardOk | 
           ok: false,
           error_code,
           message: String(status?.error || 'Usage status unavailable.'),
-          retryable: httpStatus >= 500 || httpStatus === 429,
-          details: isPreviewEnv() ? { status: status?.status, error: status?.error } : undefined,
-        },
-      };
-    }
-
-    const usage: UsageStatus = status as UsageStatus;
-    const remaining = asNumber((usage as any).remaining);
-    const limit = asNumber((usage as any).limit);
-    const burstRemaining = asNumber((usage as any).burstRemaining);
-    const burstLimit = asNumber((usage as any).burstLimit);
-
-    // Burst limiter (short-window). Treat this as RATE_LIMITED.
-    if (typeof burstRemaining === 'number' && burstRemaining < units) {
-      return {
-        ok: false,
-        status: 429,
-        error: {
-          ok: false,
-          error_code: 'RATE_LIMITED',
-          message: 'Too many requests. Please wait a moment and try again.',
-          retryable: true,
+          retryable: Boolean(status?.retryable ?? (httpStatus >= 500 || httpStatus === 429)),
           details: isPreviewEnv()
-            ? { burstRemaining, burstLimit, units, membership: (usage as any).membership }
+            ? {
+                status: status?.status,
+                error: status?.error,
+                error_code: status?.error_code,
+                membership: status?.membership,
+                remaining: status?.remaining,
+                limit: status?.limit,
+                tool: opts?.tool ?? null,
+              }
             : undefined,
         },
       };
     }
 
-    // Daily quota.
-    if (typeof remaining === 'number' && remaining < units) {
-      return {
-        ok: false,
-        status: 429,
-        error: {
-          ok: false,
-          error_code: 'QUOTA_EXCEEDED',
-          message: 'Daily AI usage limit reached. Upgrade or wait for your quota to reset.',
-          retryable: true,
-          details: isPreviewEnv()
-            ? { remaining, limit, units, membership: (usage as any).membership }
-            : undefined,
-        },
-      };
-    }
-
-    return { ok: true, usage };
+    return { ok: true, usage: status as UsageStatus };
   } catch (err: any) {
     const mapped = mapProviderError(err);
     const error_code = mapped.error_code === 'TIMEOUT' ? 'TIMEOUT' : 'USAGE_UNAVAILABLE';
@@ -148,28 +134,12 @@ export function applyUsageHeaders(res: any, usage: any) {
   }
 }
 
-// Best-effort increment after success. Never throws.
-export async function bestEffortIncrementAiUsage(req: any, units = 1) {
-  try {
-    // Prefer explicit increment function (does not re-check quota).
-    if (typeof incrementAiUsage === 'function') {
-      await withTimeout(Promise.resolve(incrementAiUsage(req, units)), 2_000, 'TIMEOUT');
-      return;
-    }
-
-    // Fallback: attempt dynamic import for older builds.
-    const mod: any = await import('../../../server/usage');
-    const inc =
-      mod?.incrementAiUsage ||
-      mod?.recordAiUsage ||
-      mod?.consumeAiUsage ||
-      mod?.incrementUsage ||
-      null;
-
-    if (typeof inc === 'function') {
-      await withTimeout(Promise.resolve(inc(req, units)), 2_000, 'TIMEOUT');
-    }
-  } catch {
-    // ignore
-  }
+// Back-compat no-op.
+//
+// guardAiUsage now uses enforceAiUsage directly, so usage has already been
+// charged or admin-bypassed before the upstream AI call starts. Keeping this
+// function as a no-op prevents older callers from double-charging or reopening
+// a second quota path after success.
+export async function bestEffortIncrementAiUsage(_req: any, _units = 1) {
+  return;
 }

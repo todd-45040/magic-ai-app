@@ -311,6 +311,23 @@ function logAdminBypass(input: { route?: string | null; userId?: string | null; 
   }
 }
 
+function logDeniedAiUsage(input: { route?: string | null; tool?: string | null; userId?: string | null; membership?: any; status?: number | null; reason?: string | null; remaining?: number | null; limit?: number | null }) {
+  try {
+    console.warn('[AI_USAGE_DENIED]', {
+      route: input.route ?? null,
+      tool: input.tool ?? null,
+      userId: input.userId ?? null,
+      membership: input.membership == null ? null : String(input.membership),
+      status: input.status ?? null,
+      reason: input.reason ?? null,
+      remaining: input.remaining ?? null,
+      limit: input.limit ?? null,
+    });
+  } catch {
+    // logging must never affect quota enforcement
+  }
+}
+
 function hasActivePaidStripe(profile: any): boolean {
   const status = String(profile?.stripe_status || '').trim().toLowerCase();
   const hasStripeIdentity = Boolean(profile?.stripe_subscription_id || profile?.stripe_customer_id);
@@ -1515,6 +1532,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       estimated_cost_usd: 0,
     });
     await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'plan_restricted', membership: norm, remainingDaily: null, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 402 });
+    logDeniedAiUsage({ route: req?.url ?? null, tool: opts?.tool ?? null, userId, membership: norm, status: 402, reason: 'plan_restricted' });
     return {
       ok: false,
       status: 402,
@@ -1551,6 +1569,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
         estimated_cost_usd: 0,
       });
       await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'daily_limit', membership: norm, remainingDaily: Math.max(0, dailyToolLimit - dailyUsed), remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
+      logDeniedAiUsage({ route: req?.url ?? null, tool: opts?.tool ?? null, userId, membership: norm, status: 429, reason: 'daily_limit', remaining: Math.max(0, dailyToolLimit - dailyUsed), limit: dailyToolLimit });
       return {
         ok: false,
         status: 429,
@@ -1595,6 +1614,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       estimated_cost_usd: 0,
     });
     await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'monthly_limit', membership: norm, remainingDaily: null, remainingMonthly: currentRemaining, requestedUnits: costUnits, route: req?.url ?? null, status: 402 });
+    logDeniedAiUsage({ route: req?.url ?? null, tool: opts?.tool ?? null, userId, membership: norm, status: 402, reason: 'monthly_limit', remaining: currentRemaining, limit: null });
     return {
       ok: false,
       status: 402,
@@ -1647,6 +1667,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       estimated_cost_usd: 0,
     });
     await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'burst_limit', membership: tier, remainingDaily: null, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
+    logDeniedAiUsage({ route: req?.url ?? null, tool: opts?.tool ?? null, userId, membership: tier, status: 429, reason: 'burst_limit' });
     return {
       ok: false,
       status: 429,
@@ -1684,6 +1705,7 @@ if (toolKey && (TOOL_POLICIES as any)[toolKey]) {
       estimated_cost_usd: 0,
     });
     await safeLogQuotaHitActivity(admin, { user_id: userId, email: profileEmail, tool_name: opts?.tool ?? 'ai_request', reason: 'daily_limit', membership: tier, remainingDaily: remaining, remainingMonthly: null, requestedUnits: costUnits, route: req?.url ?? null, status: 429 });
+    logDeniedAiUsage({ route: req?.url ?? null, tool: opts?.tool ?? null, userId, membership: tier, status: 429, reason: 'daily_limit', remaining, limit });
     return {
       ok: false,
       status: 429,
