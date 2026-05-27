@@ -526,80 +526,50 @@ const generateValidatedMatchedImage = async ({
   user: User;
   recoveryPrompt?: string;
 }): Promise<string | null> => {
-  let prompt = basePrompt;
-  let lastReason = '';
-  let lastGeneratedImage: string | null = null;
-  let lastSafeImage: string | null = null;
-  let lastNonRejectedMatchedImage: string | null = null;
+  // Production workflow rule:
+  // Generate the paired image once and keep the gallery populated whenever the
+  // image endpoint returns usable data. Earlier versions used strict QA retries;
+  // that could consume several image calls per pair, trigger rate limits, and
+  // replace good generated assets with "rejected by validation" placeholders.
+  let generatedImage: string | null = null;
 
-  const maxAttempts = kind === 'concept' && recoveryPrompt ? 3 : 2;
+  try {
+    const [image] = await generateImages(basePrompt, '16:9', 1, user, 'image_generation');
+    generatedImage = image || null;
+  } catch (primaryErr) {
+    // Concept renders get one lighter recovery prompt if the primary concept
+    // prompt is rejected by the provider. Blueprints intentionally do not loop.
+    if (kind === 'concept' && recoveryPrompt) {
+      try {
+        const [image] = await generateImages(recoveryPrompt, '16:9', 1, user, 'image_generation');
+        generatedImage = image || null;
+      } catch {
+        generatedImage = null;
+      }
+    } else {
+      generatedImage = null;
+    }
+  }
 
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const [image] = await generateImages(prompt, '16:9', 1, user);
-    if (!image) return null;
-    lastGeneratedImage = image;
+  if (!generatedImage) return null;
 
-    const validation = await validateIllusionBlueprintGeneratedImage(image, kind, visualAnchor, label, user);
-    const hasRequiredApparatusCues = kind === 'blueprint'
-      ? validation.containsIllusionApparatus && validation.containsIllusionStructure
-      : validation.containsIllusionApparatus
-        && validation.containsStageEnvironment
-        && validation.containsIllusionStructure
-        && validation.containsTheatricalContext
-        && validation.containsMagicianStagingLanguage;
-
+  try {
+    const validation = await validateIllusionBlueprintGeneratedImage(generatedImage, kind, visualAnchor, label, user);
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
 
-    if (!validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
-      lastNonRejectedMatchedImage = image;
-      if (
-        validation.containsIllusionApparatus ||
-        validation.containsIllusionStructure ||
-        validation.containsStageEnvironment ||
-        (kind === 'blueprint' && (validation.passes || validation.matchesExpectedSubject))
-      ) {
-        lastSafeImage = image;
-      }
+    // Only suppress images that the QA model says are clearly unrelated stock or
+    // concept renders that accidentally look like blueprint/document sheets.
+    // Do not suppress simply because a secondary validation model missed one of
+    // the staging cues; the generated A/B set is more useful than empty cards.
+    if (validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts) {
+      return generatedImage;
     }
-
-    if (validation.passes && hasRequiredApparatusCues && validation.matchesExpectedSubject && !validation.isUnrelatedStockOrProductImage && !hasRenderDocumentArtifacts) {
-      return image;
-    }
-
-    const missingPhase4Requirements = [
-      !validation.containsIllusionApparatus ? 'apparatus' : '',
-      kind === 'concept' && !validation.containsStageEnvironment ? 'stage environment' : '',
-      !validation.containsIllusionStructure ? 'illusion structure' : '',
-      kind === 'concept' && !validation.containsTheatricalContext ? 'theatrical context' : '',
-      kind === 'concept' && !validation.containsMagicianStagingLanguage ? 'magician staging language' : '',
-    ].filter(Boolean).join(', ');
-
-    lastReason = validation.reason || (hasRenderDocumentArtifacts ? 'concept render contained blueprint/document artifacts' : (missingPhase4Requirements ? `missing Phase 4 apparatus cues: ${missingPhase4Requirements}` : 'image did not match the stage illusion subject'));
-    prompt = kind === 'concept' && recoveryPrompt && attempt === 1
-      ? recoveryPrompt
-      : buildStrictMatchedOutputRetryPrompt(basePrompt, kind, visualAnchor, label, lastReason);
+  } catch {
+    // Validation is a support check, not a hard dependency for gallery output.
+    return generatedImage;
   }
 
-  if (lastSafeImage) {
-    return lastSafeImage;
-  }
-
-  if (lastNonRejectedMatchedImage) {
-    // Do not blank the paired blueprint/concept galleries simply because the
-    // secondary QA model is stricter than the guarded generation prompt.
-    // The user can still regenerate a pair, but the workflow should return the
-    // two generated image sets whenever the image service produced usable data.
-    return lastNonRejectedMatchedImage;
-  }
-
-  if (lastGeneratedImage) {
-    // Last-resort continuity fallback: keep the A/B set populated instead of
-    // replacing a completed generation with empty cards. This protects the
-    // builder workflow from false-negative visual QA results.
-    return lastGeneratedImage;
-  }
-
-  return null;
+  return generatedImage;
 };
 
 const asString = (value: unknown, fallback = ''): string =>
