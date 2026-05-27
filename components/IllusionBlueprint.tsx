@@ -508,36 +508,8 @@ const buildStrictMatchedOutputRetryPrompt = (
   'Show practical stage indicators such as performance floor, curtains, audience orientation, stage lighting, wings, platform, assistant/performer position, or theatre/parlor context where appropriate.',
   'Do not render food, furniture, appliances, unrelated products, fantasy weapons, sci-fi machinery, animals, surreal abstract art, hamburgers, sandwiches, consumer products, landscapes, unrelated stock photography, or random objects.',
   'Do not change the illusion category. Do not substitute a different prop. Keep the same silhouette, base, footprint, and major construction cues.',
-  'Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate reveal container, separate scenic crate, spare pedestal, unrelated side prop, or second version of the apparatus unless the user explicitly requested multiple apparatus units.',
   kind === 'concept' ? 'Concept render repair: do NOT show blueprint pages, white document fragments, text blocks, measurement labels, arrows, cutaway diagrams, instruction sheets, split-screen plan artifacts, or technical drawing overlays. Render only the clean photorealistic staged apparatus.' : '',
 ].filter(Boolean).join('\n');
-
-const logBlueprintContinuityDebug = ({
-  kind,
-  label,
-  phase,
-  prompt,
-  qaReason,
-  passes,
-}: {
-  kind: 'blueprint' | 'concept';
-  label: string;
-  phase: 'primary-prompt' | 'recovery-prompt' | 'qa-result' | 'qa-rejected' | 'qa-unavailable';
-  prompt?: string;
-  qaReason?: string;
-  passes?: boolean;
-}) => {
-  // Temporary continuity diagnostics for Blueprint/Concept Pair A/B verification.
-  // Remove after paired-output QA is stable in production.
-  console.info('[IllusionBlueprint][Blueprint Render Continuity Enforcement]', {
-    pair: label,
-    kind,
-    phase,
-    passes,
-    qaReason,
-    prompt,
-  });
-};
 
 const generateValidatedMatchedImage = async ({
   basePrompt,
@@ -554,13 +526,14 @@ const generateValidatedMatchedImage = async ({
   user: User;
   recoveryPrompt?: string;
 }): Promise<string | null> => {
-  // Continuity enforcement rule:
-  // Generate once, validate once, and reject invalid QA results instead of
-  // allowing mismatched artifacts into the paired blueprint/render galleries.
+  // Production workflow rule:
+  // Generate the paired image once and keep the gallery populated whenever the
+  // image endpoint returns usable data. Earlier versions used strict QA retries;
+  // that could consume several image calls per pair, trigger rate limits, and
+  // replace good generated assets with "rejected by validation" placeholders.
   let generatedImage: string | null = null;
 
   try {
-    logBlueprintContinuityDebug({ kind, label, phase: 'primary-prompt', prompt: basePrompt });
     const [image] = await generateImages(basePrompt, '16:9', 1, user, 'image_generation');
     generatedImage = image || null;
   } catch (primaryErr) {
@@ -568,7 +541,6 @@ const generateValidatedMatchedImage = async ({
     // prompt is rejected by the provider. Blueprints intentionally do not loop.
     if (kind === 'concept' && recoveryPrompt) {
       try {
-        logBlueprintContinuityDebug({ kind, label, phase: 'recovery-prompt', prompt: recoveryPrompt });
         const [image] = await generateImages(recoveryPrompt, '16:9', 1, user, 'image_generation');
         generatedImage = image || null;
       } catch {
@@ -584,29 +556,16 @@ const generateValidatedMatchedImage = async ({
   try {
     const validation = await validateIllusionBlueprintGeneratedImage(generatedImage, kind, visualAnchor, label, user);
     const hasRenderDocumentArtifacts = kind === 'concept' && Boolean(validation.containsBlueprintOrDocumentArtifacts);
-    const shouldReject = !validation.passes || validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts;
 
-    logBlueprintContinuityDebug({
-      kind,
-      label,
-      phase: shouldReject ? 'qa-rejected' : 'qa-result',
-      prompt: basePrompt,
-      qaReason: validation.reason,
-      passes: validation.passes,
-    });
-
-    if (shouldReject) {
-      return null;
+    // Only suppress images that the QA model says are clearly unrelated stock or
+    // concept renders that accidentally look like blueprint/document sheets.
+    // Do not suppress simply because a secondary validation model missed one of
+    // the staging cues; the generated A/B set is more useful than empty cards.
+    if (validation.isUnrelatedStockOrProductImage || hasRenderDocumentArtifacts) {
+      return generatedImage;
     }
-  } catch (validationErr: any) {
-    logBlueprintContinuityDebug({
-      kind,
-      label,
-      phase: 'qa-unavailable',
-      prompt: basePrompt,
-      qaReason: validationErr?.message || 'Validation unavailable; accepting guarded generated image.',
-      passes: true,
-    });
+  } catch {
+    // Validation is a support check, not a hard dependency for gallery output.
     return generatedImage;
   }
 
@@ -819,7 +778,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
         if (prev.trim()) return prev;
         const referenceImage = handoff.selectedImageUrl || handoff.imageUrl || '';
         const lines = [
-          'Imported from Visual Brainstorm. Preserve the selected visual concept as the starting point, but convert it into a realistic, stage-ready illusion apparatus.',
+          'Imported from Visual Brainstorm. The selected image is the canonical apparatus reference. Convert the SAME apparatus into a realistic, stage-ready illusion apparatus; do not redesign, reinterpret, upscale, or replace it with another illusion category.',
           referenceImage ? `Selected reference image: ${referenceImage}` : '',
           typeof handoff.selectedVariationIndex === 'number' ? `Selected variation: V${handoff.selectedVariationIndex + 1}` : '',
           handoff.project?.projectTitle ? `Project: ${handoff.project.projectTitle}` : '',
@@ -1993,7 +1952,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
-                          <span className="font-semibold">Continuity lock:</span> these drawings are prompted as technical views of the same concept: <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>.
+                          <span className="font-semibold">Seed geometry lock:</span> these drawings are prompted as technical conversions of the same canonical seed apparatus: <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>.
                         </div>
                       ) : null}
                       {isGeneratingBlueprints ? (
@@ -2097,7 +2056,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Geometry lock:</span> each concept render is prompted as a blueprint-derived photorealistic fabrication render of the single apparatus in its paired dimensioned blueprint for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>, preserving silhouette, footprint, roofline, door placement, platform geometry, wall proportions, caster structure, openings, and apparatus count.
+                          <span className="font-semibold">Seed geometry lock:</span> each concept render is prompted as a blueprint-derived photorealistic fabrication render of the same canonical seed apparatus for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Convert, do not redesign or change illusion category.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (

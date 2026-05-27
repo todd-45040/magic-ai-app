@@ -202,6 +202,12 @@ export default async function handler(req: any, res: any) {
         return json;
       }
 
+      if (provider === 'anthropic') {
+        const e: any = new Error('Image generation is not supported for Anthropic provider.');
+        e.status = 400;
+        throw e;
+      }
+
       const apiKey = getGoogleAiApiKey();
       if (!apiKey) throw new Error('Google AI API key is not configured. Set GOOGLE_AI_API_KEY.');
 

@@ -98,7 +98,7 @@ export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[
     label: 'B',
     directive: 'MATCHED DESIGN B: slightly more theatrical version that preserves the same seed silhouette, prop relationships, footprint, and mechanism direction while adding polished theatre finish, stronger scenic framing, and practical transport/support details.',
     operationalState: 'production-reveal',
-    stateDescription: 'PRODUCTION / REVEAL STATE: the same single apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only inside, on, emerging from, or directly interacting with the existing apparatus if the requested effect calls for it. Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate prop, or separate reveal container. Do not also show the empty-display proof in the same image.',
+    stateDescription: 'PRODUCTION / REVEAL STATE: the apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only if the requested effect calls for it. Do not also show the empty-display proof in the same image.',
   },
 ];
 
@@ -183,6 +183,18 @@ const APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS = `Apparatus component inheri
 - Do not regenerate, beautify, simplify, replace, or improvise inherited parts. No undercarriage redesign, pedestal reinterpretation, facade replacement, trim regeneration, support-frame drift, alternate wheel layout, or new roof family.
 - Variant A and Variant B may show different operational states or finish polish, but each variant must remain a revision of the same inherited prop family, not a new apparatus design.`;
 
+
+
+const SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS = `Seed geometry extraction lock requirements:
+- The imported Visual Brainstorm image is the canonical apparatus reference whenever a visual seed is present.
+- The blueprint generation process must technically convert the SAME apparatus from the imported seed into a fabrication-ready stage illusion plan.
+- Convert the supplied apparatus into a realistic fabrication blueprint. Do NOT redesign, reinvent, reinterpret, upscale, theatricalize, beautify into a different object, or replace the apparatus with a different illusion concept.
+- DO NOT CHANGE ILLUSION CATEGORY: the generated blueprint and render MUST preserve the same apparatus category, silhouette, and primary structural identity shown in the imported seed image.
+- Do not reinterpret the seed apparatus into levitation devices, ring apparatuses, portal structures, mirrors, trunks, cabinets, cages, appearance cages, suspension rigs, generic boxes, or alternate illusion categories unless the user explicitly requested that exact category.
+- Silhouette anchoring: rectangular remains rectangular, house remains house, arch remains arch, trunk remains trunk, cabinet remains cabinet, ring remains ring, and the seed's dominant outline remains the dominant outline.
+- Preserve the seed's primary body shape, roof/topline, footprint, openings, door/window locations, base/platform relationship, caster/support strategy, performer-to-prop scale, and visible material language.
+- If the imported seed shows a haunted dog house, the plan must remain a haunted dog-house apparatus. It must not become a circular levitation/ring apparatus, portal frame, mirror apparatus, trunk, cage, or generic stage cabinet.
+- The AI's role is technical conversion mode: engineer THIS exact prop into a practical illusion apparatus, not design a new magical prop inspired by it.`;
 
 const FABRICATION_PROFILE_LOCK_REQUIREMENTS = `Fabrication profile lock requirements:
 - Treat fabrication style as a locked profile shared by Blueprint A, Concept A, Blueprint B, and Concept B.
@@ -587,23 +599,6 @@ const HARD_ANTI_DRIFT_EXCLUSIONS = `Hard anti-drift exclusions:
 - Do not generate surreal abstract art, dreamlike AI-art compositions, magical energy beams, floating geometry, or non-physical fantasy scenes.
 - If the request could be interpreted as one of these excluded subjects, ignore that interpretation and render the practical theatrical illusion apparatus instead.`;
 
-const SINGLE_APPARATUS_CONTINUITY_LOCK = `Single-apparatus continuity lock:
-- The matched blueprint/render pair must depict exactly one primary illusion apparatus unless the user's original request explicitly asks for multiple apparatus units.
-- Do not add a secondary trunk, sub-trunk, duplicate cabinet, extra production box, alternate reveal container, separate scenic crate, spare pedestal, unrelated side prop, or second version of the apparatus.
-- Any reveal must occur inside, on top of, emerging from, or directly interacting with the same primary apparatus shown in the paired blueprint.
-- Concept B may show a later production/reveal state, but the reveal must not be represented by adding another trunk, cabinet, box, house, platform, or replacement apparatus.
-- Assistants, performers, curtains, ropes, lighting, practical fog, and stage dressing are allowed only when they do not read as a second illusion apparatus.`;
-
-
-const BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS = `Blueprint geometry lock requirements:
-- Treat the paired blueprint geometry as canonical truth for the matching render. The render is not a new concept-art interpretation.
-- Render MUST preserve the exact visible silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, and apparatus count from the paired blueprint/design spec.
-- Photorealistic concept renders must be blueprint-derived fabrication renderings directly derived from the supplied blueprint geometry, not cinematic redesigns, alternate scenic versions, or upgraded theatrical variants.
-- Do NOT embellish, redesign, reinterpret, upscale, theatricalize, beautify, simplify, replace, or add scenic architectural complexity beyond the supplied blueprint and matched design spec.
-- Do NOT add ornamental features, extra trim density, extra windows, extra doors, new gears, new roof features, extra support frames, alternate undercarriage, changed caster locations, larger scenic shells, or decorative complexity not present in the blueprint/design spec.
-- Preserve only realistic material texture, stage lighting, floor shadows, practical performer stance, and safe stage context; all aesthetic treatment must remain subordinate to the blueprint geometry.
-- Render may contain ONLY the single apparatus shown in the paired blueprint unless the user explicitly requested multiple apparatus units.`;
-
 const PHYSICS_AND_BUILDABILITY_GUIDANCE = `Realism standard:
 - Keep the concept grounded in real-world physics and stagecraft.
 - Use practical theatrical construction, conventional materials, believable load paths, and safe human-scale operation.
@@ -626,11 +621,11 @@ ${DIMENSIONED_BLUEPRINT_REQUIREMENTS}
 
 ${DIMENSIONED_PAIR_LOCK_REQUIREMENTS}
 
-${SINGLE_APPARATUS_CONTINUITY_LOCK}
-
 ${GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS}
 
 ${APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS}
+
+${SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS}
 
 ${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
 
@@ -669,11 +664,11 @@ ${OPERATIONAL_STATE_INTELLIGENCE}
 
 ${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
 
+${SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS}
+
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
 
 ${APPARATUS_VALIDATION_REQUIREMENTS}
-
-${BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS}
 
 Visual requirements:
 - Show the prop or illusion unit clearly in a real stage, parlor, theatre, ballroom, or event environment.
@@ -690,9 +685,8 @@ Visual requirements:
 
 const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<IllusionBlueprintImagePromptParams, 'matchedOutput' | 'visualAnchor'>): string => [
   `SANITIZED BLUEPRINT-TO-RENDER LOCK FOR MATCHED DESIGN ${matchedOutput.label}:`,
-  `Render a clean photorealistic fabrication rendering directly derived from Blueprint ${matchedOutput.label} geometry for the same ${visualAnchor}.`,
-  `Blueprint ${matchedOutput.label} is the canonical truth for Concept ${matchedOutput.label}: preserve exact visible geometry, silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, apparatus count, proportions, visible hardware, trim, and audience-facing orientation.`,
-  BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
+  `Render a clean photorealistic stage version of the same visible apparatus form intended by Blueprint ${matchedOutput.label} for the same ${visualAnchor}.`,
+  `Blueprint ${matchedOutput.label} controls Concept ${matchedOutput.label} ONLY at the level of visible geometry, silhouette, proportions, roofline/topline, major doors/panels, base/platform, supports, casters, visible hardware, trim, and audience-facing orientation.`,
   'Do not redesign the apparatus, but also do not render the blueprint sheet itself.',
   'Do not render measurement labels, text notes, dimension arrows, cutaway diagrams, exploded-view panels, annotation blocks, or white technical-document fragments.',
   'Translate the blueprint design into a realistic staged apparatus: theatrical lighting, practical fog, performer stance, curtains or performance floor, believable shadows, and real material textures are allowed.',
@@ -700,6 +694,7 @@ const buildBlueprintToRenderLock = ({ matchedOutput, visualAnchor }: Pick<Illusi
   'Do not reinterpret the apparatus. Do not redesign the illusion. Do not substitute a different prop, cabinet, platform, trunk, table, product, food item, landscape, or unrelated object.',
   'Component inheritance is mandatory: same facade, same roof/topline, same front opening, same base/pedestal, same support/caster layout, same trim map, same panel geometry, and same proportions as the paired design spec.',
   APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
+  SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
   FABRICATION_PROFILE_LOCK_REQUIREMENTS,
   HARD_ANTI_DRIFT_EXCLUSIONS,
   'The rendered concept image should look like a professional staged/photo version of the matching apparatus, not a new visual idea and not a technical drawing.',
@@ -735,9 +730,8 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     'The image must look like commercial illusion catalog photography or a staged promotional render.',
     'Do not show any paper, blueprint, technical drawing, text block, measurement line, annotation, diagram, white page, split screen, document margin, instruction sheet, arrow, callout, or overlay.',
     'Do not include extra arms, floating hands, cropped assistants, distorted anatomy, fantasy portals, unrelated objects, food, furniture, or stock photography.',
-    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
-    'Recovery geometry instruction: generate a blueprint-derived fabrication render only; do not improve, theatricalize, upscale, or add scenic architectural complexity beyond the matched blueprint/design spec.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
@@ -761,7 +755,7 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     '',
     seedIdentityBrief,
     '',
-    'STRUCTURAL CONTINUITY REQUIREMENT: If a seed image identity is provided, the builder plan must evolve that exact selected concept. Preserve the seed props, dominant geometry, silhouette, performer staging, material style, atmosphere, and composition. Do not collapse the design into a generic cabinet, random box, dollhouse, cottage, standard appearance cage, trunk, or unrelated illusion archetype unless those forms are explicitly present in the seed identity.',
+    'STRUCTURAL CONTINUITY REQUIREMENT: If a seed image identity is provided, the imported Visual Brainstorm image is the canonical apparatus reference. The builder plan must technically convert the SAME apparatus into a fabrication-ready illusion plan. Preserve the seed apparatus category, dominant geometry, silhouette, primary structural identity, performer staging, material style, atmosphere, and composition. Convert, do not redesign. Do not collapse, reinterpret, upscale, beautify, or replace the seed into a generic cabinet, random box, dollhouse, cottage, standard appearance cage, trunk, ring apparatus, portal frame, mirror apparatus, levitation device, or unrelated illusion archetype unless that form is explicitly present in the seed identity or requested by the user.',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
@@ -806,11 +800,10 @@ export function buildIllusionBlueprintDrawingPrompt({
     `Dimensions / footprint: ${plan.dimensions_footprint}`,
     DIMENSIONED_BLUEPRINT_REQUIREMENTS,
     DIMENSIONED_PAIR_LOCK_REQUIREMENTS,
-    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
-    SINGLE_APPARATUS_CONTINUITY_LOCK,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
     'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
@@ -818,7 +811,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     getOperationalStateBrief(matchedOutput),
     'Blueprint operational-state requirement: define closed-ready, display-empty, production/reveal, and reset/service as separate labeled state notes or small state diagrams where helpful. Keep transition logic high-level and non-exposure. Show operator/performer position overlays and audience sightline direction without revealing secret method steps.',
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
-    'Seed continuity requirement: the technical drawing must look engineered from the selected source concept, preserving its primary props, dominant geometry, silhouette, performer-to-prop relationship, stage layout, material language, and mood. The broad illusion category is less important than the seed image identity.',
+    'Seed geometry extraction requirement: the technical drawing must be engineered from the selected source concept as canonical apparatus identity. Preserve the same apparatus category, primary structural identity, dominant geometry, silhouette, footprint, roof/topline, openings, performer-to-prop relationship, stage layout, material language, and mood. The drawing must convert the same prop into a builder plan, not reinterpret the idea into a new illusion category.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
     'Pairing requirement: This blueprint must be the controlling design source for the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, measured proportions, hardware, access panels, roofline/top line, platform geometry, and visible construction cues consistent.',
@@ -857,34 +850,30 @@ export function buildIllusionConceptImagePrompt({
     PHYSICS_AND_BUILDABILITY_GUIDANCE,
     '',
     HARD_ANTI_DRIFT_EXCLUSIONS,
-    SINGLE_APPARATUS_CONTINUITY_LOCK,
     '',
     sanitizedStructureAnchors,
     '',
-    'RENDER ROLE: Create ONLY a photorealistic fabrication rendering directly derived from the paired blueprint geometry. Do not create a new visual concept, cinematic redesign, theatrical upgrade, document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
-    BLUEPRINT_GEOMETRY_LOCK_REQUIREMENTS,
+    'RENDER ROLE: Create ONLY a polished stage photograph / promotional render of the apparatus. Do not create any document, page, sheet, diagram, technical drawing, construction document, annotated cutaway, exploded view, instruction page, or text-heavy image.',
     GEOMETRIC_IDENTITY_LOCK_REQUIREMENTS,
+    SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
-    SINGLE_APPARATUS_CONTINUITY_LOCK,
-    'BLUEPRINT-DERIVED VISUAL ROLE: Preserve the exact visible apparatus form from the paired blueprint/design spec: silhouette, footprint, roofline/topline, door placement, platform geometry, wall proportions, caster/platform structure, opening positions, apparatus count, support structure, visible hardware, trim, material finish, performer blocking, stage orientation, and proportions.',
+    'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
     'Forbidden in the render: printed paper, blueprint sheets, white document panels, measurement labels, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, diagram overlays, and technical-document artifacts.',
-    'Single-apparatus render rule: no secondary trunk, sub-trunk, duplicate cabinet, extra production box, separate reveal container, alternate apparatus, or additional prop unit may be added unless the user explicitly requested multiple apparatus units.',
     'Render-state requirement: show exactly the assigned operational state for this matched concept. Preserve the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
     'Anti-state-blending rule: do not show the apparatus both empty and producing at once; do not show before/after split screens; do not combine closed-ready, display-empty, reveal, and reset into a single photorealistic render.',
-    'Concept B reveal containment: if this is production/reveal, the produced object or assistant must appear inside, on, emerging from, or directly interacting with the same apparatus, never from a second apparatus or added container.',
     'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must remain plausible and match the exterior proportions without adding fantasy space, impossible voids, labels, or exposed secret workings.',
-    'Seed continuity requirement: this rendered concept must be a staged/photo realization of the same selected source concept, preserving the seed primary props, silhouette, geometry, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase the original seed identity.',
+    'Seed geometry extraction requirement: this rendered concept must be a staged/photo realization of the same selected source apparatus, preserving the seed apparatus category, primary structural identity, silhouette, geometry, footprint, roof/topline, openings, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase, redesign, upscale, or replace the original seed identity.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     buildBlueprintToRenderLock({ matchedOutput, visualAnchor }),
     APPARATUS_VALIDATION_REQUIREMENTS,
     'Physics requirement: all concept images must look practical, stable, human-scale, safely staged, and commercially buildable. Do not generate fantasy energy effects, impossible geometry, cartoon styling, distorted anatomy, or unrealistic physics.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
     'Language requirement: Prefer no visible text in concept renders. If unavoidable signage appears, it must be simple English only. Never render technical-note text, measurement text, or blueprint labels in the concept render.',
-    `Produce one blueprint-derived photorealistic fabrication render for Matched Design ${matchedOutput.label}. The image must contain only the single illusion apparatus as the central subject in a stage environment and must not look like a document, diagram, redesigned concept, or theatrical reinterpretation.`,
+    `Produce one polished realistic concept image directly converted from the canonical seed apparatus and paired blueprint geometry for Matched Design ${matchedOutput.label}. The image must contain the illusion apparatus as the central subject in a stage environment and must not look like a document or diagram.`,
   ].join('\n');
 
 }

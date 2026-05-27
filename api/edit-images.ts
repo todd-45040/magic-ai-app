@@ -111,6 +111,8 @@ export default async function handler(request: any, response: any) {
       }
 
       result = json; // geminiService supports data[0].b64_json
+    } else if (provider === 'anthropic') {
+      return response.status(400).json({ error: 'Image editing is not supported for Anthropic provider.' });
     } else {
       const apiKey = getGoogleAiApiKey();
       if (!apiKey) {
