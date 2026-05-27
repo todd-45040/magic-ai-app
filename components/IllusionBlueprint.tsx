@@ -19,7 +19,7 @@ import { CohesionActions } from './CohesionActions';
 import SaveActionBar from './shared/SaveActionBar';
 import type { User } from '../types';
 import { APP_VERSION } from '../constants';
-import { BlueprintIcon, WandIcon, FileTextIcon, ChecklistIcon, ShieldIcon, ImageIcon } from './icons';
+import { BlueprintIcon, WandIcon, FileTextIcon, ChecklistIcon, ShieldIcon, ImageIcon, DownloadIcon } from './icons';
 import WorkspaceBreadcrumbs from './WorkspaceBreadcrumbs';
 
 interface IllusionBlueprintProps {
@@ -336,6 +336,19 @@ const DetailList: React.FC<{ items: string[] }> = ({ items }) => (
 );
 
 const cleanText = (text: string): string => text.replace(/\*\*/g, '').replace(/\n{3,}/g, '\n\n').trim();
+
+const slugifyDownloadName = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72) || 'illusion-blueprint';
+
+const buildAssetDownloadName = (kind: 'concept' | 'blueprint', index: number, title?: string): string => {
+  const label = String.fromCharCode(65 + index).toLowerCase();
+  const safeTitle = slugifyDownloadName(title || 'illusion-blueprint');
+  return `${safeTitle}-${kind}-${label}.png`;
+};
 
 const splitListLines = (text: string): string[] =>
   cleanText(text)
@@ -1350,13 +1363,23 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                 <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Blueprint Preview</div>
                 <div className="mt-1 text-lg font-bold text-white">{`Blueprint ${String.fromCharCode(65 + activeBlueprintIndex)} — ${builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'Matched Technical View'}`}</div>
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveBlueprintIndex(null)}
-                className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500"
-              >
-                Close
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <a
+                  href={blueprintDrawings[activeBlueprintIndex]}
+                  download={buildAssetDownloadName('blueprint', activeBlueprintIndex, builderPlan?.project_title || effectInput)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-100 transition-colors hover:border-sky-300/70 hover:bg-sky-500/15"
+                >
+                  <DownloadIcon className="h-3.5 w-3.5" />
+                  Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveBlueprintIndex(null)}
+                  className="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-slate-500"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="bg-slate-950/60 p-4">
@@ -1410,6 +1433,14 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-slate-400">Inspect the concept at a larger size, then choose it as the preferred build direction.</div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={imageOptions[activeConceptIndex]}
+                    download={buildAssetDownloadName('concept', activeConceptIndex, builderPlan?.project_title || effectInput)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition-colors hover:border-violet-300/70 hover:bg-violet-500/15"
+                  >
+                    <DownloadIcon className="h-4 w-4" />
+                    Download
+                  </a>
                   <button
                     type="button"
                     onClick={() => setSelectedConceptIndex(activeConceptIndex)}
@@ -1480,7 +1511,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
               </div>
               {(visualHandoff.selectedImageUrl || visualHandoff.imageUrl) ? (
                 <div className="mt-3 overflow-hidden rounded-lg border border-violet-300/20 bg-slate-950/40">
-                  <img src={visualHandoff.selectedImageUrl || visualHandoff.imageUrl} alt="Selected Visual Brainstorm reference" className="max-h-44 w-full object-cover" />
+                  <img src={visualHandoff.selectedImageUrl || visualHandoff.imageUrl} alt="Selected Visual Brainstorm reference" className="h-auto max-h-56 w-full object-contain" />
                 </div>
               ) : null}
             </div>
@@ -1666,7 +1697,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
           <div className="px-4 py-3 border-b border-slate-800 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <div className="text-sm font-semibold text-slate-200">Builder Output</div>
-              <div className="text-xs text-slate-500">Realistic plan first. Two matched blueprint/concept pairs second.</div>
+              <div className="text-xs text-slate-500">Realistic plan first. Matched concept renders before blueprint drawings.</div>
             </div>
             <div className="text-[11px] text-slate-500">Version: {APP_VERSION}</div>
           </div>
@@ -1694,8 +1725,8 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       ['plan', 'Overview'],
                       ['construction', 'Construction'],
                       ['operations', 'Safety & Ops'],
-                      ['blueprints', 'Dimensioned Blueprint Drawings'],
                       ['visuals', 'Matched Concept Renders'],
+                      ['blueprints', 'Dimensioned Blueprint Drawings'],
                     ].map(([key, label]) => (
                       <button
                         key={key}
@@ -1930,110 +1961,6 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                   </CollapsibleCard>
                 </div>
 
-                <div id="ib-blueprints">
-                  <CollapsibleCard
-                    title="Dimensioned Blueprint Drawings"
-                    subtitle="Dimensioned technical concept drawings for build planning"
-                    isOpen={openSections.blueprints}
-                    onToggle={() => toggleSection('blueprints')}
-                    actions={
-                      isGeneratingBlueprints ? (
-                        <div className="text-[11px] text-violet-300">Generating…</div>
-                      ) : blueprintDrawings.length ? (
-                        <div className="text-[11px] text-slate-500">{blueprintDrawings.filter(Boolean).length} / {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length} drawings</div>
-                      ) : null
-                    }
-                  >
-                    <div className="space-y-5">
-                      <SectionIntro
-                        icon={<BlueprintIcon className="h-4 w-4" />}
-                        title="Dimensioned Technical Drawing Set"
-                        subtitle="Blueprint-style concept drawings with approximate measurement callouts for structure, layout, and mechanism direction."
-                      />
-                      {builderPlan ? (
-                        <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
-                          <span className="font-semibold">Final continuity polish:</span> these drawings preserve the same seed apparatus, mechanism archetype, reveal/opening architecture, performer/load path, and restrained shop-built profile for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Cleaner fabrication-style diagrams, readable callouts, restrained trim, and practical workshop realism are prioritized.
-                        </div>
-                      ) : null}
-                      {isGeneratingBlueprints ? (
-                        <ImageGenerationCard label="Generating blueprint drawings" />
-                      ) : blueprintDrawings.length ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
-                            const src = blueprintDrawings[idx];
-                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
-                            const continuityLabel = builderPlan ? `${drawingLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : drawingLabel;
-                            return (
-                              <div
-                                key={`blueprint-${matchedOutput.label}-${idx}`}
-                                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left transition-all duration-200 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => src && setActiveBlueprintIndex(idx)}
-                                  disabled={!src || regeneratingPairIndex === idx}
-                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70 disabled:cursor-not-allowed"
-                                >
-                                  <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
-                                    {src ? (
-                                      <img
-                                        src={src}
-                                        alt={`Blueprint drawing ${continuityLabel}`}
-                                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center p-6 text-center text-xs text-slate-400">
-                                        Blueprint {String.fromCharCode(65 + idx)} was rejected by validation. Regenerate this pair to create a replacement.
-                                      </div>
-                                    )}
-                                  </div>
-                                </button>
-
-                                <div className="p-3">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
-                                      <div className="mt-1 text-xs text-slate-400">
-                                        Dimensioned technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-3 flex items-center justify-between gap-3">
-                                    <span className="text-[11px] text-slate-500">Dimensioned technical blueprint drawing</span>
-                                    <div className="flex items-center gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleRegeneratePair(idx)}
-                                        disabled={regeneratingPairIndex !== null}
-                                        className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:border-amber-300/70 disabled:cursor-not-allowed disabled:opacity-60"
-                                      >
-                                        {regeneratingPairIndex === idx ? 'Regenerating…' : `Regenerate Pair ${String.fromCharCode(65 + idx)}`}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => src && setActiveBlueprintIndex(idx)}
-                                        disabled={!src}
-                                        className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        View Larger
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
-                          No blueprint drawings were returned on this attempt.
-                        </div>
-                      )}
-                    </div>
-                  </CollapsibleCard>
-                </div>
-
                 <div id="ib-visuals">
                   <CollapsibleCard
                     title="Matched Concept Renders"
@@ -2125,6 +2052,17 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                                     >
                                       {regeneratingPairIndex === idx ? 'Regenerating…' : `Regenerate Pair ${String.fromCharCode(65 + idx)}`}
                                     </button>
+                                    {src ? (
+                                      <a
+                                        href={src}
+                                        download={buildAssetDownloadName('concept', idx, builderPlan?.project_title || effectInput)}
+                                        onClick={(event) => event.stopPropagation()}
+                                        className="inline-flex items-center gap-1 rounded-full border border-violet-400/35 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-100 transition-colors hover:border-violet-300/70"
+                                      >
+                                        <DownloadIcon className="h-3 w-3" />
+                                        Download
+                                      </a>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={() => src && setActiveConceptIndex(idx)}
@@ -2161,6 +2099,123 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                     </div>
                   </CollapsibleCard>
                 </div>
+
+                <div id="ib-blueprints">
+                  <CollapsibleCard
+                    title="Dimensioned Blueprint Drawings"
+                    subtitle="Dimensioned technical concept drawings for build planning"
+                    isOpen={openSections.blueprints}
+                    onToggle={() => toggleSection('blueprints')}
+                    actions={
+                      isGeneratingBlueprints ? (
+                        <div className="text-[11px] text-violet-300">Generating…</div>
+                      ) : blueprintDrawings.length ? (
+                        <div className="text-[11px] text-slate-500">{blueprintDrawings.filter(Boolean).length} / {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.length} drawings</div>
+                      ) : null
+                    }
+                  >
+                    <div className="space-y-5">
+                      <SectionIntro
+                        icon={<BlueprintIcon className="h-4 w-4" />}
+                        title="Dimensioned Technical Drawing Set"
+                        subtitle="Blueprint-style concept drawings with approximate measurement callouts for structure, layout, and mechanism direction."
+                      />
+                      {builderPlan ? (
+                        <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
+                          <span className="font-semibold">Final continuity polish:</span> these drawings preserve the same seed apparatus, mechanism archetype, reveal/opening architecture, performer/load path, and restrained shop-built profile for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Cleaner fabrication-style diagrams, readable callouts, restrained trim, and practical workshop realism are prioritized.
+                        </div>
+                      ) : null}
+                      {isGeneratingBlueprints ? (
+                        <ImageGenerationCard label="Generating blueprint drawings" />
+                      ) : blueprintDrawings.length ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {ILLUSION_BLUEPRINT_MATCHED_OUTPUTS.map((matchedOutput, idx) => {
+                            const src = blueprintDrawings[idx];
+                            const drawingLabel = `Blueprint ${String.fromCharCode(65 + idx)}`;
+                            const continuityLabel = builderPlan ? `${drawingLabel} — ${deriveVisualAnchor(builderPlan, effectInput)}` : drawingLabel;
+                            return (
+                              <div
+                                key={`blueprint-${matchedOutput.label}-${idx}`}
+                                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 text-left transition-all duration-200 hover:border-sky-300/60 hover:shadow-md hover:shadow-black/20 hover:-translate-y-0.5"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => src && setActiveBlueprintIndex(idx)}
+                                  disabled={!src || regeneratingPairIndex === idx}
+                                  className="block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400/70 disabled:cursor-not-allowed"
+                                >
+                                  <div className="aspect-[4/3] overflow-hidden bg-slate-950/40">
+                                    {src ? (
+                                      <img
+                                        src={src}
+                                        alt={`Blueprint drawing ${continuityLabel}`}
+                                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center p-6 text-center text-xs text-slate-400">
+                                        Blueprint {String.fromCharCode(65 + idx)} was rejected by validation. Regenerate this pair to create a replacement.
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+
+                                <div className="p-3">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-slate-100">{drawingLabel}</div>
+                                      <div className="mt-1 text-xs text-slate-400">
+                                        Dimensioned technical view for {builderPlan ? deriveVisualAnchor(builderPlan, effectInput) : 'this builder plan'}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 flex items-center justify-between gap-3">
+                                    <span className="text-[11px] text-slate-500">Dimensioned technical blueprint drawing</span>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleRegeneratePair(idx)}
+                                        disabled={regeneratingPairIndex !== null}
+                                        className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:border-amber-300/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {regeneratingPairIndex === idx ? 'Regenerating…' : `Regenerate Pair ${String.fromCharCode(65 + idx)}`}
+                                      </button>
+                                      {src ? (
+                                        <a
+                                          href={src}
+                                          download={buildAssetDownloadName('blueprint', idx, builderPlan?.project_title || effectInput)}
+                                          onClick={(event) => event.stopPropagation()}
+                                          className="inline-flex items-center gap-1 rounded-full border border-sky-400/35 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-100 transition-colors hover:border-sky-300/70"
+                                        >
+                                          <DownloadIcon className="h-3 w-3" />
+                                          Download
+                                        </a>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => src && setActiveBlueprintIndex(idx)}
+                                        disabled={!src}
+                                        className="rounded-full border border-slate-700 bg-slate-900/50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 transition-colors hover:border-sky-300/50 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        View Larger
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-slate-700 bg-slate-950/20 p-4 text-sm text-slate-400">
+                          No blueprint drawings were returned on this attempt.
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleCard>
+                </div>
+
+
 
                 <SaveActionBar
                   title="Next step: save or move this plan"
