@@ -89,14 +89,14 @@ export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[
   {
     index: 0,
     label: 'A',
-    directive: 'MATCHED DESIGN A: compact touring version that preserves the seed silhouette and primary props, uses practical support/base logic only where needed, includes builder-visible access or rigging cues, modest scenic trim, and a restrained premium stage finish.',
+    directive: 'MATCHED DESIGN A: same locked fabrication profile as Design B, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, and construction sophistication. Only the operational state and camera/view emphasis may differ.',
     operationalState: 'empty-display',
     stateDescription: 'EMPTY-DISPLAY STATE: the apparatus is opened or presented to show a clean, apparently empty interior. No production moment is shown. No dog, assistant, object, or final reveal appears in this state unless the selected seed already explicitly shows it.',
   },
   {
     index: 1,
     label: 'B',
-    directive: 'MATCHED DESIGN B: slightly more theatrical version that preserves the same seed silhouette, prop relationships, footprint, and mechanism direction while adding polished theatre finish, stronger scenic framing, and practical transport/support details.',
+    directive: 'MATCHED DESIGN B: same locked fabrication profile as Design A, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, and construction sophistication. Only the operational state and camera/view emphasis may differ.',
     operationalState: 'production-reveal',
     stateDescription: 'PRODUCTION / REVEAL STATE: the apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only if the requested effect calls for it. Do not also show the empty-display proof in the same image.',
   },
@@ -202,7 +202,9 @@ const FABRICATION_PROFILE_LOCK_REQUIREMENTS = `Fabrication profile lock requirem
 - Operational state may change doors, panels, visible reveal condition, performer pose, lighting, fog, and stage angle, but it must not change the fabrication profile.
 - Do not let one output become rustic while another becomes ornate, steampunk, gothic, modern, skeletal, luxury, or simplified unless that exact fabrication profile was inherited from the selected seed/spec.
 - Do not improvise different undercarriage engineering, different trim density, different caster type, different hardware finish, different wood/metal language, or different scenic finish between the paired blueprint and render.
-- The four generated images should feel like the same shop/fabricator built the same apparatus family with the same construction vocabulary.`;
+- The four generated images should feel like the same shop/fabricator built the same apparatus family with the same construction vocabulary.
+- Blueprint A and Blueprint B may show different states/views, but they must NOT use different trim systems, different material palettes, different undercarriages, different wheel/caster families, different scenic density, or different construction sophistication.
+- Concept A and Concept B must be photorealistic renditions of that same locked shop-built profile, not upgraded/downscaled redesigns.`;
 
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
@@ -476,8 +478,8 @@ export function buildIllusionDesignSpec({
   const baseCue = plan.recommended_construction.mobility_modularity || 'visible stage base/platform with caster-ready support';
   const proportionCue = plan.dimensions_footprint || 'human-scale stage prop proportions';
   const variantCue = matchedOutput.label === 'A'
-    ? 'compact practical touring version; restrained trim; clear empty-display access orientation'
-    : 'more theatrical premium version; same family and footprint; reveal-state presentation details only';
+    ? 'same locked fabrication profile as Design B; empty-display access orientation only'
+    : 'same locked fabrication profile as Design A; production/reveal presentation state only';
 
   return {
     label: matchedOutput.label,
@@ -756,6 +758,7 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     seedIdentityBrief,
     '',
     'STRUCTURAL CONTINUITY REQUIREMENT: If a seed image identity is provided, the imported Visual Brainstorm image is the canonical apparatus reference. The builder plan must technically convert the SAME apparatus into a fabrication-ready illusion plan. Preserve the seed apparatus category, dominant geometry, silhouette, primary structural identity, performer staging, material style, atmosphere, and composition. Convert, do not redesign. Do not collapse, reinterpret, upscale, beautify, or replace the seed into a generic cabinet, random box, dollhouse, cottage, standard appearance cage, trunk, ring apparatus, portal frame, mirror apparatus, levitation device, or unrelated illusion archetype unless that form is explicitly present in the seed identity or requested by the user.',
+    'FABRICATION PROFILE REQUIREMENT: establish ONE shared fabrication profile from the canonical seed and builder plan. The same structural style, material language, trim density, hardware style, pedestal/base engineering, caster/wheel style, ornament intensity, and construction sophistication must be reused by Blueprint A, Concept A, Blueprint B, and Concept B. A/B may show different operational states, but they are not different style families or different shop builds.',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
@@ -814,6 +817,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     'Seed geometry extraction requirement: the technical drawing must be engineered from the selected source concept as canonical apparatus identity. Preserve the same apparatus category, primary structural identity, dominant geometry, silhouette, footprint, roof/topline, openings, performer-to-prop relationship, stage layout, material language, and mood. The drawing must convert the same prop into a builder plan, not reinterpret the idea into a new illusion category.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
+    'Fabrication profile requirement: This blueprint must use the same locked fabrication profile as the other blueprint and both concept renders: same structural style, material palette, trim density, hardware family, pedestal/base engineering, caster/wheel type, ornament level, and build sophistication.',
     'Pairing requirement: This blueprint must be the controlling design source for the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, measured proportions, hardware, access panels, roofline/top line, platform geometry, and visible construction cues consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
     'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
@@ -859,6 +863,7 @@ export function buildIllusionConceptImagePrompt({
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
+    'FABRICATION PROFILE ROLE: Render the SAME locked fabrication profile used by both blueprints and the companion concept render. Do not make this concept more ornate, more modern, more rustic, more premium, more simplified, or differently engineered than its paired blueprint and companion output. Same shop build, same material palette, same trim map, same hardware family, same base/caster system.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,

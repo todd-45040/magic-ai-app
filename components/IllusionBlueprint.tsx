@@ -1952,7 +1952,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
-                          <span className="font-semibold">Seed geometry lock:</span> these drawings are prompted as technical conversions of the same canonical seed apparatus: <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>.
+                          <span className="font-semibold">Fabrication profile lock:</span> these drawings preserve the same seed apparatus plus one shared shop-built profile: structural style, materials, trim density, hardware, pedestal/base engineering, caster style, ornament intensity, and construction sophistication for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>.
                         </div>
                       ) : null}
                       {isGeneratingBlueprints ? (
@@ -2056,7 +2056,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Seed geometry lock:</span> each concept render is prompted as a blueprint-derived photorealistic fabrication render of the same canonical seed apparatus for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Convert, do not redesign or change illusion category.
+                          <span className="font-semibold">Fabrication profile lock:</span> each concept render preserves the same canonical seed apparatus and the same shared fabrication profile as its paired blueprint and companion set for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Same shop build, same materials, same trim/hardware/base/caster language.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (
