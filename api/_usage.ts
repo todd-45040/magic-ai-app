@@ -1,7 +1,7 @@
 import { requireSupabaseAuth } from './_auth.js';
 // Canonical membership tiers used for usage enforcement.
 // Legacy tiers are accepted and normalized server-side.
-type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro';
+type Membership = 'free' | 'trial' | 'performer' | 'professional' | 'expired' | 'amateur' | 'semi-pro' | 'admin';
 
 function hasActivePaidStripe(profile: any): boolean {
   const status = String(profile?.stripe_status || '').trim().toLowerCase();
