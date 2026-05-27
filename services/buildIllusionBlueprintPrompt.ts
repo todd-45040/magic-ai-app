@@ -89,14 +89,14 @@ export const ILLUSION_BLUEPRINT_MATCHED_OUTPUTS: IllusionBlueprintMatchedOutput[
   {
     index: 0,
     label: 'A',
-    directive: 'MATCHED DESIGN A: same locked fabrication profile as Design B, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, and construction sophistication. Only the operational state and camera/view emphasis may differ.',
+    directive: 'MATCHED DESIGN A: same locked fabrication profile and same mechanism family as Design B, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, construction sophistication, reveal method, opening architecture, concealment logic, and performer/load path. Only the operational state, camera/view emphasis, and open/closed positions may differ.',
     operationalState: 'empty-display',
     stateDescription: 'EMPTY-DISPLAY STATE: the apparatus is opened or presented to show a clean, apparently empty interior. No production moment is shown. No dog, assistant, object, or final reveal appears in this state unless the selected seed already explicitly shows it.',
   },
   {
     index: 1,
     label: 'B',
-    directive: 'MATCHED DESIGN B: same locked fabrication profile as Design A, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, and construction sophistication. Only the operational state and camera/view emphasis may differ.',
+    directive: 'MATCHED DESIGN B: same locked fabrication profile and same mechanism family as Design A, preserving the seed silhouette, primary components, material language, trim density, hardware style, pedestal/base engineering, caster style, ornament intensity, construction sophistication, reveal method, opening architecture, concealment logic, and performer/load path. Only the operational state, camera/view emphasis, and open/closed positions may differ.',
     operationalState: 'production-reveal',
     stateDescription: 'PRODUCTION / REVEAL STATE: the apparatus is in the later reveal moment, with the produced object, assistant, or theatrical result visible only if the requested effect calls for it. Do not also show the empty-display proof in the same image.',
   },
@@ -205,6 +205,28 @@ const FABRICATION_PROFILE_LOCK_REQUIREMENTS = `Fabrication profile lock requirem
 - The four generated images should feel like the same shop/fabricator built the same apparatus family with the same construction vocabulary.
 - Blueprint A and Blueprint B may show different states/views, but they must NOT use different trim systems, different material palettes, different undercarriages, different wheel/caster families, different scenic density, or different construction sophistication.
 - Concept A and Concept B must be photorealistic renditions of that same locked shop-built profile, not upgraded/downscaled redesigns.`;
+
+const MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS = `Mechanism consistency lock requirements:
+- Treat the reveal method, opening architecture, concealment logic, performer/load path, access-panel logic, reset path, and operator reach as ONE shared mechanism family across Blueprint A, Concept A, Blueprint B, and Concept B.
+- Blueprint A and Blueprint B may show different operational states or viewing angles, but they must not invent different mechanisms, different reveal doors, different loading directions, different hidden volumes, different roof/panel behavior, or different performer pathways.
+- Concept A and Concept B must depict the same mechanical vocabulary through visible cues only: same hinged areas, same openable panels, same access seams, same base/service zone, same performer relationship, and same reveal orientation.
+- If Design A uses a roof-opening, front-door reveal, side-panel access, sliding panel, lift lid, or removable scenic section, Design B must keep that same opening family rather than switching to a different architecture.
+- Keep mechanism details high-level and non-exposure; show plausibility and continuity without showing secret method steps.`;
+
+const TECHNICAL_BLUEPRINT_REALISM_REQUIREMENTS = `Technical blueprint realism requirements:
+- Reduce fake annotations, pseudo-engineering labels, ornamental drafting nonsense, decorative scribbles, unreadable note blocks, random arrows, and text-heavy fake blueprint theater.
+- Prefer clean fabrication-style diagrams: front elevation, side elevation, top/footprint view, simple cutaway only where useful, realistic dimension placement, and short readable English callouts.
+- Use believable dimensions and callouts that correspond to visible parts: overall width/depth/height, base height, caster size, door/opening size, panel seams, hinge line, access/service panel, and audience-facing side.
+- Keep labels short and workshop-oriented: FRONT, SIDE, TOP, BASE, DOOR, PANEL, HINGE, CASTER, ACCESS, FRAME, TRIM, SUPPORT, SIGHTLINE.
+- Do not fill the drawing with invented paragraphs, mechanism essays, illegible blocks, decorative labels, fake math, or pseudo-language.
+- The blueprint should read as a practical fabrication concept sheet, not a fantasy technical poster.`;
+
+const FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS = `Fabrication simplicity bias requirements:
+- Favor practical workshop realism over cinematic embellishment: simple load-bearing geometry, restrained scenic finish, plausible hinges, visible seams, modest trim, standard casters, and conventional theatrical materials.
+- Do not over-decorate, over-stylize, over-cinematize, over-ornament, upscale into luxury scenic art, or add extra architectural complexity beyond the seed and locked fabrication profile.
+- Lighting, fog, and stage atmosphere may support the image, but they must not hide geometry, replace structure, or make the apparatus look fantastical.
+- The apparatus should look like it could be built, rolled, reset, stored, and repaired by a small professional illusion shop.
+- When in doubt, simplify toward clear fabrication logic rather than adding scenic drama.`;
 
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
@@ -631,6 +653,12 @@ ${SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS}
 
 ${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
 
+${MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS}
+
+${TECHNICAL_BLUEPRINT_REALISM_REQUIREMENTS}
+
+${FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS}
+
 ${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
@@ -665,6 +693,10 @@ ${PROFESSIONAL_ILLUSION_DESIGN_REFINEMENT}
 ${OPERATIONAL_STATE_INTELLIGENCE}
 
 ${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
+
+${MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS}
+
+${FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS}
 
 ${SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS}
 
@@ -736,6 +768,8 @@ export function buildIllusionConceptRenderRecoveryPrompt({
     SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
+    MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS,
+    FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS,
     'Keep the same visible silhouette, roofline/topline, base/platform, major door/panel placement, supports, wheels/casters, trim, and façade style implied by the matched design.',
   ].filter(Boolean).join('\n');
 }
@@ -759,6 +793,9 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     '',
     'STRUCTURAL CONTINUITY REQUIREMENT: If a seed image identity is provided, the imported Visual Brainstorm image is the canonical apparatus reference. The builder plan must technically convert the SAME apparatus into a fabrication-ready illusion plan. Preserve the seed apparatus category, dominant geometry, silhouette, primary structural identity, performer staging, material style, atmosphere, and composition. Convert, do not redesign. Do not collapse, reinterpret, upscale, beautify, or replace the seed into a generic cabinet, random box, dollhouse, cottage, standard appearance cage, trunk, ring apparatus, portal frame, mirror apparatus, levitation device, or unrelated illusion archetype unless that form is explicitly present in the seed identity or requested by the user.',
     'FABRICATION PROFILE REQUIREMENT: establish ONE shared fabrication profile from the canonical seed and builder plan. The same structural style, material language, trim density, hardware style, pedestal/base engineering, caster/wheel style, ornament intensity, and construction sophistication must be reused by Blueprint A, Concept A, Blueprint B, and Concept B. A/B may show different operational states, but they are not different style families or different shop builds.',
+    'MECHANISM CONSISTENCY REQUIREMENT: establish ONE shared mechanism family for all A/B outputs: same reveal method, same opening architecture, same concealment logic, same performer/load path, same reset/service access logic, and same operator reach. A/B may show empty-display versus reveal state, but must not switch to a different apparatus mechanism.',
+    'TECHNICAL BLUEPRINT REALISM REQUIREMENT: use clean fabrication-style drawing logic with short readable labels, believable dimensions, realistic view placement, and minimal annotation clutter. Avoid fake paragraphs, pseudo-engineering labels, decorative drafting nonsense, and illegible note blocks.',
+    'FABRICATION SIMPLICITY REQUIREMENT: keep the design practical, restrained, buildable, and shop-realistic. Do not over-decorate, over-cinematize, add unnecessary architectural complexity, or hide geometry behind theatrical fog/lighting.',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
@@ -807,18 +844,22 @@ export function buildIllusionBlueprintDrawingPrompt({
     SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
+    MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS,
+    TECHNICAL_BLUEPRINT_REALISM_REQUIREMENTS,
+    FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
+    `Alternate mechanism direction must stay in the same mechanism family, not a new apparatus architecture: ${plan.mechanism_approach.alternate}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
-    'Mechanism/fabrication requirement: include non-exposure labels for concealment volume, service access path, load chamber zone, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus.',
-    'Blueprint view requirement: include at least one cutaway or exploded-view style area that clarifies structure, support, access, and operation-state relationships without exposing a secret method.',
+    'Mechanism/fabrication requirement: include only clean, non-exposure labels for shared mechanism family, access/service area, hinge/panel operation, caster/load support, performer position, and audience sightline direction where they make sense for this apparatus. Avoid fake paragraphs and decorative pseudo-engineering labels.',
+    'Blueprint view requirement: use clean front/side/top or simple cutaway views that clarify structure, support, access, and operation-state relationships without exposing a secret method. Avoid busy exploded-view clutter unless essential.',
     getOperationalStateBrief(matchedOutput),
-    'Blueprint operational-state requirement: define closed-ready, display-empty, production/reveal, and reset/service as separate labeled state notes or small state diagrams where helpful. Keep transition logic high-level and non-exposure. Show operator/performer position overlays and audience sightline direction without revealing secret method steps.',
+    'Blueprint operational-state requirement: define closed-ready, display-empty, production/reveal, and reset/service using the same reveal method and opening architecture. Keep transition logic high-level and non-exposure. Show operator/performer position and audience sightline direction with short labels only.',
     `Matched output requirement: This is Blueprint ${matchedOutput.label}. ${matchedOutput.directive}`,
     'Seed geometry extraction requirement: the technical drawing must be engineered from the selected source concept as canonical apparatus identity. Preserve the same apparatus category, primary structural identity, dominant geometry, silhouette, footprint, roof/topline, openings, performer-to-prop relationship, stage layout, material language, and mood. The drawing must convert the same prop into a builder plan, not reinterpret the idea into a new illusion category.',
     'Anti-generic substitution: do not replace rope/ring/suspension/open apparatus concepts with sealed cabinets, dollhouses, cottages, house facades, unrelated boxes, standard sawing props, appearance cages, or trunk illusions unless the seed explicitly contains those elements.',
     `Blueprint continuity requirement: Create exactly one technical drawing sheet for Matched Design ${matchedOutput.label} of the same ${visualAnchor}; do not introduce unrelated boxes, tables, cabinets, platforms, fantasy machinery, food, consumer products, stock objects, or impossible floating structures unless they are part of this practical plan.`,
-    'Fabrication profile requirement: This blueprint must use the same locked fabrication profile as the other blueprint and both concept renders: same structural style, material palette, trim density, hardware family, pedestal/base engineering, caster/wheel type, ornament level, and build sophistication.',
-    'Pairing requirement: This blueprint must be the controlling design source for the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, measured proportions, hardware, access panels, roofline/top line, platform geometry, and visible construction cues consistent.',
+    'Fabrication/mechanism profile requirement: This blueprint must use the same locked fabrication profile and mechanism family as the other blueprint and both concept renders: same structural style, material palette, trim density, hardware family, pedestal/base engineering, caster/wheel type, ornament level, build sophistication, reveal method, opening architecture, and service/access logic.',
+    'Pairing requirement: This blueprint must be the controlling design source for the Concept Image with the same letter. Keep the silhouette, base, major panels, footprint, finish direction, measured proportions, hardware, access panels, roofline/top line, platform geometry, visible construction cues, and shared reveal/opening architecture consistent.',
     'Physics requirement: every visual element must look structurally supported, safely balanced, human-scale, and physically buildable in a real workshop or theatre.',
     'Language requirement: English only. If labels appear inside the drawing, they must be readable English labels. Avoid foreign words, pseudo-language, random symbols, and garbled text.',
     `Create one dimensioned technical drawing style image suitable for illusion build planning. Do not create multiple alternate concepts inside the same image; only show Matched Design ${matchedOutput.label}. The image must include visible dimension callouts and measurement lines.`,
@@ -862,13 +903,15 @@ export function buildIllusionConceptImagePrompt({
     SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS,
     APPARATUS_COMPONENT_INHERITANCE_REQUIREMENTS,
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
+    MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS,
+    FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
-    'FABRICATION PROFILE ROLE: Render the SAME locked fabrication profile used by both blueprints and the companion concept render. Do not make this concept more ornate, more modern, more rustic, more premium, more simplified, or differently engineered than its paired blueprint and companion output. Same shop build, same material palette, same trim map, same hardware family, same base/caster system.',
+    'FABRICATION / MECHANISM PROFILE ROLE: Render the SAME locked fabrication profile and SAME mechanism family used by both blueprints and the companion concept render. Do not make this concept more ornate, more modern, more rustic, more premium, more simplified, more cinematic, or differently engineered than its paired blueprint and companion output. Same shop build, same material palette, same trim map, same hardware family, same base/caster system, same reveal/opening architecture, same service/access cue family.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
     `Pair lock: Concept ${matchedOutput.label} must look like a staged photo of the apparatus represented by Blueprint ${matchedOutput.label}, but it must NOT include Blueprint ${matchedOutput.label} as a visible page, overlay, sheet, drawing, diagram, margin, note, label, dimension line, or text block.`,
     'Forbidden in the render: printed paper, blueprint sheets, white document panels, measurement labels, arrows, callout lines, text columns, construction notes, cutaway labels, exploded-view graphics, diagram overlays, and technical-document artifacts.',
-    'Render-state requirement: show exactly the assigned operational state for this matched concept. Preserve the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, and audience-facing orientation from the paired design.',
+    'Render-state requirement: show exactly the assigned operational state for this matched concept. Preserve the same visible apparatus, access placement cues, doors/panels, support members, caster/base logic, performer position, reveal/opening architecture, and audience-facing orientation from the paired design.',
     'Anti-state-blending rule: do not show the apparatus both empty and producing at once; do not show before/after split screens; do not combine closed-ready, display-empty, reveal, and reset into a single photorealistic render.',
     'Interior visibility requirement: if the apparatus is shown open or in reveal state, the visible interior must remain plausible and match the exterior proportions without adding fantasy space, impossible voids, labels, or exposed secret workings.',
     'Seed geometry extraction requirement: this rendered concept must be a staged/photo realization of the same selected source apparatus, preserving the seed apparatus category, primary structural identity, silhouette, geometry, footprint, roof/topline, openings, performer position, staging, materials, atmosphere, and apparatus form. Do not let the builder plan or matched-output variant erase, redesign, upscale, or replace the original seed identity.',
