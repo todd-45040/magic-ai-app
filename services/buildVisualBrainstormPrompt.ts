@@ -41,11 +41,11 @@ Preferred aesthetic:
 - professional theatrical stage photography
 - commercial illusion advertising photography
 - clean centered composition
-- cinematic realism only when it remains physically realistic
+- restrained stage realism only when it keeps the apparatus geometry readable
 - practical stagecraft
 - real-world textures
 - grounded theatrical presentation
-- premium promotional photography
+- practical promotional photography with clear prop geometry
 
 Avoid unless explicitly requested:
 - fantasy spell effects
@@ -103,9 +103,20 @@ Professional illusion design refinement:
 - Trap/access plausibility: if the concept needs access, suggest it visually through plausible panel seams, hinged doors, removable lids, service panels, or builder-friendly openings without exposing secrets.
 - Performance blocking intelligence: place the magician in a natural working stance beside the apparatus, facing the audience with clear reveal orientation, ergonomic reach distance, and sightline-aware spacing.
 - Assistant positioning: include assistants only when explicitly requested; if included, show complete assistants in natural positions with clear purpose and no cropped limbs.
-- Stage lighting intelligence: use realistic theatre spotlights, practical stage wash, believable shadows, controlled fog/haze, and commercial promo-photo lighting.
+- Stage lighting intelligence: use realistic theatre spotlights, practical stage wash, believable shadows, and only light controlled fog/haze that does not obscure the apparatus geometry.
 - Builder material intelligence: render credible wood grain, metal brackets, hinges, latches, casters, seams, trim, scenic paint, theatrical finish materials, and fabrication details.
-- Keep the image useful to an illusion designer: the apparatus should look like it could be fabricated, transported, rolled into position, rehearsed, and photographed professionally.
+- Keep the image useful to an illusion designer: the apparatus should look like it could be fabricated, transported, rolled into position, rehearsed, photographed professionally, and converted into a readable blueprint.
+`.trim();
+
+
+const VISUAL_BRAINSTORM_BLUEPRINT_HANDOFF_POLISH = `
+Blueprint handoff polish:
+- When the concept is an illusion apparatus, prop, box, cabinet, house, platform, pedestal, or production device, make the apparatus easy to read as a buildable object.
+- Favor simple product-photo stage composition over cinematic spectacle: clear silhouette, visible base, visible floor contact, believable scale, and readable front/side structure.
+- Do not let fog, spotlights, darkness, or dramatic camera angles hide the primary geometry, base, wheels, openings, doors, panels, or support structure.
+- Keep decorative styling restrained and inherited from the requested concept; do not upscale into luxury scenery, fantasy architecture, or an unrelated illusion category.
+- Preserve one clear mechanism impression per image: same front/roof/lid/opening logic, not multiple competing reveal systems.
+- The image should be a strong seed for a fabrication blueprint: clear apparatus identity first, theatrical mood second.
 `.trim();
 
 const VISUAL_BRAINSTORM_FRESH_CONTEXT_ISOLATION = `
@@ -148,7 +159,7 @@ const STYLE_MODE_GUIDANCE: Record<VisualBrainstormStyleMode, string> = {
   technical_prop:
     'Style mode: technical prop visualization. Emphasize practical construction, real materials, structural plausibility, and clear prop design.',
   tv_cinematic:
-    'Style mode: TV special cinematic. Use dramatic broadcast-quality lighting and camera composition while preserving realistic stagecraft.',
+    'Style mode: TV special cinematic. Use broadcast-quality lighting while preserving readable prop geometry, realistic stagecraft, and buildable apparatus structure.',
   vintage_poster:
     'Style mode: vintage magic poster. Use classic poster composition, but keep the depicted props and staging physically coherent.',
   fantasy_surreal:
@@ -195,11 +206,12 @@ export function buildVisualBrainstormImagePrompt({
     realismEnabled ? buildStrictSinglePresenterGuidance(userPrompt) : '',
     realismEnabled ? VISUAL_BRAINSTORM_OPERATIONAL_STATE_ANCHOR : '',
     realismEnabled ? VISUAL_BRAINSTORM_PROFESSIONAL_ILLUSION_REFINEMENT : '',
+    realismEnabled ? VISUAL_BRAINSTORM_BLUEPRINT_HANDOFF_POLISH : '',
     hasUploadedImage
       ? 'Reference image mode: preserve believable scale, materials, lighting, and practical magic staging while applying the requested changes.'
       : '',
     `User concept:\n${userPrompt}`,
-    'Generate a polished, commercially usable magic visualization.',
+    'Generate a polished, commercially usable magic visualization with clear apparatus geometry suitable for later blueprint conversion.',
     realismEnabled ? VISUAL_BRAINSTORM_NEGATIVE_REINFORCEMENT : '',
     freshContext && !hasUploadedImage ? buildStaleNegativeGuidance(staleNegativeTerms) : '',
   ];

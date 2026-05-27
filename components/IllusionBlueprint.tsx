@@ -1952,7 +1952,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-sky-400/20 bg-sky-500/10 px-3.5 py-3 text-xs leading-relaxed text-sky-100">
-                          <span className="font-semibold">Mechanism + fabrication lock:</span> these drawings preserve the same seed apparatus, shared reveal/opening architecture, performer/load path, and shop-built profile for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Cleaner fabrication-style diagrams, restrained trim, and practical workshop realism are prioritized.
+                          <span className="font-semibold">Final continuity polish:</span> these drawings preserve the same seed apparatus, mechanism archetype, reveal/opening architecture, performer/load path, and restrained shop-built profile for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Cleaner fabrication-style diagrams, readable callouts, restrained trim, and practical workshop realism are prioritized.
                         </div>
                       ) : null}
                       {isGeneratingBlueprints ? (
@@ -2056,7 +2056,7 @@ const IllusionBlueprint: React.FC<IllusionBlueprintProps> = ({ user, onIdeaSaved
                       />
                       {builderPlan ? (
                         <div className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3.5 py-3 text-xs leading-relaxed text-violet-100">
-                          <span className="font-semibold">Mechanism + fabrication lock:</span> each concept render preserves the same canonical seed apparatus, same reveal/opening architecture, and same shared fabrication profile as its paired blueprint and companion set for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Practical workshop realism is favored over extra decoration or cinematic redesign.
+                          <span className="font-semibold">Final continuity polish:</span> each concept render preserves the same canonical seed apparatus, mechanism archetype, reveal/opening architecture, and shared fabrication profile as its paired blueprint and companion set for <span className="font-semibold">{deriveVisualAnchor(builderPlan, effectInput)}</span>. Practical workshop realism and readable geometry are favored over extra decoration, fog, or cinematic redesign.
                         </div>
                       ) : null}
                     {isGeneratingVisuals ? (

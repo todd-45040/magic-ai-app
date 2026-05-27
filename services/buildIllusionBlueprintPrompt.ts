@@ -228,6 +228,16 @@ const FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS = `Fabrication simplicity bias re
 - The apparatus should look like it could be built, rolled, reset, stored, and repaired by a small professional illusion shop.
 - When in doubt, simplify toward clear fabrication logic rather than adding scenic drama.`;
 
+
+const FINAL_CONTINUITY_POLISH_REQUIREMENTS = `Final continuity polish requirements:
+- Mechanism archetype consistency: establish ONE simple reveal/opening archetype for the apparatus and keep it unchanged across Blueprint A, Concept A, Blueprint B, and Concept B. A/B may show different states or views, but not different mechanical ideas.
+- A/B engineering variance limit: treat A and B as companion views/states of the same shop-built apparatus family, not competing redesigns. Do not change the front access direction, roof/lid behavior, base/pedestal strategy, caster placement, visible hinge family, or performer/load path between A and B.
+- Practical drafting bias: prefer fewer, clearer views with readable dimension lines over crowded technical spectacle. Use front/side/top/elevation logic only when it clarifies fabrication.
+- Blueprint text restraint: use short English labels and dimensions only. Avoid fake paragraphs, tiny unreadable notes, pseudo-language, decorative callouts, excessive arrows, or labels that do not correspond to visible parts.
+- Visual simplicity: preserve the seed's character while reducing cinematic fog, dramatic shadows, excessive ornament, luxury styling, and busy scenic additions that obscure the build.
+- Workshop realism: the final apparatus should look like a small professional illusion shop could build, roll, repair, reset, and store it using ordinary theatrical materials.
+- When realism conflicts with theatrical drama, choose the simpler buildable fabrication solution.`;
+
 const OPERATIONAL_STATE_INTELLIGENCE = `Operational state intelligence:
 - Treat the illusion as a sequence of distinct operating states: closed-ready, display-empty, production/reveal, and reset/service.
 - Do not merge multiple moments of the illusion into one render or one blueprint view unless a blueprint explicitly labels separate state diagrams.
@@ -659,6 +669,8 @@ ${TECHNICAL_BLUEPRINT_REALISM_REQUIREMENTS}
 
 ${FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS}
 
+${FINAL_CONTINUITY_POLISH_REQUIREMENTS}
+
 ${BLUEPRINT_RENDER_SEPARATION_REQUIREMENTS}
 
 ${HARD_ANTI_DRIFT_EXCLUSIONS}
@@ -697,6 +709,8 @@ ${FABRICATION_PROFILE_LOCK_REQUIREMENTS}
 ${MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS}
 
 ${FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS}
+
+${FINAL_CONTINUITY_POLISH_REQUIREMENTS}
 
 ${SEED_GEOMETRY_EXTRACTION_LOCK_REQUIREMENTS}
 
@@ -796,6 +810,7 @@ export function buildIllusionBlueprintPlanPrompt({ generationContext, seedIdenti
     'MECHANISM CONSISTENCY REQUIREMENT: establish ONE shared mechanism family for all A/B outputs: same reveal method, same opening architecture, same concealment logic, same performer/load path, same reset/service access logic, and same operator reach. A/B may show empty-display versus reveal state, but must not switch to a different apparatus mechanism.',
     'TECHNICAL BLUEPRINT REALISM REQUIREMENT: use clean fabrication-style drawing logic with short readable labels, believable dimensions, realistic view placement, and minimal annotation clutter. Avoid fake paragraphs, pseudo-engineering labels, decorative drafting nonsense, and illegible note blocks.',
     'FABRICATION SIMPLICITY REQUIREMENT: keep the design practical, restrained, buildable, and shop-realistic. Do not over-decorate, over-cinematize, add unnecessary architectural complexity, or hide geometry behind theatrical fog/lighting.',
+    'FINAL POLISH REQUIREMENT: define one simple mechanism archetype and one fabrication profile, then reuse them across all A/B blueprint and render outputs. Limit A/B differences to operational state, viewing angle, and open/closed positions; do not create competing engineering variants.',
     'Return a compact, practical plan for a real builder/fabricator.',
     'Use English language only throughout every field of the plan.',
     HARD_ANTI_DRIFT_EXCLUSIONS,
@@ -847,6 +862,7 @@ export function buildIllusionBlueprintDrawingPrompt({
     MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS,
     TECHNICAL_BLUEPRINT_REALISM_REQUIREMENTS,
     FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS,
+    FINAL_CONTINUITY_POLISH_REQUIREMENTS,
     `Primary mechanism direction: ${plan.mechanism_approach.primary}`,
     `Alternate mechanism direction must stay in the same mechanism family, not a new apparatus architecture: ${plan.mechanism_approach.alternate}`,
     `Mobility / modularity: ${plan.recommended_construction.mobility_modularity}`,
@@ -905,7 +921,9 @@ export function buildIllusionConceptImagePrompt({
     FABRICATION_PROFILE_LOCK_REQUIREMENTS,
     MECHANISM_CONSISTENCY_LOCK_REQUIREMENTS,
     FABRICATION_SIMPLICITY_BIAS_REQUIREMENTS,
+    FINAL_CONTINUITY_POLISH_REQUIREMENTS,
     'VISUAL CONTINUITY ROLE: Preserve the visible apparatus form from the paired design: silhouette, roofline/topline, base/platform, support structure, door/panel placement, visible hardware, trim, caster/wheel placement, material finish, performer blocking, stage orientation, and approximate proportions.',
+    'FINAL POLISH ROLE: Render a restrained, practical, workshop-buildable apparatus. Keep lighting/fog supportive but do not let atmosphere hide geometry or make the apparatus more cinematic than the blueprint. Limit A/B differences to state/view; do not visually redesign the mechanism.',
     'FABRICATION / MECHANISM PROFILE ROLE: Render the SAME locked fabrication profile and SAME mechanism family used by both blueprints and the companion concept render. Do not make this concept more ornate, more modern, more rustic, more premium, more simplified, more cinematic, or differently engineered than its paired blueprint and companion output. Same shop build, same material palette, same trim map, same hardware family, same base/caster system, same reveal/opening architecture, same service/access cue family.',
     getOperationalStateBrief(matchedOutput),
     `Concept ${matchedOutput.label} requirement: Produce exactly one clean, polished, photorealistic stage rendering of Matched Design ${matchedOutput.label} for the same ${visualAnchor}.`,
